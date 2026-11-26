@@ -14,7 +14,8 @@ Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 | 0 | Probe and scaffold | Done: see [PROBE.md](PROBE.md). P-9 (wallet) and P-10 (Pinata) need a run on the owner's side |
 | 1 | Contracts | Contracts and 81 tests done ([GAS.md](contracts/GAS.md)); testnet deploy and explorer verification need a funded deployer key |
 | 2 | Core library | Done: envelope, EIP-712, verifier, lineage and quarantine closure, blast radius, digest, policy engine R0–R5; verifier and policy engine at 100% branch coverage |
-| 3–7 | Control and storage, agent and payments, detection and response, mainnet, presentation | Planned |
+| 3 | Control and storage | Done on a local chain: `tyrell setup`, deploy, control (encrypt, pin, anchor, index), `rebuild --fresh`, `verify`; testnet run needs a funded deployer and a Pinata JWT |
+| 4–7 | Agent and payments, detection and response, mainnet, presentation | Planned |
 
 ## Repo layout
 
@@ -38,6 +39,22 @@ pnpm scan-keys:history  # scans every commit for anything shaped like a private 
 ```
 
 Requires Node 22.21 or newer and pnpm 10. Foundry comes from npm (`@foundry-rs/forge`); clone with `--recurse-submodules` for forge-std.
+
+## Running on QIE testnet
+
+```sh
+pnpm tyrell setup keys --network testnet --store pinata --gateway https://<you>.mypinata.cloud --new-passphrase
+#   prints seven public addresses; keys stay encrypted in ~/.tyrell/keys
+#   fund the submitter address with testnet QIEV3 (https://qie.digital/faucet)
+cast wallet import tyrell-deployer --interactive      # a throwaway, funded deployer
+export PINATA_JWT=...                                 # never commit it
+pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer --verify
+pnpm tyrell setup register                            # open the page, sign 5 transactions in QIE Wallet
+pnpm tyrell control start &                           # the control process
+pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
+pnpm tyrell status
+pnpm tyrell verify --head <block>                     # live digest == fresh rebuild from chain + IPFS
+```
 
 ## Design origin
 

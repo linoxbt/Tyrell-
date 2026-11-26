@@ -3,5 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "vitest run --passWithNoTests" }
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "bin": {
+    "tyrell": "./src/main.ts"
+  },
+  "dependencies": {
+    "@tyrell/chain": "workspace:*",
+    "@tyrell/control": "workspace:*",
+    "@tyrell/core": "workspace:*",
+    "@tyrell/ipc": "workspace:*",
+    "@tyrell/storage": "workspace:*",
+    "commander": "^12.1.0",
+    "viem": "^2.21.0"
+  }
 }

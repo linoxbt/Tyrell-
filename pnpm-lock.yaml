@@ -34,9 +34,44 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.7)(tsx@4.23.15)
 
-  apps/cli: {}
+  apps/cli:
+    dependencies:
+      '@tyrell/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
+      '@tyrell/control':
+        specifier: workspace:*
+        version: link:../control
+      '@tyrell/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@tyrell/ipc':
+        specifier: workspace:*
+        version: link:../../packages/ipc
+      '@tyrell/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      commander:
+        specifier: ^12.1.0
+        version: 12.1.0
+      viem:
+        specifier: ^2.21.0
+        version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
 
-  apps/control: {}
+  apps/control:
+    dependencies:
+      '@tyrell/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
+      '@tyrell/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@tyrell/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      viem:
+        specifier: ^2.21.0
+        version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
 
   apps/ingest: {}
 
@@ -62,6 +97,9 @@ importers:
 
   packages/chain:
     dependencies:
+      '@tyrell/core':
+        specifier: workspace:*
+        version: link:../core
       viem:
         specifier: ^2.21.0
         version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
@@ -81,9 +119,17 @@ importers:
         specifier: ^3.24.0
         version: 3.25.76
 
-  packages/ipc: {}
+  packages/ipc:
+    dependencies:
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
 
-  packages/storage: {}
+  packages/storage:
+    dependencies:
+      viem:
+        specifier: ^2.21.0
+        version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
 
 packages:
 
@@ -734,6 +780,10 @@ packages:
 
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
 
   content-disposition@2.0.1:
     resolution: {integrity: sha512-e+H0ZXHSWYrENhQzw1LPuP4oF5MzVKmDU6d3hxlvaPEYLLg62MxtQNPRx4SYSuYJSBUgnQIG4HIN2tEtNv7Dog==}
@@ -1921,6 +1971,8 @@ snapshots:
       color-name: 1.1.4
 
   color-name@1.1.4: {}
+
+  commander@12.1.0: {}
 
   content-disposition@2.0.1: {}
 

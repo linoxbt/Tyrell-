@@ -9,3 +9,4 @@ export * from "./seeds.js";
 export * from "./lineage.js";
 export * from "./digest.js";
 export * from "./policy.js";
+export * from "./sign.js";

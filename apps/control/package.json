@@ -3,5 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "vitest run --passWithNoTests" }
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tyrell/chain": "workspace:*",
+    "@tyrell/core": "workspace:*",
+    "@tyrell/storage": "workspace:*",
+    "viem": "^2.21.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }

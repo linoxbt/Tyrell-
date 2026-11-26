@@ -1,5 +1,27 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
-  "include": ["src"]
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/chain"
+    },
+    {
+      "path": "../../packages/storage"
+    },
+    {
+      "path": "../../packages/ipc"
+    },
+    {
+      "path": "../control"
+    }
+  ]
 }

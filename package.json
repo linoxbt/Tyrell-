@@ -19,7 +19,9 @@
     "contracts:build": "pnpm --filter @tyrell/contracts build",
     "contracts:test": "pnpm --filter @tyrell/contracts test",
     "coverage": "vitest run --coverage",
-    "vectors": "pnpm --filter ./packages/core vectors"
+    "vectors": "pnpm --filter ./packages/core vectors",
+    "gen:abi": "pnpm contracts:build && tsx scripts/gen-abi.ts",
+    "tyrell": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=ExperimentalWarning --disable-warning=UNDICI-EHPA\" tsx apps/cli/src/main.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
