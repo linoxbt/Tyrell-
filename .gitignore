@@ -13,3 +13,4 @@ contracts/broadcast/*/31337/
 .tyrell/
 *.keystore.json
 keys/
+contracts/deployments/31337.json

@@ -15,7 +15,9 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "scan-keys": "node scripts/scan-keys.mjs --staged",
-    "scan-keys:history": "node scripts/scan-keys.mjs --history"
+    "scan-keys:history": "node scripts/scan-keys.mjs --history",
+    "contracts:build": "pnpm --filter @tyrell/contracts build",
+    "contracts:test": "pnpm --filter @tyrell/contracts test"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -30,6 +32,9 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@foundry-rs/anvil",
+      "@foundry-rs/cast",
+      "@foundry-rs/forge",
       "esbuild"
     ]
   }

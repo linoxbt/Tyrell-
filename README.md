@@ -12,7 +12,7 @@ Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Probe and scaffold | Done: see [PROBE.md](PROBE.md). P-9 (wallet) and P-10 (Pinata) need a run on the owner's side |
-| 1 | Contracts | Next |
+| 1 | Contracts | Contracts and 81 tests done ([GAS.md](contracts/GAS.md)); testnet deploy and explorer verification need a funded deployer key |
 | 2–7 | Core library, control and storage, agent and payments, detection and response, mainnet, presentation | Planned |
 
 ## Repo layout
@@ -30,10 +30,11 @@ scripts/     probe.ts (Phase 0), probe-wallet.html (P-9), scan-keys.mjs (pre-com
 pnpm install            # also points git at .githooks (pre-commit key scan)
 cp .env.example .env    # never put a private key in it
 pnpm probe              # re-runs the Phase 0 probe and rewrites PROBE.md
+pnpm contracts:test     # Foundry unit, fuzz and invariant tests
 pnpm scan-keys:history  # scans every commit for anything shaped like a private key
 ```
 
-Requires Node 22.21 or newer and pnpm 10.
+Requires Node 22.21 or newer and pnpm 10. Foundry comes from npm (`@foundry-rs/forge`); clone with `--recurse-submodules` for forge-std.
 
 ## Design origin
 
