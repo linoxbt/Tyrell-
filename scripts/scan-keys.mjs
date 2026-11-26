@@ -1,0 +1,39 @@
+#!/usr/bin/env node
+// NFR-01: refuse commits that contain anything shaped like a private key.
+//   --staged   scan lines added in the staged diff (pre-commit hook)
+//   --history  scan every line ever added on any branch (submission checklist)
+// A 32-byte hex value that is public (an event topic, a hash) can be kept by
+// putting "key-scan: allow" on the same line.
+import { execFileSync } from "node:child_process";
+
+const RULES = [
+  { name: "32-byte hex (possible private key)", re: /(?<![0-9a-fA-Fx])(?:0x)?[0-9a-fA-F]{64}(?![0-9a-fA-F])/ },
+  { name: "PEM private key", re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
+  { name: "keystore ciphertext", re: /"ciphertext"\s*:\s*"[0-9a-fA-F]{32,}"/ },
+];
+const ALLOW = "key-scan: allow";
+
+const mode = process.argv[2] ?? "--staged";
+const args =
+  mode === "--history"
+    ? ["log", "-p", "--all", "-U0", "--no-color", "--format=commit %H"]
+    : ["diff", "--cached", "-U0", "--no-color"];
+
+const diff = execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 30 });
+let where = "", file = "";
+const hits = [];
+for (const line of diff.split("\n")) {
+  if (line.startsWith("commit ")) where = line.slice(7, 19);
+  else if (line.startsWith("+++ ")) file = line.slice(6);
+  else if (line.startsWith("+") && !line.includes(ALLOW)) {
+    for (const r of RULES) if (r.re.test(line)) hits.push(`${where ? where + " " : ""}${file}: ${r.name}`);
+  }
+}
+
+if (hits.length) {
+  console.error(`scan-keys: ${hits.length} possible secret(s) found:`);
+  for (const h of [...new Set(hits)]) console.error("  " + h);
+  console.error(`If a value is public, add "${ALLOW}" on its line.`);
+  process.exit(1);
+}
+console.log(`scan-keys: clean (${mode})`);

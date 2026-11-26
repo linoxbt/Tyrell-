@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tyrell probe P-9: QIE Wallet</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+  button { font: inherit; padding: 8px 16px; margin-right: 8px; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+  th, td { text-align: left; border-bottom: 1px solid #ddd; padding: 6px 8px; vertical-align: top; }
+  td.PASS { color: #1a7f37; font-weight: 600; } td.FAIL { color: #cf222e; font-weight: 600; } td.INFO { color: #555; }
+  code, textarea { font: 13px ui-monospace, monospace; }
+  textarea { width: 100%; height: 160px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>P-9: QIE Wallet probe</h1>
+<p>Runs on QIE <b>testnet</b> (chain 1983). It asks the wallet to connect, switch chain, sign typed data and send a
+0-value transaction to your own address, so you need a little testnet QIEV3 for gas
+(<a href="https://qie.digital/faucet">faucet</a>). Enable testnet in the wallet's settings first.</p>
+<button id="run">Run probe</button><button id="copy" disabled>Copy results as Markdown</button>
+<table><thead><tr><th>Check</th><th>Status</th><th>Result</th></tr></thead><tbody id="out"></tbody></table>
+<textarea id="md" readonly placeholder="Markdown for PROBE.md appears here"></textarea>
+
+<script type="module">
+import { recoverTypedDataAddress } from "https://esm.sh/viem@2";
+
+const TESTNET = {
+  chainId: "0x7bf",
+  chainName: "QIE Testnet",
+  nativeCurrency: { name: "QIE", symbol: "QIEV3", decimals: 18 },
+  rpcUrls: ["https://rpc5testnet.qie.digital", "https://rpc4testnet.qie.digital"],
+  blockExplorerUrls: ["https://testnet.qie.digital"],
+};
+const rows = [];
+const out = document.getElementById("out");
+function row(check, status, result) {
+  rows.push({ check, status, result });
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${check}</td><td class="${status}">${status}</td><td></td>`;
+  tr.lastChild.textContent = result;
+  out.appendChild(tr);
+}
+const errText = (e) => `${e?.code ?? ""} ${e?.message ?? String(e)}`.trim();
+
+async function discover() {
+  const found = [];
+  const onAnnounce = (ev) => found.push(ev.detail);
+  window.addEventListener("eip6963:announceProvider", onAnnounce);
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise((r) => setTimeout(r, 600));
+  window.removeEventListener("eip6963:announceProvider", onAnnounce);
+  return found;
+}
+
+async function run() {
+  rows.length = 0; out.innerHTML = "";
+  document.getElementById("run").disabled = true;
+  try {
+    // 1. EIP-6963 discovery
+    const providers = await discover();
+    row("EIP-6963 announcements", providers.length ? "INFO" : "FAIL",
+      providers.map((p) => `${p.info.name} (${p.info.rdns})`).join(", ") || "none");
+    let provider = providers.find((p) => p.info.rdns === "me.qiewallet")?.provider;
+    if (provider) row("Discover rdns me.qiewallet", "PASS", "found via EIP-6963");
+    else if (window.qie) { provider = window.qie; row("Discover rdns me.qiewallet", "FAIL", "not announced; fell back to window.qie"); }
+    else { row("Discover rdns me.qiewallet", "FAIL", "no QIE Wallet provider and no window.qie"); return; }
+    row("provider.isMetaMask", "INFO", String(provider.isMetaMask) + " (spec: never branch on this)");
+
+    // 2. Connect
+    const [account] = await provider.request({ method: "eth_requestAccounts" });
+    row("eth_requestAccounts", account ? "PASS" : "FAIL", account ?? "no account");
+
+    // 3. Switch to testnet 1983, adding it if missing
+    try {
+      await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: TESTNET.chainId }] });
+      row("wallet_switchEthereumChain 0x7bf", "PASS", "switched");
+    } catch (e) {
+      if (e?.code === 4902) {
+        await provider.request({ method: "wallet_addEthereumChain", params: [TESTNET] });
+        row("wallet_addEthereumChain 0x7bf", "PASS", "chain added (was missing)");
+      } else throw e;
+    }
+    const chainId = await provider.request({ method: "eth_chainId" });
+    row("eth_chainId after switch", chainId === TESTNET.chainId ? "PASS" : "FAIL", chainId);
+
+    // 4. EIP-712 typed data shaped like a Tyrell memory envelope
+    const typedData = {
+      domain: { name: "Tyrell", version: "1", chainId: 1983, verifyingContract: "0x000000000000000000000000000000000000dEaD" },
+      types: {
+        EIP712Domain: [
+          { name: "name", type: "string" }, { name: "version", type: "string" },
+          { name: "chainId", type: "uint256" }, { name: "verifyingContract", type: "address" },
+        ],
+        Memory: [
+          { name: "id", type: "bytes16" }, { name: "lane", type: "uint8" }, { name: "kind", type: "uint8" },
+          { name: "bodyHash", type: "bytes32" }, { name: "refBlock", type: "uint64" },
+        ],
+      },
+      primaryType: "Memory",
+      message: {
+        id: "0x0193a1b2c3d47e8f9a0b1c2d3e4f5a6b", lane: 1, kind: 1,
+        bodyHash: "0x" + "11".repeat(32), refBlock: 1,
+      },
+    };
+    const sig = await provider.request({ method: "eth_signTypedData_v4", params: [account, JSON.stringify(typedData)] });
+    const { EIP712Domain, ...types } = typedData.types;
+    const recovered = await recoverTypedDataAddress({ domain: typedData.domain, types, primaryType: "Memory", message: typedData.message, signature: sig });
+    row("eth_signTypedData_v4 + recover", recovered.toLowerCase() === account.toLowerCase() ? "PASS" : "FAIL",
+      `recovered ${recovered}`);
+
+    // 5. Send a 0-value transaction to self
+    const tx = await provider.request({ method: "eth_sendTransaction", params: [{ from: account, to: account, value: "0x0" }] });
+    row("eth_sendTransaction (0 value, self)", tx ? "PASS" : "FAIL", `${tx}  https://testnet.qie.digital/tx/${tx}`);
+
+    // 6. No disconnect event: note what eth_accounts says now
+    const accts = await provider.request({ method: "eth_accounts" });
+    row("eth_accounts (poll on focus)", "INFO", JSON.stringify(accts));
+  } catch (e) {
+    row("error", "FAIL", errText(e));
+  } finally {
+    document.getElementById("run").disabled = false;
+    const md = ["| Check | Status | Result |", "| --- | --- | --- |",
+      ...rows.map((r) => `| ${r.check} | ${r.status} | ${String(r.result).replace(/\|/g, "\\|")} |`)].join("\n");
+    document.getElementById("md").value = `### P-9 QIE Wallet (run ${new Date().toISOString()}, ${navigator.userAgent})\n\n${md}\n`;
+    document.getElementById("copy").disabled = false;
+  }
+}
+
+document.getElementById("run").onclick = run;
+document.getElementById("copy").onclick = () => navigator.clipboard.writeText(document.getElementById("md").value);
+</script>
+</body>
+</html>

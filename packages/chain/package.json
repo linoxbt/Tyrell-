@@ -1,0 +1,9 @@
+{
+  "name": "@tyrell/chain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "test": "vitest run --passWithNoTests" },
+  "dependencies": { "viem": "^2.21.0" }
+}

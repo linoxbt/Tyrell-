@@ -1,0 +1,36 @@
+{
+  "name": "tyrell",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Provenance and quarantine layer between an AI agent and its memory, with payments enforced by QIE smart contracts",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.21"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "probe": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=UNDICI-EHPA\" tsx scripts/probe.ts",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "scan-keys": "node scripts/scan-keys.mjs --staged",
+    "scan-keys:history": "node scripts/scan-keys.mjs --history"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@tyrell/chain": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "viem": "^2.21.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

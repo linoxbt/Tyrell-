@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/chain" },
+    { "path": "packages/storage" },
+    { "path": "packages/ipc" },
+    { "path": "apps/cli" },
+    { "path": "apps/control" },
+    { "path": "apps/ingest" },
+    { "path": "apps/steward" },
+    { "path": "apps/signer" },
+    { "path": "scripts" }
+  ]
+}

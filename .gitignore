@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+coverage/
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+# local state and keys never belong in git
+.tyrell/
+*.keystore.json
+keys/
