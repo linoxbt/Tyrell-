@@ -13,7 +13,8 @@ Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 | --- | --- | --- |
 | 0 | Probe and scaffold | Done: see [PROBE.md](PROBE.md). P-9 (wallet) and P-10 (Pinata) need a run on the owner's side |
 | 1 | Contracts | Contracts and 81 tests done ([GAS.md](contracts/GAS.md)); testnet deploy and explorer verification need a funded deployer key |
-| 2–7 | Core library, control and storage, agent and payments, detection and response, mainnet, presentation | Planned |
+| 2 | Core library | Done: envelope, EIP-712, verifier, lineage and quarantine closure, blast radius, digest, policy engine R0–R5; verifier and policy engine at 100% branch coverage |
+| 3–7 | Control and storage, agent and payments, detection and response, mainnet, presentation | Planned |
 
 ## Repo layout
 
@@ -31,6 +32,8 @@ pnpm install            # also points git at .githooks (pre-commit key scan)
 cp .env.example .env    # never put a private key in it
 pnpm probe              # re-runs the Phase 0 probe and rewrites PROBE.md
 pnpm contracts:test     # Foundry unit, fuzz and invariant tests
+pnpm test               # TypeScript tests (pnpm coverage enforces NFR-04)
+pnpm vectors            # regenerate the TypeScript/Solidity cross-check vectors
 pnpm scan-keys:history  # scans every commit for anything shaped like a private key
 ```
 

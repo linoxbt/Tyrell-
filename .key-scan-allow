@@ -1,0 +1,4 @@
+# Paths whose 32-byte hex values are public (hashes, account IDs), one glob per line.
+# Never add a path that could hold a private key.
+contracts/test/vectors/*.json
+contracts/deployments/*.json

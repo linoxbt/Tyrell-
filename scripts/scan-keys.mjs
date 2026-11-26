@@ -5,6 +5,7 @@
 // A 32-byte hex value that is public (an event topic, a hash) can be kept by
 // putting "key-scan: allow" on the same line.
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 
 const RULES = [
   { name: "32-byte hex (possible private key)", re: /(?<![0-9a-fA-Fx])(?:0x)?[0-9a-fA-F]{64}(?![0-9a-fA-F])/ },
@@ -12,6 +13,13 @@ const RULES = [
   { name: "keystore ciphertext", re: /"ciphertext"\s*:\s*"[0-9a-fA-F]{32,}"/ },
 ];
 const ALLOW = "key-scan: allow";
+
+// Paths listed in .key-scan-allow (globs: * within a segment) hold only public 32-byte values.
+const globToRe = (g) => new RegExp("^" + g.split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*") + "$");
+const allowedPaths = existsSync(".key-scan-allow")
+  ? readFileSync(".key-scan-allow", "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#")).map(globToRe)
+  : [];
+const pathAllowed = (f) => allowedPaths.some((re) => re.test(f));
 
 const mode = process.argv[2] ?? "--staged";
 const args =
@@ -25,7 +33,7 @@ const hits = [];
 for (const line of diff.split("\n")) {
   if (line.startsWith("commit ")) where = line.slice(7, 19);
   else if (line.startsWith("+++ ")) file = line.slice(6);
-  else if (line.startsWith("+") && !line.includes(ALLOW)) {
+  else if (line.startsWith("+") && !line.includes(ALLOW) && !pathAllowed(file)) {
     for (const r of RULES) if (r.re.test(line)) hits.push(`${where ? where + " " : ""}${file}: ${r.name}`);
   }
 }

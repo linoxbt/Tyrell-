@@ -3,6 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "test": "vitest run --passWithNoTests" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. packages/core",
+    "vectors": "tsx scripts/vectors.ts"
+  },
+  "dependencies": {
+    "abitype": "1.2.3",
+    "canonicalize": "^2.1.0",
+    "viem": "^2.21.0",
+    "zod": "^3.24.0"
+  }
 }
