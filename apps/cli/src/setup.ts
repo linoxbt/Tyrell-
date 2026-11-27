@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { randomBytes } from "node:crypto";
-import { encodeFunctionData, toHex, type Address, type Hex, type PublicClient } from "viem";
-import { guardedVaultAbi, laneRegistryAbi, QIE_WALLET_RDNS, type Deployment } from "@tyrell/chain";
+import { encodeFunctionData, erc20Abi, toHex, type Address, type Hex, type PublicClient } from "viem";
+import { guardedVaultAbi, laneRegistryAbi, QIE_WALLET_RDNS, tyrellTestUSDAbi, type Deployment } from "@tyrell/chain";
 import { encryptKeystore, keystoreAddress, newSecret, writeKeystore } from "@tyrell/storage";
 import { defaultRpcs, home, paths, readConfig, ROLES, writeConfig, type TyrellConfig } from "./config.js";
 
@@ -79,7 +79,14 @@ export interface OwnerTx {
 }
 
 /** The owner transactions still missing: lane keys not yet active, and the vault's daily cap. */
-export async function pendingOwnerTxs(c: PublicClient, d: Deployment, addresses: Record<string, Address>, dailyCap: bigint): Promise<OwnerTx[]> {
+export async function pendingOwnerTxs(
+  c: PublicClient,
+  d: Deployment,
+  addresses: Record<string, Address>,
+  dailyCap: bigint,
+  /** Testnet only: top the vault up to this many TyrellTestUSD base units (the owner may mint them). */
+  mintTestToken?: bigint,
+): Promise<OwnerTx[]> {
   const txs: OwnerTx[] = [];
   for (const [lane, role] of Object.entries(LANE_ROLES)) {
     const want = addresses[role]!;
@@ -91,6 +98,16 @@ export async function pendingOwnerTxs(c: PublicClient, d: Deployment, addresses:
   const cap = await c.readContract({ address: d.guardedVault, abi: guardedVaultAbi, functionName: "globalDailyCap", args: [d.token] });
   if (cap !== dailyCap) {
     txs.push({ label: `Set the vault's daily cap to ${dailyCap} base units of ${d.token}`, to: d.guardedVault, data: encodeFunctionData({ abi: guardedVaultAbi, functionName: "setGlobalDailyCap", args: [d.token, dailyCap] }) });
+  }
+  if (mintTestToken) {
+    const bal = await c.readContract({ address: d.token, abi: erc20Abi, functionName: "balanceOf", args: [d.guardedVault] });
+    if (bal < mintTestToken) {
+      txs.push({
+        label: `Mint ${mintTestToken - bal} TyrellTestUSD base units into the vault (testnet only)`,
+        to: d.token,
+        data: encodeFunctionData({ abi: tyrellTestUSDAbi, functionName: "mint", args: [d.guardedVault, mintTestToken - bal] }),
+      });
+    }
   }
   return txs;
 }

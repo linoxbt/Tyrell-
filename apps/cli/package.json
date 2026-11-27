@@ -10,10 +10,13 @@
     "tyrell": "./src/main.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
     "@tyrell/chain": "workspace:*",
     "@tyrell/control": "workspace:*",
     "@tyrell/core": "workspace:*",
     "@tyrell/ipc": "workspace:*",
+    "@tyrell/signer": "workspace:*",
+    "@tyrell/steward": "workspace:*",
     "@tyrell/storage": "workspace:*",
     "commander": "^12.1.0",
     "viem": "^2.21.0"

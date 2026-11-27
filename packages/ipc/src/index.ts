@@ -1,6 +1,6 @@
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { chmodSync, existsSync, unlinkSync } from "node:fs";
-import { z } from "zod";
+import { z, type ZodType } from "zod";
 
 /**
  * Local IPC between Tyrell processes: newline-delimited JSON over a Unix domain socket (spec
@@ -9,6 +9,23 @@ import { z } from "zod";
  */
 
 const blob = z.object({ header: z.record(z.unknown()), body: z.string(), signature: z.string() });
+const id16 = z.string().regex(/^0x[0-9a-f]{32}$/);
+const digits = z.string().regex(/^\d{1,78}$/);
+
+/** What Steward's propose_payment tool sends after the runtime converts the amount to base units. */
+export const Proposal = z
+  .object({
+    recipient: z.string().max(128),
+    amount: digits,
+    token: z.string().max(64),
+    payeeLabel: z.string().max(64).optional(),
+    reason: z.string().max(1024).optional(),
+    cites: z.array(z.string().max(66)).max(32).optional(),
+  })
+  .strict();
+export type Proposal = z.infer<typeof Proposal>;
+
+export const LEDGER_ACTIONS = ["AddPayee", "RemovePayee", "ReinstatePayee", "ReleaseQuarantine"] as const;
 
 export const Request = z.discriminatedUnion("type", [
   z.object({ type: z.literal("submit"), blob }),
@@ -17,6 +34,10 @@ export const Request = z.discriminatedUnion("type", [
   z.object({ type: z.literal("recall"), query: z.string().max(512), limit: z.number().int().min(1).max(32).optional() }),
   z.object({ type: z.literal("show"), id: z.string().regex(/^0x[0-9a-f]{32}$/), forensic: z.boolean().optional() }),
   z.object({ type: z.literal("refresh") }),
+  /** Steward: a payment proposal, with the turn's readSet set by the runtime (I-3). */
+  z.object({ type: z.literal("propose"), proposal: Proposal, readSet: z.array(id16).max(256), turn: id16 }),
+  /** Human CLI: a user-signed ledger action that control only relays as a transaction. */
+  z.object({ type: z.literal("ledger"), action: z.enum(LEDGER_ACTIONS), message: z.record(z.unknown()), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) }),
   z.object({ type: z.literal("digest"), head: z.string().regex(/^\d+$/) }),
 ]);
 export type Request = z.infer<typeof Request>;
@@ -31,10 +52,10 @@ export const encode = (v: unknown): string =>
 export const decode = (s: string): unknown =>
   JSON.parse(s, (_k, x) => (x && typeof x === "object" && typeof x.$bigint === "string" && Object.keys(x).length === 1 ? BigInt(x.$bigint) : x));
 
-export type Handler = (req: Request) => Promise<unknown>;
+export type Handler<R = Request> = (req: R) => Promise<unknown>;
 
-/** Serves requests on a Unix socket readable only by this OS user. */
-export function serve(path: string, handler: Handler): Promise<Server> {
+/** Serves requests on a Unix socket readable only by this OS user. Requests are parsed with `schema`. */
+export function serve<R = Request>(path: string, handler: Handler<R>, schema: ZodType<R> = Request as unknown as ZodType<R>): Promise<Server> {
   if (existsSync(path)) unlinkSync(path);
   const server = createServer((sock: Socket) => {
     let buf = "";
@@ -57,7 +78,7 @@ export function serve(path: string, handler: Handler): Promise<Server> {
   const respond = async (line: string): Promise<Response> => {
     let parsed;
     try {
-      parsed = Request.safeParse(decode(line));
+      parsed = schema.safeParse(decode(line));
     } catch {
       return { ok: false, error: "invalid JSON" };
     }
@@ -78,7 +99,7 @@ export function serve(path: string, handler: Handler): Promise<Server> {
 }
 
 /** Sends one request and waits for its response. */
-export function call(path: string, req: Request, timeoutMs = 120_000): Promise<unknown> {
+export function call<R = Request>(path: string, req: R, timeoutMs = 120_000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const sock = createConnection(path);
     let buf = "";

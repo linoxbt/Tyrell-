@@ -15,7 +15,8 @@ Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 | 1 | Contracts | Contracts and 81 tests done ([GAS.md](contracts/GAS.md)); testnet deploy and explorer verification need a funded deployer key |
 | 2 | Core library | Done: envelope, EIP-712, verifier, lineage and quarantine closure, blast radius, digest, policy engine R0–R5; verifier and policy engine at 100% branch coverage |
 | 3 | Control and storage | Done on a local chain: `tyrell setup`, deploy, control (encrypt, pin, anchor, index), `rebuild --fresh`, `verify`; testnet run needs a funded deployer and a Pinata JWT |
-| 4–7 | Agent and payments, detection and response, mainnet, presentation | Planned |
+| 4 | Agent and payments | Done on a local chain: Steward (readSet, three tools, context labels), policy engine in control, signer process, payees via QIE ID round-trip, decision memories; M1 acceptance run passes |
+| 5–7 | Detection and response, mainnet, presentation | Planned |
 
 ## Repo layout
 
@@ -49,9 +50,13 @@ pnpm tyrell setup keys --network testnet --store pinata --gateway https://<you>.
 cast wallet import tyrell-deployer --interactive      # a throwaway, funded deployer
 export PINATA_JWT=...                                 # never commit it
 pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer --verify
-pnpm tyrell setup register                            # open the page, sign 5 transactions in QIE Wallet
-pnpm tyrell control start &                           # the control process
+pnpm tyrell setup register --mint 10000000            # page: lane keys, vault cap, 10 test dollars into the vault
+pnpm tyrell control start &                           # the control process (control, submitter, data keys)
+pnpm tyrell signer start &                            # the signer process (vault signer key only)
+pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5
 pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
+export LLM_BASE_URL=... LLM_API_KEY=... LLM_MODEL=...   # any OpenAI-compatible endpoint
+pnpm tyrell steward "pay this month's rent"           # agent key only; proposes, never signs
 pnpm tyrell status
 pnpm tyrell verify --head <block>                     # live digest == fresh rebuild from chain + IPFS
 ```

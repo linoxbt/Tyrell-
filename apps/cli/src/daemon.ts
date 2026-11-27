@@ -1,8 +1,9 @@
 import type { Server } from "node:net";
-import { formatEther } from "viem";
+import { readFileSync } from "node:fs";
+import { formatEther, type Address } from "viem";
 import type { Id16 } from "@tyrell/core";
-import { serve, type Request } from "@tyrell/ipc";
-import { Control, type BuiltProjection } from "@tyrell/control";
+import { call, serve, type Request } from "@tyrell/ipc";
+import { Control, Payments, type BuiltProjection, type SignedPayRequest } from "@tyrell/control";
 import { ProjectionDb } from "@tyrell/storage";
 import { account, blobStore, checkKeyIsolation, clients, dataKey, deployment, paths, readConfig } from "./config.js";
 
@@ -37,6 +38,14 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
   const db = new ProjectionDb(paths().db);
   const control = new Control({ deployment: d, clients: cs, submitter, rpc: c.rpcs[0]!, dataKey: await dataKey("control"), store: blobStore(c), db });
   const first = await control.start();
+  const addresses = JSON.parse(readFileSync(paths().addresses, "utf8")) as Record<string, Address>;
+  const payments = new Payments({
+    control,
+    clients: cs,
+    controlKey: account("control", "control"),
+    signerAddress: addresses.signer!,
+    signer: (r: SignedPayRequest) => call(paths().signerSocket, r) as Promise<{ txHash: `0x${string}` }>,
+  });
   log(`control: ${first.projection.size} memories at block ${first.head}, digest ${first.digest}`);
 
   const handler = async (req: Request): Promise<unknown> => {
@@ -61,7 +70,12 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
         };
       }
       case "recall":
+        await control.refresh(); // recall must see the latest anchors and the latest quarantine
         return db.search(req.query, req.limit ?? 8);
+      case "propose":
+        return payments.decide(req.proposal, req.readSet as `0x${string}`[], req.turn as `0x${string}`);
+      case "ledger":
+        return control.relayLedger(req.action, req.message, req.signature as `0x${string}`);
       case "show": {
         const p = control.projection ?? (await control.refresh());
         const m = p.projection.get(req.id as Id16);

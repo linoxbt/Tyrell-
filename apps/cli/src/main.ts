@@ -8,6 +8,7 @@ import { ownerPageHtml, pendingOwnerTxs, serveOwnerPage, setupKeys } from "./set
 import { deploy } from "./deploy.js";
 import { startDaemon } from "./daemon.js";
 import { rebuild, say, show, status, verifyDigest } from "./commands.js";
+import { payeeAdd, payeeList, payeeReinstate, payeeRemove, release, startSigner, stewardTurn } from "./agent.js";
 
 const print = (v: unknown) => console.log(JSON.stringify(JSON.parse(encode(v)), (_k, x) => (x && typeof x === "object" && "$bigint" in x ? x.$bigint : x), 2));
 const addressArg = (v: string): Address => {
@@ -62,15 +63,19 @@ setup
   .command("register")
   .description("Open a local page that registers the lane keys and the vault cap from QIE Wallet")
   .option("--daily-cap <units>", "vault-wide daily cap in token base units", "5000000")
+  .option("--mint <units>", "testnet only: fund the vault with TyrellTestUSD up to this many base units")
   .option("--port <port>", "local port", "0")
   .action(
-    run(async (o: { dailyCap: string; port: string }) => {
+    run(async (o: { dailyCap: string; port: string; mint?: string }) => {
       const c = readConfig();
       const d = deployment(c);
       const pub = clients(c)[0]!;
       const addrs = JSON.parse(readFileSync(paths().addresses, "utf8")) as Record<string, Address>;
       const cap = BigInt(o.dailyCap);
-      const txs = await pendingOwnerTxs(pub, d, addrs, cap);
+      const testToken = (JSON.parse(readFileSync(c.deploymentFile!, "utf8")) as { testToken?: boolean }).testToken === true;
+      if (o.mint && !testToken) throw new Error("--mint only works with the testnet TyrellTestUSD token");
+      const mint = o.mint ? BigInt(o.mint) : undefined;
+      const txs = await pendingOwnerTxs(pub, d, addrs, cap, mint);
       if (txs.length === 0) return void console.log("Everything is registered.");
       const html = ownerPageHtml({ chainId: c.chainId, chainName: c.network === "mainnet" ? "QIE Mainnet" : c.network === "testnet" ? "QIE Testnet" : "Local", rpcUrls: c.rpcs.slice(0, 2), owner: d.owner, txs });
       const { url, server } = await serveOwnerPage(html, Number(o.port));
@@ -78,7 +83,7 @@ setup
       for (const t of txs) console.log(`  - ${t.label}`);
       for (;;) {
         await new Promise((r) => setTimeout(r, 4_000));
-        if ((await pendingOwnerTxs(pub, d, addrs, cap)).length === 0) break;
+        if ((await pendingOwnerTxs(pub, d, addrs, cap, mint)).length === 0) break;
       }
       server.close();
       console.log("Registered: four lane keys active and the vault cap set.");
@@ -119,6 +124,62 @@ control
       await new Promise(() => undefined);
     }),
   );
+
+const signerCmd = program.command("signer").description("The vault signer process");
+signerCmd.command("start").action(
+  run(async () => {
+    const server = await startSigner();
+    const stop = () => server.close(() => process.exit(0));
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+    await new Promise(() => undefined);
+  }),
+);
+
+program
+  .command("steward <task>")
+  .description("Run one Steward turn (agent key only; needs LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)")
+  .action(
+    run(async (task: string) => {
+      const t = await stewardTurn(task);
+      print({ turn: t.turn, readSet: t.readSet, writes: t.writes, decisions: t.decisions, final: t.final });
+    }),
+  );
+
+const payee = program.command("payee").description("Manage payees (signed with the user key in this process)");
+payee
+  .command("add")
+  .requiredOption("--label <label>", "e.g. landlord")
+  .option("--qie-id <id>", "QIE ID, resolved once now and required to round-trip")
+  .option("--address <0x>", "raw address instead of a QIE ID", addressArg)
+  .option("--token <address>", "payee token (default: the vault token)", addressArg)
+  .requiredOption("--cap <amount>", "per-payment cap in token units")
+  .requiredOption("--daily <amount>", "daily cap in token units")
+  .option("--confirm <last6>", "last 6 characters of the address (prompted for if omitted)")
+  .action(
+    run(async (o: { label: string; qieId?: string; address?: Address; token?: Address; cap: string; daily: string; confirm?: string }) =>
+      print(
+        await payeeAdd({
+          label: o.label,
+          cap: o.cap,
+          daily: o.daily,
+          ...(o.qieId ? { qieId: o.qieId } : {}),
+          ...(o.address ? { address: o.address } : {}),
+          ...(o.token ? { token: o.token } : {}),
+          ...(o.confirm ? { confirm: o.confirm } : {}),
+        }),
+      ),
+    ),
+  );
+payee.command("list").action(run(async () => print(await payeeList())));
+payee.command("remove <label>").action(run(async (label: string) => print(await payeeRemove(label))));
+payee.command("reinstate <label>").action(run(async (label: string) => print(await payeeReinstate(label))));
+
+program
+  .command("release <seedId>")
+  .description("Release a quarantine seed (user key)")
+  .requiredOption("--reason <cid>", "IPFS CID of the reason")
+  .action(run(async (seedId: string, o: { reason: string }) => print(await release(BigInt(seedId), o.reason))));
 
 program
   .command("say <text>")

@@ -16,6 +16,9 @@
     },
     {
       "path": "../../packages/storage"
+    },
+    {
+      "path": "../../packages/ipc"
     }
   ]
 }

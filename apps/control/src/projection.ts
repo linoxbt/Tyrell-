@@ -17,6 +17,7 @@ import type { Hex } from "viem";
 
 export interface BuiltProjection {
   head: bigint;
+  snapshot: ChainSnapshot;
   results: VerifyResult[];
   projection: Projection;
   digest: Hex;
@@ -67,7 +68,7 @@ export async function buildProjection(snap: ChainSnapshot, d: Deployment, fetchB
   );
   const projection = computeProjection(results, snap.ledger.seeds);
   const input = { acct: d.acct, head: snap.head, projection, payees: snap.ledger.payees, seeds: snap.ledger.seeds };
-  return { head: snap.head, results, projection, digest: projectionDigest(input), document: digestDocument(input), keys };
+  return { head: snap.head, snapshot: snap, results, projection, digest: projectionDigest(input), document: digestDocument(input), keys };
 }
 
 /** Rows for the recall index: visible memories only, with their class for context labels. */

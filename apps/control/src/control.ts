@@ -11,7 +11,7 @@ import {
   type WalletClient,
 } from "viem";
 import { Blob, Lane, memoryTypedData, toMemoryStruct, type AnchorRecord, type Id16 } from "@tyrell/core";
-import { memoryAnchorAbi, laneRegistryAbi, qieMainnet, qieTestnet, readSnapshot, type Deployment } from "@tyrell/chain";
+import { memoryAnchorAbi, laneRegistryAbi, qieMainnet, qieTestnet, readSnapshot, tyrellLedgerAbi, type Deployment } from "@tyrell/chain";
 import { sealBlob, type BlobStore, type DataKey, type ProjectionDb } from "@tyrell/storage";
 import { anchorDomain, buildProjection, recallRows, storeFetcher, type BuiltProjection } from "./projection.js";
 
@@ -198,5 +198,49 @@ export class Control {
 
   get projection(): BuiltProjection | undefined {
     return this.last;
+  }
+
+  get deployment(): Deployment {
+    return this.o.deployment;
+  }
+
+  /**
+   * Relays a user-signed ledger action (payee add/remove/reinstate, quarantine release) as a
+   * transaction paid by the submitter. Control adds nothing: TyrellLedger checks the user-lane
+   * signature, nonce and deadline itself (I-11), so a relayed message can only do what the user signed.
+   */
+  relayLedger(action: "AddPayee" | "RemovePayee" | "ReinstatePayee" | "ReleaseQuarantine", m: Record<string, unknown>, signature: Hex): Promise<{ txHash: Hex; block: bigint }> {
+    return this.serial(async () => {
+      const big = (k: string) => BigInt(m[k] as string | number | bigint);
+      const common = { address: this.o.deployment.tyrellLedger, abi: tyrellLedgerAbi, chain: this.wallet.chain, account: this.o.submitter } as const;
+      let hash: Hex;
+      switch (action) {
+        case "AddPayee":
+          hash = await this.wallet.writeContract({
+            ...common,
+            functionName: "addPayee",
+            args: [
+              { addr: m.addr as Hex, token: m.token as Hex, capPerTx: big("capPerTx"), capPerDay: big("capPerDay"), label: m.label as string, active: false, suspended: false },
+              m.payeeId as Hex,
+              big("nonce"),
+              big("deadline"),
+              signature,
+            ],
+          });
+          break;
+        case "RemovePayee":
+          hash = await this.wallet.writeContract({ ...common, functionName: "removePayee", args: [m.payeeId as Hex, big("nonce"), big("deadline"), signature] });
+          break;
+        case "ReinstatePayee":
+          hash = await this.wallet.writeContract({ ...common, functionName: "reinstatePayee", args: [m.payeeId as Hex, big("nonce"), big("deadline"), signature] });
+          break;
+        case "ReleaseQuarantine":
+          hash = await this.wallet.writeContract({ ...common, functionName: "releaseQuarantine", args: [big("seedId"), m.reasonCid as string, big("nonce"), big("deadline"), signature] });
+          break;
+      }
+      const r = await this.reader.waitForTransactionReceipt({ hash });
+      if (r.status !== "success") throw new SubmitRejected(`ledger transaction ${hash} reverted`);
+      return { txHash: hash, block: r.blockNumber };
+    });
   }
 }

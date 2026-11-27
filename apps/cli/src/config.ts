@@ -42,6 +42,7 @@ export const paths = () => {
     addresses: join(h, "keys", "addresses.json"),
     db: process.env.TYRELL_DB ?? join(h, "projection.sqlite"),
     socket: join(h, "control.sock"),
+    signerSocket: join(h, "signer.sock"),
     blobs: join(h, "blobs"),
   };
 };

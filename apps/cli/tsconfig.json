@@ -22,6 +22,12 @@
     },
     {
       "path": "../control"
+    },
+    {
+      "path": "../signer"
+    },
+    {
+      "path": "../steward"
     }
   ]
 }

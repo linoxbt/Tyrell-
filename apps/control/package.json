@@ -9,6 +9,7 @@
   "dependencies": {
     "@tyrell/chain": "workspace:*",
     "@tyrell/core": "workspace:*",
+    "@tyrell/ipc": "workspace:*",
     "@tyrell/storage": "workspace:*",
     "viem": "^2.21.0"
   },
