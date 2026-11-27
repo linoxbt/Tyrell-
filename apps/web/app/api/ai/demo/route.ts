@@ -6,7 +6,7 @@ import { llmFromEnv } from "@/lib/playground/vendor/llm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const config = () => {
   const agent = llmFromEnv(process.env, "agent");
@@ -23,7 +23,7 @@ export function GET() {
 export async function POST(req: Request) {
   const c = config();
   if (!c) return NextResponse.json({ error: "not_configured" }, { status: 503 });
-  let body: { scenario?: unknown; text?: unknown };
+  let body: { scenario?: unknown; text?: unknown; hijacked?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -37,7 +37,8 @@ export async function POST(req: Request) {
     if (!poison || poison.length > CUSTOM_MAX) return NextResponse.json({ error: `text must be 1 to ${CUSTOM_MAX} characters` }, { status: 400 });
   }
 
-  const key = `${scenario.id}:${poison}`;
+  const hijacked = body.hijacked === true;
+  const key = `${scenario.id}:${hijacked}:${poison}`;
   const hit = scenario.id !== "custom" ? cached<DemoResult>(key) : undefined;
   if (hit) return NextResponse.json({ ...hit, cached: true });
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
   const gate = admit(visitor);
   if (!gate.ok) return NextResponse.json({ error: "rate_limited", message: gate.reason, retryAfter: gate.retryAfter }, { status: 429, headers: { "retry-after": String(gate.retryAfter) } });
 
-  const result = await runDemo(scenario, poison, c);
+  const result = await runDemo(scenario, poison, c, { hijacked });
   if (scenario.id !== "custom" && !result.steward.error && !result.unprotected.error) remember(key, result);
   return NextResponse.json(result);
 }

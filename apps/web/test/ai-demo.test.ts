@@ -79,6 +79,19 @@ describe("live AI demo (server side)", () => {
     }
   });
 
+  it("a hijacked model: the real model's payment is rewritten to the attacker; Tyrell blocks it, the plain agent pays it", async () => {
+    const { f } = fakeFortytwo(LANDLORD); // the real model behaves: both agents propose the landlord
+    const s = SCENARIOS[0]!;
+    const r = await runDemo(s, s.poison, cfg, { fetch: f, hijacked: true });
+    expect(r.hijacked).toBe(true);
+    const st = r.steward.steps.find((x) => x.type === "tool") as { original?: string; result: string };
+    expect(st.original).toBe(LANDLORD);
+    expect(r.steward.proposals[0]!.recipient).toBe(ATTACKER);
+    expect(r.steward.proposals[0]!.verdict).toMatchObject({ decision: "BLOCK", code: "UNKNOWN_RECIPIENT" });
+    expect(r.unprotected.proposals[0]!.recipient).toBe(ATTACKER);
+    expect(r.judge.ai?.injection).toBe(true); // the judge is not behind the hijacker
+  });
+
   it("reports a model outage in the run instead of failing", async () => {
     const down = (async () => new Response("{}", { status: 429 })) as unknown as typeof fetch;
     const s = SCENARIOS[1]!;

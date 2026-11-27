@@ -18,8 +18,9 @@ if (!agent || !judge) {
 }
 async function main(agent: LlmConfig, judge: LlmConfig) {
   const runs: Record<string, DemoResult> = {};
-  for (const s of SCENARIOS) {
-    const r = await runDemo(s, s.poison, { agent, judge });
+  for (const hijacked of [false, true])
+for (const s of SCENARIOS) {
+    const r = await runDemo(s, s.poison, { agent, judge }, { hijacked });
     const err = r.steward.error ?? r.unprotected.error;
     if (err) {
       console.error(`${s.id}: ${err}`);
@@ -32,7 +33,7 @@ async function main(agent: LlmConfig, judge: LlmConfig) {
     console.log(
       `${s.id}: judge ${r.judge.aiScore} (rules ${r.judge.rules.score}) · Tyrell: ${verdicts} · plain agent paid: ${r.unprotected.proposals.map((p) => p.recipient).join(", ") || "nobody"} · ${(r.ms / 1000).toFixed(1)}s`,
     );
-    runs[s.id] = r;
+    runs[`${s.id}${hijacked ? ":hijacked" : ""}`] = r;
     await new Promise((res) => setTimeout(res, 3000)); // stay well inside the provider's per-minute limit
   }
   const out = new URL("../public/ai-demo-recorded.json", import.meta.url);

@@ -33,6 +33,11 @@ The second tab runs a real model, Qwen 3.8 on [Fortytwo](https://fortytwo.networ
 2. **Steward on Tyrell** gets the user's instruction and the poisoned memory, labelled, with its real system prompt and tools. Its `propose_payment` goes to the real policy engine, whose verdict it reads back.
 3. A **plain agent** gets the same model and the same memories with no labels, no policy and a normal wallet.
 
+Two model modes:
+
+- **Honest model:** the model as it is. In our recorded runs Qwen 3.8 spotted all three attacks on its own, with or without Tyrell, and the judge scored them 98 to 100.
+- **Hijacked model:** the attacker sits between the agents and the model (a stolen API route, a poisoned proxy or a backdoored model) and rewrites every payment the model proposes to the attacker's address. The real model still runs; the page shows what it proposed and what the hijacker turned it into. This is the case Tyrell exists for: the plain agent pays the attacker, Steward on Tyrell is blocked with `UNKNOWN_RECIPIENT` every time.
+
 Both outcomes then run on Tyrell's contracts in your browser: the guarded vault pays only the registered landlord (and refuses the attacker even when asked directly), while the plain wallet sends whatever the model asked for. The model call runs on the site's server, because the model API takes no browser calls and the key must stay secret; nothing about the outcome depends on the model.
 
 Live runs are rate-limited and preset results are cached for 30 minutes. When live runs are off or busy, the tab shows real runs recorded with `pnpm record:ai`.
