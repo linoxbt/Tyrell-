@@ -2,3 +2,5 @@
 next-env.d.ts
 .vercel
 .env*
+.next-*
+!.env.example

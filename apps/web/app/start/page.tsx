@@ -71,7 +71,7 @@ export default function Start() {
   const net = w.chainId === 1983 ? "testnet" : "mainnet";
   const owner = w.account ?? "<your QIE Wallet address>";
 
-  const s1: State = hasWallet ? "done" : "now";
+  const s1: State = hasWallet || w.account ? "done" : "now";
   const s2: State = w.session ? "done" : s1 === "done" ? "now" : "todo";
   const s3: State = w.account && onQie ? "done" : s2 === "done" ? "now" : "todo";
   const browserDone = s1 === "done" && s2 === "done" && s3 === "done";
@@ -142,9 +142,13 @@ export default function Start() {
               >
                 {hasQie
                   ? "QIE Wallet is installed in this browser."
+                  : w.account
+                    ? `Connected with ${w.wallet?.name ?? "your wallet"}. QIE Wallet is recommended, but any EVM wallet that can use QIE works.`
                   : hasWallet
                     ? `Found ${w.wallets.map((x) => x.name).join(", ")}. QIE Wallet is recommended, but any EVM wallet that can switch to QIE works.`
-                    : "Install the QIE Wallet extension, or on a phone open this page in the QIE Wallet app's browser. This wallet becomes the owner of your Tyrell account."}
+                    : w.mode === "reown"
+                      ? "Install the QIE Wallet extension or app. On a phone you can also connect any WalletConnect wallet by scanning a QR code or opening it directly. This wallet becomes the owner of your Tyrell account."
+                      : "Install the QIE Wallet extension, or on a phone open this page in the QIE Wallet app's browser. This wallet becomes the owner of your Tyrell account."}
               </Step>
               <Step n={2} state={s2} title="Connect and sign in" action={<ConnectButton />}>
                 {w.session

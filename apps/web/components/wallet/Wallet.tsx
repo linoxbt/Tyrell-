@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { CHAINS, QIE_WALLET_RDNS, QIE_WALLET_URL, chainName, useWallet, type DetectedWallet } from "@/lib/wallet";
-import { Glyph } from "../Logo";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -112,9 +111,8 @@ function Pick() {
       ))}
       {ready && !hasQie && (
         <a href={QIE_WALLET_URL} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3 transition-colors hover:bg-paper">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-50">
-            <Glyph size={18} />
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/qie-wallet.png" alt="" className="h-9 w-9 rounded-lg" />
           <span className="min-w-0">
             <span className="block text-[15px] text-ink">QIE Wallet</span>
             <span className="block text-xs text-muted">Not detected. Get the extension or app</span>
@@ -152,7 +150,7 @@ function WalletRow({ w, onClick, disabled }: { w: DetectedWallet; onClick: () =>
 }
 
 function Account() {
-  const { account, chainId, session, signIn, switchTo, disconnect, busy, wallet, closeSheet } = useWallet();
+  const { account, chainId, session, signIn, switchTo, disconnect, busy, wallet, closeSheet, manage, mode } = useWallet();
   if (!account) return null;
   const onQie = chainId === 1990 || chainId === 1983;
   return (
@@ -197,9 +195,17 @@ function Account() {
           Get started
         </Link>
       </div>
-      <button onClick={disconnect} className="mt-3 w-full py-2 text-sm text-muted transition-colors hover:text-rose">
-        Disconnect
-      </button>
+      <div className="mt-3 flex items-center justify-center gap-6">
+        {manage && (
+          <button onClick={manage} className="py-2 text-sm text-muted transition-colors hover:text-ink">
+            Wallet details
+          </button>
+        )}
+        <button onClick={disconnect} className="py-2 text-sm text-muted transition-colors hover:text-rose">
+          Disconnect
+        </button>
+      </div>
+      {mode === "reown" && <p className="mt-1 text-center text-[11px] text-muted">Connected with Reown · WalletConnect</p>}
     </div>
   );
 }

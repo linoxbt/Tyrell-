@@ -6,14 +6,23 @@ import { getAddress, isAddress, toHex, verifyMessage, type Address, type Hex } f
 /*
  * Wallet login for the Tyrell web app.
  *
- * Wallets are discovered with EIP-6963 (QIE Wallet announces itself as rdns "me.qiewallet"), with the
- * legacy window.ethereum as a fallback. "Signing in" is an EIP-4361 message the wallet signs and the
- * page verifies locally: it proves control of the address, costs nothing and sends no transaction.
- * Nothing here can move funds; on-chain actions are separate, explicit wallet transactions.
+ * The rest of the app talks to `useWallet()`. Two providers implement it:
+ *  - ReownWalletProvider (lib/reown.tsx): Reown AppKit, when NEXT_PUBLIC_REOWN_PROJECT_ID is set.
+ *    Browser wallets (QIE Wallet first), mobile wallets over WalletConnect, QR codes and deep links.
+ *  - InjectedWalletProvider (below): EIP-6963 browser wallets only, used when no project id is set.
+ *
+ * "Signing in" is the same in both: an EIP-4361 message the wallet signs and the page verifies
+ * locally. It proves control of the address, costs nothing and sends no transaction. Nothing here
+ * can move funds; on-chain actions are separate, explicit wallet transactions.
  */
 
 export const QIE_WALLET_RDNS = "me.qiewallet";
 export const QIE_WALLET_URL = "https://www.qiewallet.me";
+export const QIE_WALLET_LINKS = {
+  chrome: "https://chromewebstore.google.com/detail/qie-wallet-and-domain-res/oljchdcgmibnjbbopolafbjncfhdacjb",
+  ios: "https://apps.apple.com/app/qie-wallet/id6445826746",
+  android: "https://play.google.com/store/search?q=qie+wallet&c=apps",
+};
 
 export interface Eip1193 {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
@@ -68,7 +77,10 @@ export interface Session {
   expiresAt: string;
 }
 
-interface WalletCtx {
+export interface WalletCtx {
+  /** "reown" when AppKit is configured, "injected" for the browser-wallet-only fallback. */
+  mode: "reown" | "injected";
+  /** Browser wallets announced over EIP-6963 (both modes). */
   wallets: DetectedWallet[];
   ready: boolean;
   wallet?: DetectedWallet;
@@ -78,16 +90,19 @@ interface WalletCtx {
   busy?: "connecting" | "signing" | "switching";
   error?: string;
   sheetOpen: boolean;
+  /** Connect if needed (AppKit's modal or Tyrell's picker), otherwise show the account sheet. */
   openSheet(): void;
   closeSheet(): void;
   connect(w: DetectedWallet): Promise<void>;
   signIn(): Promise<void>;
   switchTo(chainId: number): Promise<void>;
   disconnect(): void;
+  /** Reown only: open AppKit's own account view (networks, addresses, disconnect). */
+  manage?(): void;
 }
 
-const Ctx = createContext<WalletCtx | null>(null);
-const LAST = "tyrell.wallet.rdns";
+export const WalletContext = createContext<WalletCtx | null>(null);
+export const LAST_WALLET = "tyrell.wallet.rdns";
 const SESSION = "tyrell.wallet.session";
 
 /** The EIP-4361 ("Sign-In with Ethereum") message the wallet signs. */
@@ -107,7 +122,7 @@ export function signInMessage(o: { host: string; origin: string; address: Addres
   ].join("\n");
 }
 
-function loadSession(address?: Address): Session | undefined {
+export function loadSession(address?: Address): Session | undefined {
   if (!address || typeof localStorage === "undefined") return undefined;
   try {
     const s = JSON.parse(localStorage.getItem(SESSION) ?? "null") as Session | null;
@@ -118,31 +133,54 @@ function loadSession(address?: Address): Session | undefined {
   }
 }
 
-const errText = (e: unknown) => {
+export const clearSession = () => localStorage.removeItem(SESSION);
+
+export const errText = (e: unknown) => {
   const x = e as { code?: number; shortMessage?: string; message?: string };
   if (x?.code === 4001) return "You declined the request in your wallet.";
   if (x?.code === -32002) return "Your wallet already has a request open. Check the wallet window.";
   return x?.shortMessage ?? x?.message ?? String(e);
 };
 
-export function WalletProvider({ children }: { children: React.ReactNode }) {
+/** Ask the wallet to sign the sign-in message, verify it here, and keep it for 24 hours. */
+export async function signInWith(provider: Eip1193, account: Address, chainId: number | undefined): Promise<Session> {
+  const now = new Date();
+  const issuedAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + 24 * 3600 * 1000).toISOString();
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const message = signInMessage({ host: location.host, origin: location.origin, address: account, chainId: chainId ?? 1990, nonce, issuedAt, expiresAt });
+  const signature = (await provider.request({ method: "personal_sign", params: [toHex(message), account] })) as Hex;
+  if (!(await verifyMessage({ address: account, message, signature }))) throw new Error("The signature does not match this address.");
+  const s: Session = { address: account, chainId: chainId ?? 1990, message, signature, issuedAt, expiresAt };
+  localStorage.setItem(SESSION, JSON.stringify(s));
+  return s;
+}
+
+/** Switch the wallet's network, adding QIE first if the wallet does not know it. */
+export async function switchWith(provider: Eip1193, id: number): Promise<void> {
+  const hex = `0x${id.toString(16)}`;
+  try {
+    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
+  } catch (e) {
+    const code = (e as { code?: number }).code;
+    const c = CHAINS[id];
+    if (!((code === 4902 || code === -32603) && c)) throw e;
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [{ chainId: hex, chainName: c.name, nativeCurrency: { name: "QIE", symbol: "QIEV3", decimals: 18 }, rpcUrls: c.rpcUrls, ...(c.explorer ? { blockExplorerUrls: [c.explorer] } : {}) }],
+    });
+  }
+}
+
+/** EIP-6963 discovery (QIE Wallet first), falling back to window.ethereum. */
+export function useDiscoveredWallets(): { wallets: DetectedWallet[]; ready: boolean } {
   const [wallets, setWallets] = useState<DetectedWallet[]>([]);
   const [ready, setReady] = useState(false);
-  const [wallet, setWallet] = useState<DetectedWallet>();
-  const [account, setAccount] = useState<Address>();
-  const [chainId, setChainId] = useState<number>();
-  const [session, setSession] = useState<Session>();
-  const [busy, setBusy] = useState<WalletCtx["busy"]>();
-  const [error, setError] = useState<string>();
-  const [sheetOpen, setSheetOpen] = useState(false);
   const found = useRef(new Map<string, DetectedWallet>());
-
-  // 1. discover wallets (EIP-6963), falling back to window.ethereum
   useEffect(() => {
     const add = (w: DetectedWallet) => {
       if (found.current.has(w.rdns)) return;
       found.current.set(w.rdns, w);
-      // QIE Wallet first, then alphabetical
       setWallets([...found.current.values()].sort((a, b) => (a.rdns === QIE_WALLET_RDNS ? -1 : b.rdns === QIE_WALLET_RDNS ? 1 : a.name.localeCompare(b.name))));
     };
     const on = (e: Event) => {
@@ -161,12 +199,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(t);
     };
   }, []);
+  return { wallets, ready };
+}
 
-  // 2. reconnect silently to the last wallet (eth_accounts never prompts)
+/** Browser wallets only (EIP-6963), with Tyrell's own picker. Used when Reown is not configured. */
+export function InjectedWalletProvider({ children }: { children: React.ReactNode }) {
+  const { wallets, ready } = useDiscoveredWallets();
+  const [wallet, setWallet] = useState<DetectedWallet>();
+  const [account, setAccount] = useState<Address>();
+  const [chainId, setChainId] = useState<number>();
+  const [session, setSession] = useState<Session>();
+  const [busy, setBusy] = useState<WalletCtx["busy"]>();
+  const [error, setError] = useState<string>();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // reconnect silently to the last wallet (eth_accounts never prompts)
   useEffect(() => {
     if (!ready || wallet) return;
-    const last = localStorage.getItem(LAST);
-    const w = wallets.find((x) => x.rdns === last);
+    const w = wallets.find((x) => x.rdns === localStorage.getItem(LAST_WALLET));
     if (!w) return;
     (async () => {
       try {
@@ -178,12 +228,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setChainId(Number(await w.provider.request({ method: "eth_chainId" })));
         setSession(loadSession(a));
       } catch {
-        /* the wallet is locked or gone: stay disconnected */
+        /* locked or gone: stay disconnected */
       }
     })();
   }, [ready, wallets, wallet]);
 
-  // 3. follow account and network changes
+  // follow account and network changes
   useEffect(() => {
     const p = wallet?.provider;
     if (!p?.on) return;
@@ -213,7 +263,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setAccount(a);
       setChainId(Number(await w.provider.request({ method: "eth_chainId" })));
       setSession(loadSession(a));
-      localStorage.setItem(LAST, w.rdns);
+      localStorage.setItem(LAST_WALLET, w.rdns);
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -226,16 +276,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setError(undefined);
     setBusy("signing");
     try {
-      const now = new Date();
-      const issuedAt = now.toISOString();
-      const expiresAt = new Date(now.getTime() + 24 * 3600 * 1000).toISOString();
-      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
-      const message = signInMessage({ host: location.host, origin: location.origin, address: account, chainId: chainId ?? 1990, nonce, issuedAt, expiresAt });
-      const signature = (await wallet.provider.request({ method: "personal_sign", params: [toHex(message), account] })) as Hex;
-      if (!(await verifyMessage({ address: account, message, signature }))) throw new Error("The signature does not match this address.");
-      const s: Session = { address: account, chainId: chainId ?? 1990, message, signature, issuedAt, expiresAt };
-      localStorage.setItem(SESSION, JSON.stringify(s));
-      setSession(s);
+      setSession(await signInWith(wallet.provider, account, chainId));
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -248,28 +289,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (!wallet) return;
       setError(undefined);
       setBusy("switching");
-      const hex = `0x${id.toString(16)}`;
       try {
-        await wallet.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
+        await switchWith(wallet.provider, id);
       } catch (e) {
-        const code = (e as { code?: number }).code;
-        const c = CHAINS[id];
-        if ((code === 4902 || code === -32603) && c) {
-          try {
-            await wallet.provider.request({
-              method: "wallet_addEthereumChain",
-              params: [{ chainId: hex, chainName: c.name, nativeCurrency: { name: "QIE", symbol: "QIEV3", decimals: 18 }, rpcUrls: c.rpcUrls, ...(c.explorer ? { blockExplorerUrls: [c.explorer] } : {}) }],
-            });
-          } catch (e2) {
-            setError(errText(e2));
-          }
-        } else setError(errText(e));
+        setError(errText(e));
       } finally {
-        try {
-          setChainId(Number(await wallet.provider.request({ method: "eth_chainId" })));
-        } catch {
-          /* ignore */
-        }
+        setChainId(Number(await wallet.provider.request({ method: "eth_chainId" }).catch(() => id)));
         setBusy(undefined);
       }
     },
@@ -277,9 +302,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 
   const disconnect = useCallback(() => {
-    localStorage.removeItem(LAST);
-    localStorage.removeItem(SESSION);
-    // wallets that support it forget the site's permission too
+    localStorage.removeItem(LAST_WALLET);
+    clearSession();
     wallet?.provider.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] }).catch(() => undefined);
     setWallet(undefined);
     setAccount(undefined);
@@ -290,6 +314,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<WalletCtx>(
     () => ({
+      mode: "injected",
       wallets,
       ready,
       wallet,
@@ -311,11 +336,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }),
     [wallets, ready, wallet, account, chainId, session, busy, error, sheetOpen, connect, signIn, switchTo, disconnect],
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
 export function useWallet(): WalletCtx {
-  const c = useContext(Ctx);
-  if (!c) throw new Error("useWallet needs <WalletProvider>");
+  const c = useContext(WalletContext);
+  if (!c) throw new Error("useWallet needs a wallet provider");
   return c;
 }
