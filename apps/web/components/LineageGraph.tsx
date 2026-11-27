@@ -12,16 +12,16 @@ function MemoryNode({ data }: NodeProps) {
       style={{ borderLeft: `4px solid ${LANE_COLOR[m.lane] ?? "#999"}`, outline: m.quarantined ? "2px dashed #e11d48" : "1px solid #ececf1", outlineOffset: m.quarantined ? 2 : 0 }}
       title={m.clsReason}
     >
-      <Handle type="target" position={Position.Left} className="!bg-stone-400" />
+      <Handle type="target" position={Position.Left} className="!bg-mist" />
       <div className="mb-1 flex items-center gap-1.5">
         <span className="font-semibold">{m.laneName}</span>
-        <span className="text-stone-500">{KIND[m.kind]}</span>
+        <span className="text-muted">{KIND[m.kind]}</span>
         <span className={`ml-auto rounded px-1 ${CLS_STYLE[m.cls]}`}>{m.cls}</span>
         {m.quarantined && <span className="rounded bg-red-600 px-1 font-semibold text-white">Q</span>}
       </div>
-      <div className="line-clamp-3 text-stone-700">{bodyText(m)}</div>
-      <div className="mono mt-1 text-[10px] text-stone-400">{short(m.id, 4)}</div>
-      <Handle type="source" position={Position.Right} className="!bg-stone-400" />
+      <div className="line-clamp-3 text-body">{bodyText(m)}</div>
+      <div className="mono mt-1 text-[10px] text-muted">{short(m.id, 4)}</div>
+      <Handle type="source" position={Position.Right} className="!bg-mist" />
     </div>
   );
 }
@@ -39,9 +39,9 @@ const nodeTypes = { memory: MemoryNode, source: SourceNode };
 
 export function LineageGraph({ graph, onSelect }: { graph: Graph; onSelect?: (id: string) => void }) {
   const edges = useMemo(() => graph.edges.map((e) => ({ ...e, markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } })), [graph.edges]);
-  if (graph.nodes.length === 0) return <p className="p-6 text-sm text-stone-500">Nothing to show yet.</p>;
+  if (graph.nodes.length === 0) return <p className="p-6 text-sm text-muted">Nothing to show yet.</p>;
   return (
-    <div className="grid-bg h-[600px] rounded-2xl border border-line bg-white" data-testid="lineage-graph" data-memories={graph.memoryIds.join(",")} data-edges={graph.edges.length}>
+    <div className="grid-lines h-[600px] rounded-2xl border border-line bg-white" data-testid="lineage-graph" data-memories={graph.memoryIds.join(",")} data-edges={graph.edges.length}>
       <ReactFlow
         key={graph.memoryIds.join(",")} // remount so fitView runs for each new graph (e.g. a different seed)
         nodes={graph.nodes}

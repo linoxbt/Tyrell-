@@ -1,11 +1,13 @@
 "use client";
 
-import { Hero } from "@/components/site/Hero";
-import { Nav } from "@/components/site/Nav";
-import { Problem } from "@/components/site/Problem";
-import { AttackGate, BuiltOnQie, Cta, Faq, Footer, Guarantees, HowItWorks, Platform } from "@/components/site/Sections";
+import { Hero } from "@/components/argus/Hero";
+import { Nav } from "@/components/argus/Nav";
+import { Problem } from "@/components/argus/Problem";
+import { AttackGate, BuiltOnQie, Cta, Faq, Footer, Guarantees, Marquee, Platform, Steps } from "@/components/argus/Sections";
 import { useView } from "@/lib/useView";
 
+// Section order follows the Argus template: hero + dashboard, logo strip, problem, steps, platform, eval gate,
+// integrations, pricing (here: guarantees), FAQ, CTA, footer.
 export default function Landing() {
   const { view } = useView(30_000);
   return (
@@ -13,8 +15,9 @@ export default function Landing() {
       <Nav />
       <main>
         <Hero view={view} />
+        <Marquee view={view} />
         <Problem view={view} />
-        <HowItWorks />
+        <Steps />
         <Platform view={view} />
         <AttackGate />
         <BuiltOnQie view={view} />

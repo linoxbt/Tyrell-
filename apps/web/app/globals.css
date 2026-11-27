@@ -1,51 +1,76 @@
 @import "tailwindcss";
 
-/* Design language after the Argus Framer template: Geist, a violet primary, white grid hero,
-   near-black sections, soft cards. Tyrell adds its own signal colours for trust classes. */
+/* Tokens measured from the Argus Framer template (arguss.framer.website) and reused for Tyrell. */
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
-  --color-brand: #6c5ce7;
-  --color-brand-600: #5b4bd6;
-  --color-brand-50: #f1eeff;
-  --color-ink: #0f1020;
-  --color-night: #17171c;
-  --color-night-2: #1f1f26;
-  --color-line: #ececf1;
+
+  --color-ink: #0f1220;        /* headings */
+  --color-body: #5a6277;       /* body copy */
+  --color-muted: #5b6378;      /* step titles, checklists */
+  --color-nav: #504c61;        /* navigation */
+  --color-brand: #7c5cff;      /* primary */
+  --color-brand-deep: #6d4df2; /* glows, captions */
+  --color-brand-50: #f3efff;
+  --color-paper: #f6f8f9;      /* light sections */
+  --color-line: #e9ebf0;
+  --color-night: #181a1b;      /* dark sections */
+  --color-night-card: #1f2122; /* dark cards */
+  --color-night-2: #26282a;    /* dark pills, nodes */
+  --color-snow: #f3f5fa;       /* text on dark */
+  --color-mist: #bac1d5;       /* secondary text on dark */
+  --color-fog: #8a91a5;        /* card body on dark */
+  --color-footer: #1f2433;
+  --color-rose: #ff5c7a;
+  --color-amber: #ffb84d;
+  --color-band-amber: #f59e0b;
+  --color-band-violet: #6e4cf0;
+  --color-band-green: #14b37f;
+  --color-tint-peach: #fff6e6;
+  --color-tint-lilac: #f5f2ff;
+  --color-tint-pink: #fef6ff;
+  --color-tint-blue: #eff6ff;
+  --color-tint-grey: #f8f8f8;
 }
 
 :root { color-scheme: light; }
-body { @apply bg-white font-sans text-ink antialiased; font-feature-settings: "ss01", "tnum"; }
+body { @apply bg-white font-sans text-ink antialiased; }
 .mono { font-family: var(--font-mono); }
 
-/* the faint grid behind the hero */
-.grid-bg {
+/* type scale from the template */
+.h-hero { font-size: clamp(44px, 6vw, 80px); line-height: 1.05; font-weight: 500; letter-spacing: -0.04em; }
+.h-section { font-size: clamp(36px, 4vw, 54px); line-height: 1.2; font-weight: 500; letter-spacing: -0.03em; }
+.t-lead { font-size: 18px; line-height: 28px; }
+
+.grid-lines {
   background-image:
-    linear-gradient(to right, rgb(15 16 32 / 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(15 16 32 / 0.045) 1px, transparent 1px);
+    linear-gradient(to right, rgb(15 18 32 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 18 32 / 0.05) 1px, transparent 1px);
   background-size: 52px 52px;
 }
-.grid-bg-dark {
+.grid-lines-dark {
   background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+    linear-gradient(to right, rgb(255 255 255 / 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.04) 1px, transparent 1px);
   background-size: 52px 52px;
 }
+.halftone { background-image: radial-gradient(rgb(255 92 122 / 0.55) 1px, transparent 1.3px); background-size: 6px 6px; }
+.halftone-violet { background-image: radial-gradient(rgb(124 92 255 / 0.5) 1px, transparent 1.3px); background-size: 6px 6px; }
 
-/* halftone fringe, as on the template's section edges */
-.halftone {
-  background-image: radial-gradient(rgb(108 92 231 / 0.55) 1px, transparent 1.4px);
-  background-size: 7px 7px;
+/* the template's 1px radial violet border glow: wrapper gets this, child gets the card background */
+.glow { padding: 1px; background: radial-gradient(60% 60% at 86% 10%, #6d4df2 0%, rgb(109 77 242 / 0.25) 45%, rgb(255 255 255 / 0.06) 100%); }
+.glow-light { padding: 1px; background: radial-gradient(55% 55% at 84% 14%, #7c5cff 0%, rgb(124 92 255 / 0.15) 50%, rgb(15 18 32 / 0.06) 100%); }
+
+/* the eval-gate visual */
+.gradient-halftone {
+  background:
+    radial-gradient(rgb(255 255 255 / 0.35) 1px, transparent 1.3px) 0 0 / 5px 5px,
+    radial-gradient(120% 90% at 10% 0%, #7c5cff 0%, transparent 60%),
+    radial-gradient(90% 90% at 100% 20%, #a5b4fc 0%, transparent 55%),
+    radial-gradient(120% 120% at 50% 100%, #d946ef 0%, #c026d3 40%, #7c3aed 100%);
 }
 
-@keyframes pulse-ring {
-  0% { transform: scale(0.85); opacity: 0.55; }
-  100% { transform: scale(1.6); opacity: 0; }
-}
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee { animation: marquee 40s linear infinite; }
+@keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1.7); opacity: 0; } }
 .pulse-ring { animation: pulse-ring 2.8s ease-out infinite; }
-
-@keyframes float-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-.float-in { animation: float-in 0.6s ease-out both; }
