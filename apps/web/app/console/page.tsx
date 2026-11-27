@@ -35,73 +35,87 @@ export default function Console() {
   const graph = useMemo(() => (view ? graphFor(view, tab === "blast" ? { ...(seedId !== undefined ? { seedId } : {}) } : { last: 60 }) : undefined), [view, tab, seedId]);
   const byId = useMemo(() => new Map((view?.memories ?? []).map((m) => [m.id, m])), [view]);
 
-  // The layout is the Argus template's product dashboard: a slim icon rail, a title row with status pills,
-  // underline tabs, then KPI cards with sparkbars.
+  const [menu, setMenu] = useState(false);
+  const label = TABS.find((t) => t[0] === tab)![1];
+  const go = (t: Tab) => {
+    setTab(t);
+    setMenu(false);
+  };
+  const navItems = (compact: boolean) =>
+    TABS.map(([t, l, icon]) => {
+      const active = tab === t;
+      const count = t === "incidents" && view ? view.incidents.length : 0;
+      return (
+        <button
+          key={t}
+          onClick={() => go(t)}
+          aria-current={active ? "page" : undefined}
+          className={
+            compact
+              ? `relative flex w-[60px] flex-col items-center gap-1 rounded-lg py-2 text-[10.5px] leading-none transition-colors ${active ? "bg-brand-50 text-brand" : "text-muted hover:bg-paper hover:text-ink"}`
+              : `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors ${active ? "bg-brand-50 text-brand" : "text-body hover:bg-paper hover:text-ink"}`
+          }
+        >
+          <Icon name={icon} />
+          <span className={compact ? "whitespace-nowrap" : ""}>{l}</span>
+          {count > 0 &&
+            (compact ? (
+              <span className="mono absolute right-1.5 top-1 min-w-4 rounded-full bg-rose px-1 text-[9px] leading-4 text-white">{count}</span>
+            ) : (
+              <span className="mono ml-auto rounded-full bg-paper px-2 text-[12px] text-muted">{count}</span>
+            ))}
+        </button>
+      );
+    });
+
+  // The Argus product dashboard: a slim labelled rail on desktop, a menu drawer on phones.
   return (
-    <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] bg-[#f7f8fa] md:grid-cols-[68px_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-screen flex-col items-center gap-3 border-r border-line bg-white py-4 md:flex">
-        <Link href="/" aria-label="Tyrell home">
+    <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] bg-[#f7f8fa] md:grid-cols-[76px_minmax(0,1fr)]">
+      <aside className="sticky top-0 hidden h-screen flex-col items-center gap-1 overflow-y-auto border-r border-line bg-white py-4 md:flex">
+        <Link href="/" aria-label="Tyrell home" className="mb-4">
           <Mark size={28} />
         </Link>
-        <div className="mt-5 flex flex-col gap-2" aria-hidden="true">
-          {TABS.map(([t, , icon]) => (
-            <button
-              key={t}
-              tabIndex={-1}
-              onClick={() => setTab(t)}
-              title={TABS.find((x) => x[0] === t)![1]}
-              className={`grid h-10 w-10 place-items-center rounded-lg border ${tab === t ? "border-brand/40 bg-brand-50 text-brand" : "border-transparent text-muted hover:bg-paper"}`}
-            >
-              <Icon name={icon} />
-            </button>
-          ))}
-        </div>
-        {view && (
-          <span
-            className={`mt-auto h-2.5 w-2.5 rounded-full ${source === "live" ? "bg-band-green" : "bg-amber"}`}
-            title={source === "live" ? "live from control" : "read-only snapshot"}
-          />
-        )}
+        <nav className="flex flex-col items-center gap-1" aria-label="Console">
+          {navItems(true)}
+        </nav>
       </aside>
 
       <main className="min-w-0">
-        <header className="sticky top-0 z-10 border-b border-line bg-white/90 px-4 pt-4 backdrop-blur-md sm:px-8 sm:pt-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href="/" aria-label="Tyrell home" className="mr-1 md:hidden">
-              <Mark size={26} />
-            </Link>
-            <span className="text-lg font-medium text-ink">steward</span>
-            <span className="mono text-[13px] text-muted">/ {TABS.find((t) => t[0] === tab)![1].toLowerCase()}</span>
-            {view && (
-              <>
-                <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1 text-[12px] text-body sm:text-[13px]">
-                  <span className={`h-1.5 w-1.5 rounded-full ${source === "live" ? "bg-band-green" : "bg-amber"}`} /> {view.network} · {source === "live" ? "live" : "snapshot"}
-                </span>
-                <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body sm:block">block {view.head}</span>
-                <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body xl:block">digest {short(view.digest, 5)}</span>
-              </>
-            )}
-            <ConnectButton className={`hidden sm:flex ${view ? "" : "ml-auto"}`} />
-            <ConnectButton variant="icon" className={`-mr-2 sm:hidden ${view ? "" : "ml-auto"}`} />
+        <header className="sticky top-0 z-10 border-b border-line bg-white/90 px-4 py-3 backdrop-blur-md sm:px-8 sm:py-4">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setMenu(true)} className="-ml-1.5 grid h-10 w-10 place-items-center rounded-lg text-ink hover:bg-paper md:hidden" aria-label="Open menu" aria-expanded={menu}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <span className="text-lg font-medium text-ink">{label}</span>
+            <ConnectButton className="ml-auto hidden sm:flex" />
+            <ConnectButton variant="icon" className="-mr-2 ml-auto sm:hidden" />
           </div>
-          <nav className="-mx-4 mt-4 flex gap-6 overflow-x-auto px-4 text-[15px] [scrollbar-width:none] sm:mx-0 sm:mt-5 sm:gap-7 sm:px-0 [&::-webkit-scrollbar]:hidden">
-            {TABS.map(([t, label]) => (
-              <button key={t} onClick={() => setTab(t)} className={`-mb-px shrink-0 whitespace-nowrap border-b-2 pb-3 transition-colors duration-200 ${tab === t ? "border-brand text-ink" : "border-transparent text-muted hover:text-ink"}`}>
-                {label}
-                {t === "incidents" && view ? <span className="mono ml-1.5 rounded-full bg-paper px-1.5 text-[11px] text-muted">{view.incidents.length}</span> : null}
-              </button>
-            ))}
-          </nav>
         </header>
+
+        {/* phone menu */}
+        <div className={`fixed inset-0 z-50 transition-[visibility] duration-300 md:hidden ${menu ? "visible" : "pointer-events-none invisible"}`}>
+          <div onClick={() => setMenu(false)} className={`absolute inset-0 bg-ink/30 transition-opacity duration-300 ${menu ? "opacity-100" : "opacity-0"}`} />
+          <div className={`absolute inset-y-0 left-0 flex w-[78%] max-w-[300px] flex-col bg-white px-3 pb-6 pt-4 shadow-xl transition-transform duration-300 ${menu ? "translate-x-0" : "-translate-x-full"}`}>
+            <div className="mb-4 flex items-center justify-between px-2">
+              <Link href="/" aria-label="Tyrell home" onClick={() => setMenu(false)}>
+                <Mark size={28} />
+              </Link>
+              <button onClick={() => setMenu(false)} className="grid h-9 w-9 place-items-center rounded-lg text-muted hover:bg-paper" aria-label="Close menu">
+                ✕
+              </button>
+            </div>
+            <nav className="space-y-0.5" aria-label="Console">
+              {navItems(false)}
+            </nav>
+          </div>
+        </div>
 
         <div className="px-4 py-5 [overflow-wrap:anywhere] sm:px-8 sm:py-7">
           {error && !view && <p className="rounded-xl border border-rose/30 bg-[#ffe9ed] p-4 text-rose">Could not load the projection: {error}</p>}
           {!view && !error && <p className="text-muted">Loading…</p>}
-          {view && source === "snapshot" && (
-            <p className="mb-5 rounded-xl border border-amber/40 bg-tint-peach px-4 py-2.5 text-[13px] text-body sm:text-sm">
-              Read-only snapshot from {new Date(view.generatedAt).toLocaleString()}. Run <span className="mono">tyrell control start</span> and set TYRELL_API_URL for live data.
-            </p>
-          )}
+          {view && source === "snapshot" && <p className="mb-4 text-[13px] text-muted">Recorded demo · read-only</p>}
           {view && graph && (
             <>
               {tab === "overview" && <Overview view={view} onSelect={setSelected} />}

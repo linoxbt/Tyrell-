@@ -26,10 +26,10 @@ const registryAbi = [
 ] as const;
 
 const LANES: Array<[number, string, string]> = [
-  [1, "user", "Your instructions and payee changes"],
-  [2, "agent", "Steward, the AI agent: proposes, never pays"],
-  [3, "wallet", "Ingest: what lands in your wallet"],
-  [4, "control", "Policy, quarantine and the vault requests"],
+  [1, "user", "Your instructions"],
+  [2, "agent", "Steward, the AI agent"],
+  [3, "wallet", "Incoming transfers"],
+  [4, "control", "Policy and payments"],
 ];
 
 interface Reading {
@@ -98,7 +98,7 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
         <h3 className="mono mb-4 text-[12px] uppercase tracking-wider text-muted">You</h3>
         {!w.account ? (
           <div>
-            <p className="text-sm text-body">Connect the QIE Wallet that owns this Tyrell account to manage its keys. Anyone can read; only the owner can change anything.</p>
+            <p className="text-sm text-body">Connect the owner wallet to manage keys.</p>
             <ConnectButton className="mt-4" />
           </div>
         ) : (
@@ -124,18 +124,11 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
           </div>
         )}
 
-        <div className="mt-6 border-t border-line pt-4 text-sm">
-          <div className="text-body">
-            This console shows a deployment on <span className="text-ink">{chainName(target)}</span>
-            {target === 31337 && " (a recorded local demo run)"}.
-          </div>
-          {w.account && !sameChain && (
-            <button onClick={() => w.switchTo(target)} className="mt-3 rounded-lg border border-line px-3 py-2 text-sm text-ink transition-colors hover:bg-paper">
-              Switch wallet to {chainName(target)}
-            </button>
-          )}
-          {!publicRpc && !sameChain && <p className="mt-2 text-xs text-muted">Owner and key details for a local chain are read through your wallet once it is on that chain.</p>}
-        </div>
+        {w.account && !sameChain && (
+          <button onClick={() => w.switchTo(target)} className="mt-4 rounded-lg border border-line px-3 py-2 text-sm text-ink transition-colors hover:bg-paper">
+            Switch wallet to {chainName(target)}
+          </button>
+        )}
       </section>
 
       <section className="rounded-xl border border-line bg-white p-5">
@@ -148,7 +141,7 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
           )}
         </div>
         {err && <p className="mb-3 rounded-lg bg-[#ffe9ed] px-3 py-2 text-[13px] text-rose">Could not read the registry: {err}</p>}
-        {!r && !err && <p className="text-sm text-muted">{client() ? "Reading the registry…" : "Connect a wallet on this chain to read owner and keys."}</p>}
+        {!r && !err && <p className="text-sm text-muted">{client() ? "Reading…" : "Connect a wallet to see the keys."}</p>}
         {r && (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-paper px-3 py-2 text-sm">
@@ -161,11 +154,6 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
                 <KeyRow key={lane} lane={lane} name={name} what={what} keyAddr={r.keys[lane]!} canRevoke={isOwner && sameChain} registry={r.registry} onDone={load} />
               ))}
             </ul>
-            {isOwner && (
-              <p className="mt-4 text-xs leading-relaxed text-muted">
-                Revoking stops a key at once: MemoryAnchor refuses anything it signs. To replace it with a new key file, run <span className="mono">pnpm tyrell revoke --lane &lt;lane&gt; --rotate</span>.
-              </p>
-            )}
           </>
         )}
       </section>
@@ -212,14 +200,14 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
       {open && (
         <div className="mt-3 rounded-lg border border-rose/30 bg-[#fff7f8] p-3">
           <label className="block text-xs text-body">
-            Reason, recorded on-chain
+            Reason (on-chain)
             <input value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-sm text-ink outline-none focus:border-brand" />
           </label>
           <button onClick={revoke} disabled={!reason || !!state?.startsWith("Confirm") || !!state?.startsWith("Waiting")} className="mt-2 w-full rounded-md bg-rose py-2 text-sm text-white transition-opacity disabled:opacity-60">
             Revoke the {name} key
           </button>
           {state && <p className="mt-2 text-xs text-body">{state}</p>}
-          <p className="mt-2 text-[11px] text-muted">Lane {lane}. A revoked key can never be re-added.</p>
+          <p className="mt-2 text-[11px] text-muted">Permanent: a revoked key can never be re-added.</p>
         </div>
       )}
     </li>
