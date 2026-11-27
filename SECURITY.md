@@ -53,6 +53,15 @@ closed: no payment without two agreeing endpoints).
 - **QIE ID resolution uses the QIE MCP server on mainnet**, once, at registration, with a required
   reverse round-trip. A compromised MCP server could return a wrong address for a name it also
   reverse-maps; the human confirms the last six characters before signing.
+- **QIE ID binding trusts QIE's record store.** AgentRegistry reads the upgradeable proxy at
+  `0x8777…5018` on every check. Whoever can upgrade that proxy can change who holds a name, and so
+  which human an agent answers to. A revert or a zero address counts as unbound (fail-closed). QIE ID
+  is not on testnet, so testnet deployments use `TestQieId`, which anyone can claim names in.
+- **The arbiter is trusted** for contested abuse reports: it decides who loses a bond. Uncontested
+  reports are upheld by anyone after the contest window. Use a multisig as arbiter on mainnet.
+- **Reputation is a score, not a guarantee.** It is computed from deals, bond and penalties on-chain;
+  deals must be between agents of different humans, and each one is paid from the payer's limits and
+  shared quota, so farming reputation costs real funds and a second bound QIE ID.
 - **The data key** decrypts every body. Losing it means the projection cannot be rebuilt; leaking it
   exposes memory contents (not integrity: forging still needs a lane key and an anchor).
 - **Detection is heuristic.** Scores propose quarantines; they do not protect payments. A split

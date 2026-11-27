@@ -8,7 +8,11 @@ didn't approve.
 
 Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 
-Live demo: **https://tyrell-mu.vercel.app** (landing page and [console](https://tyrell-mu.vercel.app/console), read-only snapshot).
+Live demo: **https://tyrell-mu.vercel.app**
+
+- [Playground](https://tyrell-mu.vercel.app/playground): the real contracts, compiled and running in an EVM in your browser. 34 live checks across memory, the vault, Phase A and Phase B, no login and no wallet. It also shows the recorded results of the full repository test suites.
+- [Docs](https://tyrell-mu.vercel.app/docs): guides, concepts, the agents network, contract and CLI reference, and the security model ([llms.txt](https://tyrell-mu.vercel.app/llms.txt) for language models).
+- [Console](https://tyrell-mu.vercel.app/console): a recorded end-to-end run (read-only snapshot); connect a wallet with Reown AppKit to see your role and manage lane keys.
 
 ## The problem
 
@@ -71,13 +75,32 @@ graph LR
 
 The design and its invariants are in [SECURITY.md](SECURITY.md).
 
+## Agents network: every agent is bound to a human's QIE ID
+
+On top of the memory and payment core, two contracts turn one human's agents into accountable actors:
+
+- **Phase A, `AgentRegistry`**: a human binds a QIE ID; the registry asks QIE's own record store
+  (`resolveCurrency(name, "qie")` on `0x8777…5018`) who holds the name, at binding and again on
+  every check, so a transferred or expired name unbinds its agents immediately. Each agent has a
+  key, permissions (pay, memory, message, deal), per-transaction and daily limits, delegated payees,
+  and draws on **one quota shared by all of its human's agents** (fail-closed). Humans can freeze
+  everything at once or revoke a single agent. `GuardedVault.payForAgent` enforces it on-chain, and
+  control's policy rule R4a checks it before a payment is signed.
+- **Phase B, `AgentNetwork`**: agents post bonds; bound humans file abuse reports with a report bond;
+  the accused human has a contest window, an arbiter resolves disputes, upheld reports slash the bond
+  and three of them ban the agent. Reputation is computed on-chain from deals, bond and penalties.
+  Agents sign EIP-712 messages to each other and open escrowed deals that count against both
+  sides' limits and quotas.
+
+Details: [docs/agents](https://tyrell-mu.vercel.app/docs/agents/overview).
+
 ## QIE components used
 
 | Component | How Tyrell uses it |
 | --- | --- |
-| QIE mainnet (chain 1990) | Four contracts: LaneRegistry, MemoryAnchor, TyrellLedger, GuardedVault. EVM target Shanghai, found by probe P-4 |
-| QIE Wallet | The owner key: deploys roles, registers and rotates lane keys, sets vault caps. Discovered by EIP-6963 (`me.qiewallet`) on local pages served by the CLI |
-| QIE ID | Payees are added by QIE ID, resolved once at registration and required to reverse-resolve to the same name |
+| QIE mainnet (chain 1990) | Core contracts LaneRegistry, MemoryAnchor, TyrellLedger, GuardedVault, plus AgentRegistry and AgentNetwork. EVM target Shanghai, found by probe P-4 |
+| QIE Wallet | The owner key: deploys roles, registers and rotates lane keys, sets vault caps. Discovered by EIP-6963 (`me.qiewallet`) on local pages served by the CLI, and listed first in the site's Reown AppKit modal |
+| QIE ID | Every agent is bound to its human's QIE ID, verified on-chain against QIE's record store on every check. Payees are added by QIE ID, resolved once at registration and required to reverse-resolve to the same name |
 | QIE MCP server | `qie_resolve_name` and `qie_reverse_lookup` for payees; `qie_get_balances` read by the ingest worker as untrusted observations |
 | QUSDC | The vault's payment token (6 decimals; probe P-7 and the QIE MCP token list confirm the reported address) |
 | QIE explorer (Blockscout) | Contract verification and the evidence links |
@@ -87,8 +110,9 @@ The design and its invariants are in [SECURITY.md](SECURITY.md).
 | Check | Result |
 | --- | --- |
 | Phase 0 network probe | [PROBE.md](PROBE.md): 11 pass, 4 partial, 1 fallback; P-9 (wallet) and P-10 (Pinata) run by the owner |
-| Contracts | 84 Foundry tests: unit, fuzz (1,000 runs), invariants, and TypeScript-signed vectors; [GAS.md](contracts/GAS.md) |
-| TypeScript | 167 tests; verifier and policy engine at 100% statement and branch coverage (enforced) |
+| Contracts | 118 Foundry tests: unit, fuzz (1,000 runs), invariants, and TypeScript-signed vectors; [GAS.md](contracts/GAS.md) |
+| TypeScript | 197 tests, including real-browser wallet tests in both wallet modes; verifier, policy engine and agent helpers at 100% statement and branch coverage (enforced) |
+| Playground | 34 of 34 live checks in the browser on every visit |
 | M1 acceptance run | Passes on a local chain, in-process and across real processes |
 | Rebuild | Fresh rebuild digest matches live in every end-to-end test; 500 memories rebuild in about 1.5 s locally |
 | Attack set | 10 of 10 (below) |
@@ -180,11 +204,12 @@ URLs use `TYRELL_SITE_URL`, or the Vercel production domain when that is unset.
 ## Repo layout
 
 ```
-contracts/   LaneRegistry, MemoryAnchor, TyrellLedger, GuardedVault (+ TyrellTestUSD for testnet)
+contracts/   LaneRegistry, MemoryAnchor, TyrellLedger, GuardedVault, AgentRegistry, AgentNetwork
+             (+ TyrellTestUSD and TestQieId for testnet)
 packages/    core (envelope, EIP-712, verifier, lineage, digest, policy) · chain · storage · ipc
 apps/        cli (tyrell) · control · steward (+ comparison agent) · ingest (sentinel) · signer · web
-scripts/     probe.ts, probe-wallet.html, scan-keys.mjs, gen-abi.ts
-docs/        MAINNET.md
+scripts/     probe.ts, probe-wallet.html, scan-keys.mjs, gen-abi.ts, gen-playground.ts, test-report.ts
+docs/        MAINNET.md (the site's docs are in apps/web/content/docs)
 ```
 
 ## Design origin
