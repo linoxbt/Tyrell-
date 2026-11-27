@@ -74,3 +74,21 @@ body { @apply bg-white font-sans text-ink antialiased; }
 .marquee { animation: marquee 40s linear infinite; }
 @keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1.7); opacity: 0; } }
 .pulse-ring { animation: pulse-ring 2.8s ease-out infinite; }
+
+/* ---------- smoothness and small screens ---------- */
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { overflow-x: clip; -webkit-tap-highlight-color: transparent; text-rendering: optimizeLegibility; }
+main section[id] { scroll-margin-top: 64px; }
+@media (min-width: 768px) { main section[id] { scroll-margin-top: 74px; } }
+:where(a, button, select, summary):focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; border-radius: 8px; }
+
+/* content eases in as it scrolls into view (classes added by useReveal) */
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.reveal.in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .marquee, .pulse-ring { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+}

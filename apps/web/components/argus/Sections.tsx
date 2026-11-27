@@ -46,9 +46,9 @@ export function Steps() {
   return (
     <section id="how" className="relative overflow-hidden bg-paper">
       <div className="grid-lines absolute inset-0" />
-      <div className="relative mx-auto max-w-[1200px] px-6 py-[120px] xl:px-0">
+      <div className="relative mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-[120px] xl:px-0">
         <SectionHead pill="How it works" title={<>From a signed memory to a payment the chain approved</>} lead="Four steps. The language model is untrusted code at every one of them." />
-        <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 sm:gap-5 md:mt-16 lg:grid-cols-4">
           {steps.map(([t, b, icon], i) => (
             <div key={t} className="glow-light rounded-[18px]">
               <div className="h-full rounded-[17px] bg-white p-6">
@@ -58,7 +58,7 @@ export function Steps() {
                   </span>
                   <span className="mono text-xs text-muted">0{i + 1}</span>
                 </div>
-                <h3 className="mt-14 text-[22px] font-medium tracking-[-0.01em] text-ink">{t}</h3>
+                <h3 className="mt-8 text-[22px] sm:mt-14 font-medium tracking-[-0.01em] text-ink">{t}</h3>
                 <p className="mt-2 text-[15px] leading-[1.6] text-body">{b}</p>
               </div>
             </div>
@@ -78,15 +78,15 @@ export function Platform({ view }: { view?: ViewDocument }) {
   const payee = view?.payees.find((p) => p.active && !p.suspended);
   return (
     <section id="platform" className="bg-white">
-      <div className="mx-auto max-w-[1200px] px-6 py-[110px] xl:px-0">
+      <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-[110px] xl:px-0">
         <SectionHead pill="Platform" title={<>Everything you need to let an agent touch money</>} />
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
+        <div className="mt-10 grid gap-4 sm:gap-6 md:mt-14 md:grid-cols-2 lg:grid-cols-3">
           <Card tint="bg-tint-peach" className="md:col-span-2" title="Blast radius" body="Pick a poisoned source and see every memory, summary and decision it reached, and the vault transactions they referenced.">
-            <div className="relative mt-8 h-[180px]">
-              <div className="absolute left-[4%] top-10 w-[46%] -rotate-[3deg] rounded-xl bg-white/80 p-4 shadow-[0_10px_30px_rgba(15,18,32,0.08)]">
+            <div className="relative mt-8 sm:h-[180px]">
+              <div className="absolute left-[4%] top-10 hidden w-[46%] -rotate-[3deg] rounded-xl bg-white/80 p-4 shadow-[0_10px_30px_rgba(15,18,32,0.08)] sm:block">
                 <Tree rows={radius.slice(0, 5)} dim />
               </div>
-              <div className="absolute right-[6%] top-0 w-[50%] rotate-[3deg] rounded-xl bg-white p-4 shadow-[0_14px_40px_rgba(15,18,32,0.12)]">
+              <div className="relative rounded-xl bg-white p-4 shadow-[0_14px_40px_rgba(15,18,32,0.12)] sm:absolute sm:right-[6%] sm:top-0 sm:w-[50%] sm:rotate-[3deg]">
                 <Tree rows={radius.slice(0, 6)} />
               </div>
             </div>
@@ -162,8 +162,8 @@ function Tree({ rows, dim = false }: { rows: ViewDocument["memories"]; dim?: boo
 
 function Card({ tint, title, body, className = "", children }: { tint: string; title: string; body: string; className?: string; children?: React.ReactNode }) {
   return (
-    <div className={`overflow-hidden rounded-[24px] px-[30px] pb-8 pt-[30px] ${tint} ${className}`}>
-      <h3 className="text-[24px] font-medium leading-[1.3] tracking-[-0.01em] text-ink">{title}</h3>
+    <div className={`overflow-hidden rounded-[24px] px-6 pb-7 pt-6 sm:px-[30px] sm:pb-8 sm:pt-[30px] ${tint} ${className}`}>
+      <h3 className="text-[21px] font-medium leading-[1.3] tracking-[-0.01em] text-ink sm:text-[24px]">{title}</h3>
       <p className="mt-3 max-w-[420px] text-base leading-[1.6] text-body">{body}</p>
       {children}
     </div>
@@ -174,7 +174,7 @@ function Card({ tint, title, body, className = "", children }: { tint: string; t
 export function AttackGate() {
   return (
     <section id="attacks" className="bg-paper">
-      <div className="mx-auto grid max-w-[1200px] items-center gap-14 px-6 py-[110px] lg:grid-cols-[0.9fr_1.1fr] xl:px-0">
+      <div className="mx-auto grid max-w-[1200px] grid-cols-[minmax(0,1fr)] items-center gap-10 px-4 py-20 sm:px-6 md:py-[110px] lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14 xl:px-0">
         <div>
           <Pill>Attack set</Pill>
           <h2 className="h-section mt-5 text-ink">Ten attacks. A fully compromised model. Nothing paid.</h2>
@@ -196,18 +196,18 @@ export function AttackGate() {
             <Button href={`${REPO}#attack-set`}>See the attack runner</Button>
           </div>
         </div>
-        <div className="gradient-halftone rounded-[24px] p-6 md:p-10">
-          <div className="rounded-2xl bg-white p-5 shadow-[0_20px_60px_rgba(15,18,32,0.25)]">
+        <div className="gradient-halftone rounded-[24px] p-3 sm:p-6 md:p-10">
+          <div className="rounded-2xl bg-white p-4 shadow-[0_20px_60px_rgba(15,18,32,0.25)] sm:p-5">
             <div className="flex items-center gap-2 border-b border-line pb-3">
-              <span className="mono text-[12px] text-muted">tyrell attack run · compromised model</span>
+              <span className="mono min-w-0 truncate text-[12px] text-muted">tyrell attack run<span className="hidden sm:inline"> · compromised model</span></span>
               <span className="mono ml-auto rounded-full bg-[#e6f7f0] px-2.5 py-0.5 text-[11px] font-medium text-band-green">10 / 10 PASSED</span>
             </div>
             <ul className="divide-y divide-line">
               {ATTACKS.map((a, i) => (
-                <li key={a.name} className="flex items-center gap-3 py-2 text-[13px]">
-                  <span className="mono w-5 text-muted">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="min-w-0 truncate text-ink">{a.name}</span>
-                  <span className="mono ml-auto shrink-0 text-[11px] text-rose">{a.result}</span>
+                <li key={a.name} className="grid grid-cols-[22px_minmax(0,1fr)] gap-x-3 gap-y-0.5 py-2 text-[13px] sm:grid-cols-[22px_minmax(0,1fr)_auto] sm:items-center">
+                  <span className="mono text-muted">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="text-ink sm:truncate">{a.name}</span>
+                  <span className="mono col-start-2 text-[11px] text-rose sm:col-start-3 sm:text-right">{a.result}</span>
                 </li>
               ))}
             </ul>
@@ -231,7 +231,7 @@ export function BuiltOnQie({ view }: { view?: ViewDocument }) {
   ];
   return (
     <section className="relative overflow-hidden bg-night text-snow">
-      <div className="relative mx-auto h-[576px] max-w-[1440px]">
+      <div className="relative mx-auto h-[420px] max-w-[1440px] md:h-[576px]">
         {[560, 820, 1080, 1340].map((d) => (
           <div key={d} className="absolute left-1/2 top-[250px] rounded-full border border-white/[0.09]" style={{ width: d, height: d * 1.15, marginLeft: -d / 2, marginTop: -(d * 1.15) / 2 }} />
         ))}
@@ -243,10 +243,17 @@ export function BuiltOnQie({ view }: { view?: ViewDocument }) {
             <span className="mt-2 block whitespace-nowrap text-center text-[11px] text-fog">{b.label}</span>
           </div>
         ))}
-        <div className="absolute inset-x-0 top-[128px] text-center">
+        <div className="absolute inset-x-0 top-[88px] px-4 text-center md:top-[128px]">
           <Pill dark>Built on QIE</Pill>
           <h2 className="h-section mx-auto mt-5 max-w-[520px] text-snow">Uses what QIE already gives you</h2>
-          <p className="mono mt-5 text-xs text-fog">
+          <ul className="mx-auto mt-6 flex max-w-[420px] flex-wrap justify-center gap-2 md:hidden">
+            {badges.map((b) => (
+              <li key={b.label} className="flex items-center gap-1.5 rounded-full border border-white/10 bg-night-2 px-3 py-1.5 text-xs text-mist">
+                <Icon name={b.icon} className={`h-3.5 w-3.5 ${b.c}`} /> {b.label}
+              </li>
+            ))}
+          </ul>
+          <p className="mono mt-5 hidden text-xs text-fog md:block">
             {view ? `4 contracts · chain ${view.chainId} · vault ${short(view.contracts.guardedVault ?? "", 5)} · block ${view.head}` : "4 contracts on QIE Mainnet"}
           </p>
         </div>
@@ -266,7 +273,7 @@ export function Guarantees() {
   ];
   return (
     <section id="guarantees" className="bg-paper">
-      <div className="mx-auto max-w-[1200px] px-6 py-[110px] xl:px-0">
+      <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 md:py-[110px] xl:px-0">
         <SectionHead pill="Guarantees" title="Twelve invariants, each with a test" lead="Flip the model. Every line below holds either way; that is the point." />
         <div className="mt-9 flex justify-center">
           <div className="inline-flex rounded-full border border-line bg-white p-1 text-sm">
@@ -274,7 +281,7 @@ export function Guarantees() {
               <button
                 key={m}
                 onClick={() => setModel(m)}
-                className={`rounded-full px-5 py-2 transition-colors ${model === m ? "bg-brand text-white" : "text-muted"}`}
+                className={`rounded-full px-4 py-2 transition-colors duration-200 sm:px-5 ${model === m ? "bg-brand text-white" : "text-muted"}`}
                 aria-pressed={model === m}
               >
                 {m === "honest" ? "Honest model" : "Compromised model"}
@@ -282,7 +289,7 @@ export function Guarantees() {
             ))}
           </div>
         </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-10 grid gap-4 sm:gap-6 md:mt-12 md:grid-cols-3">
           {cols.map((c) => (
             <div key={c.name} className={`rounded-[16px] p-2 ${c.hot ? "bg-brand" : "bg-white shadow-[0_1px_2px_rgba(15,18,32,0.06)]"}`}>
               <div className="rounded-[12px] bg-white px-6 pb-8 pt-6">
@@ -291,7 +298,7 @@ export function Guarantees() {
                   <h3 className="text-lg font-medium text-ink">{c.name}</h3>
                   {c.hot && <span className="ml-auto rounded-md bg-brand-50 px-2 py-0.5 text-xs text-brand">On-chain</span>}
                 </div>
-                <p className="mt-7 text-[30px] font-medium leading-[1.15] tracking-[-0.02em] text-ink">{c.note}</p>
+                <p className="mt-6 text-[26px] font-medium leading-[1.15] tracking-[-0.02em] text-ink lg:mt-7 lg:text-[30px]">{c.note}</p>
                 <p className="mono mt-3 text-xs text-muted">{model === "compromised" ? "holds with a compromised model" : "holds with an honest model"}</p>
                 <div className="my-6 h-px bg-line" />
                 <ul className="space-y-3 text-[15px] text-muted">
@@ -323,16 +330,20 @@ export function Faq() {
   const [open, setOpen] = useState(0);
   return (
     <section id="faq" className="bg-white">
-      <div className="mx-auto max-w-[800px] px-6 py-[110px]">
+      <div className="mx-auto max-w-[800px] px-4 py-20 sm:px-6 md:py-[110px]">
         <SectionHead pill="FAQ" title="Questions, answered" />
         <div className="mt-12 space-y-3">
           {FAQS.map(([q, a], i) => (
-            <div key={q} className="rounded-[16px] border border-line bg-white px-6">
-              <button className="flex w-full items-center gap-4 py-5 text-left text-[20px] font-medium tracking-[-0.01em] text-ink" onClick={() => setOpen(open === i ? -1 : i)} aria-expanded={open === i}>
+            <div key={q} className="rounded-[16px] border border-line bg-white px-5 transition-shadow duration-300 hover:shadow-[0_4px_20px_rgba(15,18,32,0.05)] sm:px-6">
+              <button className="flex w-full items-center gap-4 py-5 text-left text-[17px] font-medium sm:text-[20px] tracking-[-0.01em] text-ink" onClick={() => setOpen(open === i ? -1 : i)} aria-expanded={open === i}>
                 {q}
                 <span className={`ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-full text-xl transition-colors ${open === i ? "bg-brand text-white" : "bg-paper text-muted"}`}>{open === i ? "−" : "+"}</span>
               </button>
-              {open === i && <p className="-mt-1 pb-6 text-base leading-[1.6] text-body">{a}</p>}
+              <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open === i ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                <div className="overflow-hidden">
+                  <p className="-mt-1 pb-6 text-base leading-[1.6] text-body">{a}</p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -343,14 +354,14 @@ export function Faq() {
 
 export function Cta() {
   return (
-    <section className="bg-white px-6 pb-[110px]">
-      <div className="relative mx-auto max-w-[1200px] overflow-hidden rounded-[24px] bg-night px-6 py-[90px] text-center text-snow">
+    <section className="bg-white px-4 pb-20 sm:px-6 md:pb-[110px]">
+      <div className="relative mx-auto max-w-[1200px] overflow-hidden rounded-[24px] bg-night px-5 py-16 text-center text-snow sm:px-6 md:py-[90px]">
         <div className="grid-lines-dark absolute inset-0" />
         <div className="absolute left-1/2 top-0 h-[300px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.45),transparent_65%)]" />
         <Pill dark>Get started</Pill>
         <h2 className="h-section relative mx-auto mt-5 max-w-[680px]">Agents you can actually trust with money</h2>
         <p className="t-lead relative mx-auto mt-4 max-w-[540px] text-mist">Watch the poison come in, the payment get refused and the clean state come back.</p>
-        <div className="relative mt-9 flex justify-center gap-4">
+        <div className="relative mx-auto mt-9 flex max-w-[320px] flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
           <Button href="/console">Open the console</Button>
           <Button href={`${REPO}/blob/main/SECURITY.md`} variant="dark">Read SECURITY.md</Button>
         </div>
@@ -367,15 +378,15 @@ export function Footer({ view }: { view?: ViewDocument }) {
   ];
   return (
     <footer className="relative overflow-hidden bg-footer text-snow">
-      <div className="mx-auto max-w-[1200px] px-6 pt-20 xl:px-0">
-        <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
-          <div>
+      <div className="mx-auto max-w-[1200px] px-4 pt-16 sm:px-6 md:pt-20 xl:px-0">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
+          <div className="col-span-2 md:col-span-1">
             <Wordmark dark />
             <p className="mt-4 max-w-[280px] text-sm leading-relaxed text-fog">Provenance and quarantine for AI-agent memory, on QIE.</p>
           </div>
           {cols.map(([t, links]) => (
             <div key={t}>
-              <div className="text-[22px] font-medium text-brand">{t}</div>
+              <div className="text-[19px] font-medium text-brand md:text-[22px]">{t}</div>
               <ul className="mt-5 space-y-3 text-base text-mist">
                 {links.map(([l, h]) => (
                   <li key={l}>
@@ -386,9 +397,9 @@ export function Footer({ view }: { view?: ViewDocument }) {
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-center gap-6 pb-4 pt-24 sm:gap-10">
-          <Mark size={150} className="hidden shrink-0 sm:block" />
-          <Type height={190} className="h-[clamp(84px,15vw,190px)] w-auto text-snow" />
+        <div className="flex items-center justify-center gap-6 pb-4 pt-16 sm:gap-10 md:pt-24">
+          <Mark size={150} className="hidden shrink-0 lg:block" />
+          <Type height={190} className="h-auto w-full max-w-[720px] text-snow lg:h-[190px] lg:w-auto" />
         </div>
         <div className="flex flex-wrap justify-between gap-2 border-t border-white/10 py-6 text-xs text-fog">
           <span>Built for QIE Mainnet Hackathon 3.0 · Apache 2.0</span>

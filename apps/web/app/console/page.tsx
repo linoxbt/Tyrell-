@@ -35,8 +35,8 @@ export default function Console() {
   // The layout is the Argus template's product dashboard: a slim icon rail, a title row with status pills,
   // underline tabs, then KPI cards with sparkbars.
   return (
-    <div className="grid min-h-screen grid-cols-[68px_1fr] bg-[#f7f8fa]">
-      <aside className="sticky top-0 flex h-screen flex-col items-center gap-3 border-r border-line bg-white py-4">
+    <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] bg-[#f7f8fa] md:grid-cols-[68px_minmax(0,1fr)]">
+      <aside className="sticky top-0 hidden h-screen flex-col items-center gap-3 border-r border-line bg-white py-4 md:flex">
         <Link href="/" aria-label="Tyrell home">
           <Mark size={28} />
         </Link>
@@ -62,23 +62,26 @@ export default function Console() {
       </aside>
 
       <main className="min-w-0">
-        <header className="sticky top-0 z-10 border-b border-line bg-white/95 px-8 pt-5 backdrop-blur">
+        <header className="sticky top-0 z-10 border-b border-line bg-white/90 px-4 pt-4 backdrop-blur-md sm:px-8 sm:pt-5">
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/" aria-label="Tyrell home" className="mr-1 md:hidden">
+              <Mark size={26} />
+            </Link>
             <span className="text-lg font-medium text-ink">steward</span>
             <span className="mono text-[13px] text-muted">/ {TABS.find((t) => t[0] === tab)![1].toLowerCase()}</span>
             {view && (
               <>
-                <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">
+                <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1 text-[12px] text-body sm:text-[13px]">
                   <span className={`h-1.5 w-1.5 rounded-full ${source === "live" ? "bg-band-green" : "bg-amber"}`} /> {view.network} · {source === "live" ? "live" : "snapshot"}
                 </span>
-                <span className="mono rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">block {view.head}</span>
+                <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body sm:block">block {view.head}</span>
                 <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body md:block">digest {short(view.digest, 5)}</span>
               </>
             )}
           </div>
-          <nav className="mt-5 flex gap-7 overflow-x-auto text-[15px]">
+          <nav className="-mx-4 mt-4 flex gap-6 overflow-x-auto px-4 text-[15px] [scrollbar-width:none] sm:mx-0 sm:mt-5 sm:gap-7 sm:px-0 [&::-webkit-scrollbar]:hidden">
             {TABS.map(([t, label]) => (
-              <button key={t} onClick={() => setTab(t)} className={`-mb-px whitespace-nowrap border-b-2 pb-3 ${tab === t ? "border-brand text-ink" : "border-transparent text-muted hover:text-ink"}`}>
+              <button key={t} onClick={() => setTab(t)} className={`-mb-px shrink-0 whitespace-nowrap border-b-2 pb-3 transition-colors duration-200 ${tab === t ? "border-brand text-ink" : "border-transparent text-muted hover:text-ink"}`}>
                 {label}
                 {t === "incidents" && view ? <span className="mono ml-1.5 rounded-full bg-paper px-1.5 text-[11px] text-muted">{view.incidents.length}</span> : null}
               </button>
@@ -86,11 +89,11 @@ export default function Console() {
           </nav>
         </header>
 
-        <div className="px-8 py-7">
+        <div className="px-4 py-5 [overflow-wrap:anywhere] sm:px-8 sm:py-7">
           {error && !view && <p className="rounded-xl border border-rose/30 bg-[#ffe9ed] p-4 text-rose">Could not load the projection: {error}</p>}
           {!view && !error && <p className="text-muted">Loading…</p>}
           {view && source === "snapshot" && (
-            <p className="mb-5 rounded-xl border border-amber/40 bg-tint-peach px-4 py-2.5 text-sm text-body">
+            <p className="mb-5 rounded-xl border border-amber/40 bg-tint-peach px-4 py-2.5 text-[13px] text-body sm:text-sm">
               Read-only snapshot from {new Date(view.generatedAt).toLocaleString()}. Run <span className="mono">tyrell daemon</span> and set TYRELL_API_URL for live data.
             </p>
           )}
@@ -99,7 +102,7 @@ export default function Console() {
               {tab === "overview" && <Overview view={view} onSelect={setSelected} />}
 
               {(tab === "graph" || tab === "blast") && (
-                <section className="rounded-xl border border-line bg-white p-4">
+                <section className="rounded-xl border border-line bg-white p-3 sm:p-4">
                   {tab === "blast" && (
                     <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-body">
                       <label className="flex items-center gap-2">
@@ -143,32 +146,32 @@ function Overview({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
   const last = [...view.decisions].reverse()[0];
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-3.5 xl:grid-cols-4">
         {kpis(view).map((c) => (
-          <div key={c.label} className="rounded-xl border border-line bg-white px-5 py-4">
-            <div className="flex items-center justify-between text-[13px] text-body">
+          <div key={c.label} className="min-w-0 rounded-xl border border-line bg-white px-4 py-3.5 sm:px-5 sm:py-4">
+            <div className="flex flex-col gap-0.5 text-[13px] text-body sm:flex-row sm:items-center sm:justify-between">
               {c.label}
               <span className={`mono text-[11px] ${c.noteColor}`}>{c.note}</span>
             </div>
-            <div className="mt-2 text-[30px] font-medium tracking-tight text-ink">{c.value}</div>
+            <div className="mt-2 text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">{c.value}</div>
             <div className="mt-2">
               <Bars values={c.bars} color={c.color} />
             </div>
           </div>
         ))}
       </div>
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <div className="space-y-5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-5">
           {last && (
             <Panel title="Policy trace · latest decision">
-              <div className="mb-3 flex items-center gap-3 text-sm">
+              <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="mono text-ink">{short(last.id, 4)}</span>
                 <Verdict d={last} />
                 <span className="mono ml-auto text-xs text-body">{last.parents.length} memories read · {amount(view, last.proposal?.amount)}</span>
               </div>
               <div className="space-y-2.5">
                 {ruleTrace(last).map((r) => (
-                  <div key={r.id} className="grid grid-cols-[170px_1fr_40px] items-center gap-3">
+                  <div key={r.id} className="grid grid-cols-[minmax(0,118px)_1fr_34px] items-center gap-2.5 sm:grid-cols-[170px_1fr_40px] sm:gap-3">
                     <span className="mono truncate text-[12px] text-body">{r.id} {r.name}</span>
                     <span className="h-2.5 rounded-full bg-paper">
                       <span className="block h-full rounded-full" style={{ width: r.state === "skip" ? "0%" : "100%", background: r.state === "pass" ? "#7c5cff" : "#ff5c7a" }} />
@@ -187,7 +190,7 @@ function Overview({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
           <Panel title="Payees">
             <ul className="divide-y divide-line text-sm">
               {view.payees.map((p) => (
-                <li key={p.payeeId} className="flex items-center gap-3 py-2.5">
+                <li key={p.payeeId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
                   <span className="font-medium text-ink">{p.label}</span>
                   <span className="mono text-xs text-muted">{short(p.addr, 4)}</span>
                   <span className="ml-auto text-xs text-muted">
@@ -202,7 +205,7 @@ function Overview({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
           <Panel title="Quarantine seeds">
             <ul className="divide-y divide-line text-sm">
               {view.seeds.map((s) => (
-                <li key={s.seedId} className="flex items-center gap-3 py-2.5">
+                <li key={s.seedId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
                   <span className="mono text-xs text-ink">#{s.seedId}</span>
                   <span className="text-body">{SEED_TYPE[s.type]}</span>
                   <span className="mono text-xs text-muted">{short(s.value, 5)}</span>
@@ -276,33 +279,53 @@ function Decisions({ view, byId, limit, compact }: { view: ViewDocument; byId: M
 }
 
 function Timeline({ view, onSelect }: { view: ViewDocument; onSelect: (id: string) => void }) {
+  const rows = [...view.memories].reverse();
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-white">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-paper text-xs uppercase text-muted">
-          <tr>
-            <th className="px-4 py-3">Block</th>
-            <th>Lane</th>
-            <th>Kind</th>
-            <th>Class</th>
-            <th className="pr-4">Memory</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...view.memories].reverse().map((m) => (
-            <tr key={m.id} className={`cursor-pointer border-t border-line align-top hover:bg-paper ${m.quarantined ? "opacity-60" : ""}`} onClick={() => onSelect(m.id)}>
-              <td className="mono px-4 py-2.5 text-xs">{m.block}</td>
-              <td className="pr-3">
+    <>
+      {/* phones: one card per memory */}
+      <ul className="space-y-2.5 sm:hidden">
+        {rows.map((m) => (
+          <li key={m.id}>
+            <button onClick={() => onSelect(m.id)} className={`w-full rounded-xl border border-line bg-white p-3.5 text-left transition-colors active:bg-paper ${m.quarantined ? "opacity-60" : ""}`}>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <span className="font-medium" style={{ color: LANE_COLOR[m.lane] }}>{m.laneName}</span>
-              </td>
-              <td className="pr-3 text-body">{KIND[m.kind]}</td>
-              <td className="pr-3"><Cls m={m} /></td>
-              <td className="py-2.5 pr-4 text-body">{bodyText(m)}</td>
+                <span className="text-muted">{KIND[m.kind]}</span>
+                <span className="mono text-muted">#{m.block}</span>
+                <span className="ml-auto"><Cls m={m} /></span>
+              </div>
+              <p className="mt-2 line-clamp-3 text-sm text-body">{bodyText(m)}</p>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {/* tablets and up: the table */}
+      <div className="hidden overflow-hidden rounded-xl border border-line bg-white sm:block">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-paper text-xs uppercase text-muted">
+            <tr>
+              <th className="px-4 py-3">Block</th>
+              <th>Lane</th>
+              <th>Kind</th>
+              <th>Class</th>
+              <th className="pr-4">Memory</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((m) => (
+              <tr key={m.id} className={`cursor-pointer border-t border-line align-top transition-colors hover:bg-paper ${m.quarantined ? "opacity-60" : ""}`} onClick={() => onSelect(m.id)}>
+                <td className="mono px-4 py-2.5 text-xs">{m.block}</td>
+                <td className="pr-3">
+                  <span className="font-medium" style={{ color: LANE_COLOR[m.lane] }}>{m.laneName}</span>
+                </td>
+                <td className="pr-3 text-body">{KIND[m.kind]}</td>
+                <td className="pr-3"><Cls m={m} /></td>
+                <td className="py-2.5 pr-4 text-body">{bodyText(m)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -310,7 +333,7 @@ function Incidents({ view }: { view: ViewDocument }) {
   return (
     <div className="space-y-3">
       {[...view.incidents].reverse().map((i) => (
-        <div key={i.memoryId} className="flex gap-4 rounded-xl border border-line bg-white p-5 text-sm">
+        <div key={i.memoryId} className="flex gap-3 rounded-xl border border-line bg-white p-4 text-sm sm:gap-4 sm:p-5">
           <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg font-semibold ${i.score >= 80 ? "bg-[#ffe9ed] text-rose" : "bg-tint-peach text-[#b26a00]"}`}>{i.score}</div>
           <div className="min-w-0">
             <div className="flex flex-wrap gap-1.5">
@@ -368,7 +391,7 @@ function Legend() {
 
 function Detail({ m, onClose }: { m: ViewMemory; onClose: () => void }) {
   return (
-    <div className="mt-6 rounded-xl border border-line bg-white p-5 text-sm">
+    <div className="mt-6 rounded-xl border border-line bg-white p-4 text-sm sm:p-5">
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <span className="mono text-xs">{m.id}</span>
         <Cls m={m} />

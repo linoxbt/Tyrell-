@@ -60,8 +60,30 @@ export function Problem({ view }: { view?: ViewDocument }) {
   ];
   return (
     <section id="problem" className="relative overflow-hidden bg-night text-snow">
-      <div className="relative mx-auto max-w-[1200px] px-6 pt-[104px] xl:px-0">
-        <div className="relative mx-auto h-[520px]">
+      <div className="relative mx-auto max-w-[1200px] px-4 pt-20 sm:px-6 lg:pt-[104px] xl:px-0">
+        {/* phones and tablets: the agent, then its sources as a list */}
+        <div className="lg:hidden">
+          <Agent />
+          <ul className="mt-12 grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
+            {s.map((x, i) => (
+              <li key={i} className="flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-night-card p-4">
+                <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border border-white/10 bg-night-2 ${x.tint}`}>
+                  <Icon name={x.icon} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs text-fog">{x.who}</span>
+                  <span className="mt-1 flex items-center gap-2 text-[14px] text-snow">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${x.hot ? "bg-rose" : "bg-amber"}`} />
+                    <span className="truncate">{x.tag}</span>
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* desktop: the template's stage, sources orbiting the agent */}
+        <div className="relative mx-auto hidden h-[520px] lg:block">
           {[316, 556, 796, 1040].map((d) => (
             <div key={d} className="absolute left-1/2 top-1/2 rounded-full border border-white/[0.07]" style={{ width: d, height: d, marginLeft: -d / 2, marginTop: -d / 2 }} />
           ))}
@@ -70,15 +92,8 @@ export function Problem({ view }: { view?: ViewDocument }) {
               <line key={i} x1="50%" y1="50%" x2={`calc(50% + ${p.x}px)`} y2={`calc(50% + ${p.y}px)`} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 5" />
             ))}
           </svg>
-          <div className="absolute left-1/2 top-1/2 flex w-[220px] -translate-x-1/2 -translate-y-[52px] flex-col items-center">
-            <div className="relative grid h-[104px] w-[104px] place-items-center">
-              <span className="pulse-ring absolute inset-0 rounded-full bg-brand/40" />
-              <span className="absolute -inset-10 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.35),transparent_65%)]" />
-              <span className="absolute inset-0 rounded-full bg-brand" />
-              <Glyph size={50} tone="light" className="relative" />
-            </div>
-            <span className="mt-5 text-lg font-medium">Steward agent</span>
-            <span className="mt-1 text-xs text-brand">every memory traced by Tyrell</span>
+          <div className="absolute left-1/2 top-1/2 w-[220px] -translate-x-1/2 -translate-y-[52px]">
+            <Agent />
           </div>
           {s.map((x, i) => {
             const p = spots[i]!;
@@ -104,16 +119,16 @@ export function Problem({ view }: { view?: ViewDocument }) {
           })}
         </div>
 
-        <div className="relative mt-16 grid gap-6 pb-[110px] md:grid-cols-3">
+        <div className="relative mt-12 grid gap-4 pb-20 sm:gap-6 md:grid-cols-3 lg:mt-16 lg:pb-[110px]">
           {[
             ["Poisoned memory", "bg-rose/15 text-rose", "A token name says the landlord moved", "Your agent stores it like any other fact. Nothing throws, so nothing alerts."],
             ["Laundered summaries", "bg-brand/20 text-[#a78bfa]", "Summarise the poison and it looks clean", "A summary of a summary cites only good memories. Its origin is gone unless something tracks what was read."],
             ["Redirected payments", "bg-amber/15 text-amber", "One proposal and the money is gone", "If the model can sign, persuasion is enough. A look-alike label or a fake QUSDC ends the same way."],
           ].map(([tag, cls, title, body]) => (
             <div key={tag} className="glow rounded-[24px]">
-              <div className="h-full rounded-[23px] bg-night-card px-7 pb-14 pt-7">
+              <div className="h-full rounded-[23px] bg-night-card px-6 pb-10 pt-6 sm:px-7 sm:pb-14 sm:pt-7">
                 <span className={`rounded-md px-2.5 py-1 text-sm ${cls}`}>{tag}</span>
-                <h3 className="mt-8 text-[24px] font-medium leading-[1.3] tracking-[-0.01em]">{title}</h3>
+                <h3 className="mt-6 text-[21px] sm:mt-8 sm:text-[24px] font-medium leading-[1.3] tracking-[-0.01em]">{title}</h3>
                 <p className="mt-4 text-base leading-[1.6] text-fog">{body}</p>
               </div>
             </div>
@@ -121,5 +136,20 @@ export function Problem({ view }: { view?: ViewDocument }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function Agent() {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative grid h-[104px] w-[104px] place-items-center">
+        <span className="pulse-ring absolute inset-0 rounded-full bg-brand/40" />
+        <span className="absolute -inset-10 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.35),transparent_65%)]" />
+        <span className="absolute inset-0 rounded-full bg-brand" />
+        <Glyph size={50} tone="light" className="relative" />
+      </div>
+      <span className="mt-5 text-lg font-medium">Steward agent</span>
+      <span className="mt-1 text-xs text-brand">every memory traced by Tyrell</span>
+    </div>
   );
 }

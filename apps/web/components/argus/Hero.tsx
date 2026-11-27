@@ -4,14 +4,15 @@ import { useState } from "react";
 import { kpis, ruleTrace } from "@/lib/kpis";
 import { amount, short, type ViewDocument } from "@/lib/view";
 import { Mark } from "../Logo";
-import { Bars, Button, Check, Icon } from "./ui";
+import { Bars, Button, Check, Fit, Icon } from "./ui";
 
 export function Hero({ view }: { view?: ViewDocument }) {
+  const [k, setK] = useState(1);
   return (
     <section className="relative overflow-hidden bg-white">
       <div className="grid-lines absolute inset-0" />
       <div className="absolute inset-x-0 bottom-0 h-[420px] bg-gradient-to-b from-transparent via-white/70 to-white" />
-      <div className="relative mx-auto max-w-[1200px] px-6 pt-[142px] text-center xl:px-0">
+      <div className="relative mx-auto max-w-[1200px] px-6 pt-16 text-center sm:pt-24 lg:pt-[142px] xl:px-0">
         <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1 text-sm text-ink shadow-[0_1px_2px_rgba(15,18,32,0.06)]">
           <span className="h-1.5 w-1.5 rounded-full bg-band-green" />
           New · Built on QIE {view ? `· ${view.network}` : "mainnet"}
@@ -20,7 +21,7 @@ export function Hero({ view }: { view?: ViewDocument }) {
         <p className="t-lead mx-auto mt-6 max-w-[660px] text-body">
           Sign, anchor and trace everything your AI agent reads on QIE. Catch poisoned tokens and redirected payments before money moves.
         </p>
-        <div className="mt-10 flex justify-center gap-4">
+        <div className="mx-auto mt-8 flex max-w-[340px] flex-col gap-3 sm:mt-10 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
           <Button href="/console">Open the console</Button>
           <Button href="#problem" variant="outline">See the problem</Button>
         </div>
@@ -34,15 +35,23 @@ export function Hero({ view }: { view?: ViewDocument }) {
       </div>
 
       {/* the dashboard, clipped by the dark band that follows, on the template's colour bands */}
-      <div className="relative mt-[126px] h-[500px]">
-        <div className="absolute inset-x-0 top-[84px] bottom-0">
-          <div className="halftone h-[64px]" />
-          <div className="h-[86px] bg-band-amber" />
-          <div className="h-[76px] bg-band-violet" />
+      <div className="relative mt-16 sm:mt-24 lg:mt-[126px]">
+        <div className="absolute inset-x-0 bottom-0 top-[70px] sm:top-[var(--bt)]" style={{ "--bt": `${84 * k}px` } as React.CSSProperties}>
+          <div className="halftone h-10 sm:h-[var(--b1)]" style={{ "--b1": `${64 * k}px` } as React.CSSProperties} />
+          <div className="h-14 bg-band-amber sm:h-[var(--b2)]" style={{ "--b2": `${86 * k}px` } as React.CSSProperties} />
+          <div className="h-12 bg-band-violet sm:h-[var(--b3)]" style={{ "--b3": `${76 * k}px` } as React.CSSProperties} />
           <div className="h-full bg-band-green" />
         </div>
-        <div className="relative mx-auto max-w-[1200px] px-6 xl:px-0">
-          <Dashboard view={view} />
+        <div className="relative mx-auto max-w-[1200px] px-4 sm:px-6 xl:px-0" data-no-reveal>
+          {/* phones get a compact app view of the same data; larger screens get the full dashboard, scaled to fit */}
+          <div className="sm:hidden">
+            <MobileDashboard view={view} />
+          </div>
+          <div className="hidden sm:block">
+            <Fit width={1200} clip={500} onScale={setK}>
+              <Dashboard view={view} />
+            </Fit>
+          </div>
         </div>
       </div>
     </section>
@@ -61,7 +70,7 @@ function Dashboard({ view }: { view?: ViewDocument }) {
   return (
     <div className="relative">
       {blocked && (
-        <div className="absolute -right-4 -top-9 z-20 flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-left shadow-[0_12px_40px_rgba(15,18,32,0.14)] xl:-right-10">
+        <div className="absolute -right-6 -top-9 z-20 flex items-center gap-3 rounded-xl bg-white px-4 py-3 text-left shadow-[0_12px_40px_rgba(15,18,32,0.14)]">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-[#ffe9ed] text-rose">
             <Icon name="shield" className="h-4 w-4" />
           </span>
@@ -72,7 +81,7 @@ function Dashboard({ view }: { view?: ViewDocument }) {
         </div>
       )}
       {seed && (
-        <div className="absolute -left-10 top-[400px] z-20 hidden w-[230px] -rotate-[9deg] rounded-xl bg-white p-4 text-left shadow-[0_12px_40px_rgba(15,18,32,0.16)] md:block xl:-left-24">
+        <div className="absolute -left-10 top-[400px] z-20 w-[230px] -rotate-[9deg] rounded-xl bg-white p-4 text-left shadow-[0_12px_40px_rgba(15,18,32,0.16)]">
           <div className="flex items-center justify-between">
             <span className="mono text-[11px] tracking-wider text-brand">QUARANTINE</span>
             <span className="mono rounded bg-paper px-1.5 text-[9px] text-muted">SEED #{seed.seedId}</span>
@@ -117,15 +126,15 @@ function Dashboard({ view }: { view?: ViewDocument }) {
               <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">
                 <span className="h-1.5 w-1.5 rounded-full bg-band-green" /> {view?.network ?? "mainnet"}
               </span>
-              <span className="hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body sm:block">block {view?.head ?? "—"}</span>
-              <span className="hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body sm:block">Filter</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">block {view?.head ?? "—"}</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">Filter</span>
             </div>
             <div className="mt-5 flex gap-7 border-b border-line text-[15px]">
               {["Decisions", "Memories", "Quarantine", "Rebuild"].map((t, i) => (
                 <span key={t} className={`pb-3 ${i === 0 ? "-mb-px border-b-2 border-brand text-ink" : "text-muted"}`}>{t}</span>
               ))}
             </div>
-            <div className="mt-6 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+            <div className="mt-6 grid grid-cols-4 gap-3.5">
               {cards.map((c) => (
                 <div key={c.label} className="rounded-xl border border-line bg-white px-4 py-4">
                   <div className="flex items-center justify-between text-[13px] text-body">
@@ -140,7 +149,7 @@ function Dashboard({ view }: { view?: ViewDocument }) {
               ))}
               {!view && <div className="col-span-4 py-8 text-sm text-muted">Loading the projection…</div>}
             </div>
-            <div className="mt-5 grid grid-cols-1 gap-3.5 lg:grid-cols-[0.85fr_1.6fr]">
+            <div className="mt-5 grid grid-cols-[0.85fr_1.6fr] gap-3.5">
               <div className="rounded-xl border border-line bg-white">
                 <div className="mono flex justify-between px-4 py-3 text-[12px] tracking-wider text-muted">
                   DECISIONS <span>{decisions.length}</span>
@@ -195,6 +204,71 @@ function Dashboard({ view }: { view?: ViewDocument }) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** The phone version of the hero dashboard: the same projection, laid out like a mobile app screen. */
+function MobileDashboard({ view }: { view?: ViewDocument }) {
+  const decisions = [...(view?.decisions ?? [])].reverse();
+  const blocked = decisions.find((x) => x.verdict?.decision === "BLOCK");
+  const d = blocked ?? decisions[0];
+  const cards = view ? kpis(view) : [];
+  return (
+    <div className="relative mx-auto max-w-[360px] pb-6">
+      {blocked && (
+        <div className="absolute -right-1 -top-11 z-20 flex items-center gap-2.5 rounded-xl bg-white px-3 py-2.5 text-left shadow-[0_12px_40px_rgba(15,18,32,0.16)]">
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-[#ffe9ed] text-rose">
+            <Icon name="shield" className="h-3.5 w-3.5" />
+          </span>
+          <span>
+            <span className="block text-[13px] font-medium text-ink">Payment blocked</span>
+            <span className="mono block text-[9px] text-muted">{blocked.verdict?.code}</span>
+          </span>
+        </div>
+      )}
+      <div className="overflow-hidden rounded-[28px] border border-line bg-[#f7f8fa] text-left shadow-[0_4px_60px_rgba(15,18,32,0.22)]">
+        <div className="flex items-center gap-2 border-b border-line bg-white px-4 py-3">
+          <Mark size={22} />
+          <span className="text-[15px] font-medium text-ink">steward</span>
+          <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-[11px] text-body">
+            <span className="h-1.5 w-1.5 rounded-full bg-band-green" /> {view?.network ?? "mainnet"}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 p-3">
+          {cards.map((c) => (
+            <div key={c.label} className="min-w-0 rounded-xl border border-line bg-white px-3 py-2.5">
+              <div className="truncate text-[11px] text-body">{c.label}</div>
+              <div className="mt-0.5 text-[22px] font-medium leading-tight tracking-tight text-ink">{c.value}</div>
+              <div className="mt-1">
+                <Bars values={c.bars} color={c.color} count={12} />
+              </div>
+            </div>
+          ))}
+          {!view && <div className="col-span-2 py-6 text-center text-sm text-muted">Loading…</div>}
+        </div>
+        {d && (
+          <div className="mx-3 mb-3 rounded-xl border border-line bg-white px-3.5 py-3">
+            <div className="flex items-center gap-2">
+              <span className="mono text-[12px] text-ink">{short(d.id, 4)}</span>
+              <span className={`mono rounded-full px-2 py-0.5 text-[10px] ${d.verdict?.decision === "ALLOW" ? "bg-[#e6f7f0] text-band-green" : "bg-[#ffe9ed] text-rose"}`}>
+                {d.verdict?.decision === "ALLOW" ? "ALLOW" : d.verdict?.code}
+              </span>
+              <span className="mono ml-auto text-[11px] text-body">{view ? amount(view, d.proposal?.amount) : ""}</span>
+            </div>
+            <div className="mt-3 space-y-1.5">
+              {ruleTrace(d).map((r) => (
+                <div key={r.id} className="grid grid-cols-[24px_1fr] items-center gap-2">
+                  <span className="mono text-[10px] text-muted">{r.id}</span>
+                  <span className="h-2 rounded-full bg-paper">
+                    <span className="block h-full rounded-full" style={{ width: r.state === "skip" ? "0%" : "100%", background: r.state === "pass" ? "#7c5cff" : "#ff5c7a" }} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

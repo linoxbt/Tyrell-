@@ -41,7 +41,7 @@ export function LineageGraph({ graph, onSelect }: { graph: Graph; onSelect?: (id
   const edges = useMemo(() => graph.edges.map((e) => ({ ...e, markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } })), [graph.edges]);
   if (graph.nodes.length === 0) return <p className="p-6 text-sm text-muted">Nothing to show yet.</p>;
   return (
-    <div className="grid-lines h-[600px] rounded-2xl border border-line bg-white" data-testid="lineage-graph" data-memories={graph.memoryIds.join(",")} data-edges={graph.edges.length}>
+    <div className="grid-lines h-[62vh] max-h-[600px] min-h-[380px] rounded-xl border border-line bg-white sm:h-[600px]" data-testid="lineage-graph" data-memories={graph.memoryIds.join(",")} data-edges={graph.edges.length}>
       <ReactFlow
         key={graph.memoryIds.join(",")} // remount so fitView runs for each new graph (e.g. a different seed)
         nodes={graph.nodes}

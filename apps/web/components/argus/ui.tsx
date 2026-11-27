@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useLayoutEffect, useRef, useState } from "react";
 
 export const REPO = "https://github.com/linoxbt/Tyrell-";
 
@@ -27,7 +30,7 @@ export function Button({ href, children, variant = "primary", className = "" }: 
     dark: "bg-night-2 text-white hover:bg-[#303235]",
     white: "border border-line bg-white text-ink hover:bg-paper",
   }[variant];
-  const cls = `inline-flex items-center justify-center rounded-lg px-6 py-4 text-base leading-none transition-colors ${styles} ${className}`;
+  const cls = `inline-flex items-center justify-center whitespace-nowrap rounded-lg px-6 py-4 text-base leading-none transition-[background-color,transform,box-shadow] duration-200 active:scale-[0.98] ${styles} ${className}`;
   return href.startsWith("/") || href.startsWith("#") ? (
     <Link href={href} className={cls}>{children}</Link>
   ) : (
@@ -74,5 +77,39 @@ export function Icon({ name, className = "" }: { name: "pulse" | "check" | "shie
     <svg viewBox="0 0 24 24" className={`h-5 w-5 ${className}`} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d={p} />
     </svg>
+  );
+}
+
+/**
+ * Renders children at a fixed design width and scales them down to fit the container, so a dense
+ * product mock reads as a whole picture on a phone instead of being squeezed. `clip` caps the height
+ * (in design pixels) and clips only the bottom edge, letting floating cards hang over the top and sides.
+ */
+export function Fit({ width, clip, onScale, children }: { width: number; clip?: number; onScale?: (s: number) => void; children: React.ReactNode }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [s, setS] = useState(1);
+  const [h, setH] = useState<number>();
+  useLayoutEffect(() => {
+    const o = outer.current, i = inner.current;
+    if (!o || !i) return;
+    const measure = () => {
+      const k = Math.min(1, o.clientWidth / width);
+      setS(k);
+      onScale?.(k);
+      setH(Math.min(i.offsetHeight, clip ?? Infinity) * k);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(o);
+    ro.observe(i);
+    return () => ro.disconnect();
+  }, [width, clip, onScale]);
+  return (
+    <div ref={outer} data-fit style={{ height: h, clipPath: clip ? "inset(-120px -300px 0 -300px)" : undefined }}>
+      <div ref={inner} style={{ width, transform: `scale(${s})`, transformOrigin: "top left" }}>
+        {children}
+      </div>
+    </div>
   );
 }
