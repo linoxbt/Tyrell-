@@ -1,7 +1,7 @@
 "use client";
 
 import type { ViewDocument } from "@/lib/view";
-import { Mark } from "../Logo";
+import { Glyph } from "../Logo";
 import { Icon } from "./ui";
 
 /** Readable attacker text from an incident summary (the token name, or the NFT metadata). */
@@ -75,7 +75,7 @@ export function Problem({ view }: { view?: ViewDocument }) {
               <span className="pulse-ring absolute inset-0 rounded-full bg-brand/40" />
               <span className="absolute -inset-10 rounded-full bg-[radial-gradient(circle,rgba(124,92,255,0.35),transparent_65%)]" />
               <span className="absolute inset-0 rounded-full bg-brand" />
-              <Mark size={54} className="relative" />
+              <Glyph size={50} tone="light" className="relative" />
             </div>
             <span className="mt-5 text-lg font-medium">Steward agent</span>
             <span className="mt-1 text-xs text-brand">every memory traced by Tyrell</span>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ATTACKS } from "@/lib/attacks";
 import { short, type ViewDocument } from "@/lib/view";
-import { Mark, Wordmark } from "../Logo";
+import { Mark, Type, Wordmark } from "../Logo";
 import { Button, Check, Icon, Pill, REPO, SectionHead } from "./ui";
 
 /* ---------- strip under the hero: the template's customer logo marquee, carrying the QIE parts Tyrell runs on ---------- */
@@ -387,8 +387,8 @@ export function Footer({ view }: { view?: ViewDocument }) {
           ))}
         </div>
         <div className="flex items-center justify-center gap-6 pb-4 pt-24 sm:gap-10">
-          <Mark size={150} className="hidden sm:block" />
-          <span className="text-[clamp(88px,17vw,240px)] font-semibold leading-none tracking-[-0.06em] text-snow">Tyrell</span>
+          <Mark size={150} className="hidden shrink-0 sm:block" />
+          <Type height={190} className="h-[clamp(84px,15vw,190px)] w-auto text-snow" />
         </div>
         <div className="flex flex-wrap justify-between gap-2 border-t border-white/10 py-6 text-xs text-fog">
           <span>Built for QIE Mainnet Hackathon 3.0 · Apache 2.0</span>

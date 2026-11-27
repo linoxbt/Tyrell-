@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tyrell"><title>Tyrell</title><defs>
+  <linearGradient id="mbg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stop-color="#8F72FF"/><stop offset="1" stop-color="#6A48F0"/></linearGradient>
+  <linearGradient id="msheen" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity=".2"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="mfold" x1="33" y1="13" x2="52" y2="52" gradientUnits="userSpaceOnUse"><stop stop-color="#E6DEFF"/><stop offset="1" stop-color="#B5A1FF"/></linearGradient>
+</defs>
+<path d="M18.2 0H45.8C58.5 0 64 5.5 64 18.2V45.8C64 58.5 58.5 64 45.8 64H18.2C5.5 64 0 58.5 0 45.8V18.2C0 5.5 5.5 0 18.2 0Z" fill="url(#mbg)"/>
+<path d="M18.2 0H45.8C58.5 0 64 5.5 64 18.2V45.8C64 58.5 58.5 64 45.8 64H18.2C5.5 64 0 58.5 0 45.8V18.2C0 5.5 5.5 0 18.2 0Z" fill="url(#msheen)"/>
+<g transform="translate(32 32.5) scale(.94) translate(-32 -32.5)"><path d="M18 13H31V52A5 5 0 0 1 26 47V28A3 3 0 0 0 23 25H18A6 6 0 0 1 18 13Z" fill="#fff"/><path d="M46 13H33V52A5 5 0 0 0 38 47V28A3 3 0 0 1 41 25H46A6 6 0 0 0 46 13Z" fill="url(#mfold)"/></g></svg>
