@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { formatEther, type Address } from "viem";
 import type { Id16 } from "@tyrell/core";
 import { call, serve, type Request } from "@tyrell/ipc";
-import { Control, Payments, type BuiltProjection, type SignedPayRequest } from "@tyrell/control";
+import { Control, Payments, Quarantine, type BuiltProjection, type SeedSpec, type SignedPayRequest } from "@tyrell/control";
+import type { SeedSpecMsg } from "@tyrell/ipc";
 import { ProjectionDb } from "@tyrell/storage";
 import { account, blobStore, checkKeyIsolation, clients, dataKey, deployment, paths, readConfig } from "./config.js";
 
@@ -36,7 +37,9 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
   const cs = clients(c);
   const submitter = account("control", "submitter");
   const db = new ProjectionDb(paths().db);
-  const control = new Control({ deployment: d, clients: cs, submitter, rpc: c.rpcs[0]!, dataKey: await dataKey("control"), store: blobStore(c), db });
+  const dk = await dataKey("control");
+  const store = blobStore(c);
+  const control = new Control({ deployment: d, clients: cs, submitter, rpc: c.rpcs[0]!, dataKey: dk, store, db });
   const first = await control.start();
   const addresses = JSON.parse(readFileSync(paths().addresses, "utf8")) as Record<string, Address>;
   const payments = new Payments({
@@ -46,6 +49,15 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
     signerAddress: addresses.signer!,
     signer: (r: SignedPayRequest) => call(paths().signerSocket, r) as Promise<{ txHash: `0x${string}` }>,
   });
+  const quarantine = new Quarantine({ control, clients: cs, controlKey: account("control", "control"), submitter, rpc: c.rpcs[0]!, store, dataKey: dk });
+  const seedSpec = (m: SeedSpecMsg): SeedSpec =>
+    m.type === "signer-window"
+      ? { type: "signer-window", signer: m.signer as Address, fromBlock: BigInt(m.fromBlock), toBlock: BigInt(m.toBlock) }
+      : m.type === "source"
+        ? { type: "source", ref: m.ref as Address }
+        : m.type === "memory"
+          ? { type: "memory", id: m.id as `0x${string}` }
+          : { type: "turn", turn: m.turn as `0x${string}` };
   log(`control: ${first.projection.size} memories at block ${first.head}, digest ${first.digest}`);
 
   const handler = async (req: Request): Promise<unknown> => {
@@ -74,6 +86,22 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
         return db.search(req.query, req.limit ?? 8);
       case "propose":
         return payments.decide(req.proposal, req.readSet as `0x${string}`[], req.turn as `0x${string}`);
+      case "incident":
+        db.addIncident(String(req.incident.memoryId), req.incident);
+        log(`incident: score ${String(req.incident.score)} source ${String(req.incident.source)} (${String((req.incident.rules as string[] | undefined)?.join(", "))})`);
+        return { recorded: true };
+      case "incidents":
+        return db.incidents();
+      case "quarantine": {
+        const spec = seedSpec(req.seed);
+        if (req.preview) {
+          const pv = await quarantine.preview(spec);
+          return { memories: pv.memories, decisions: pv.decisions, vaultTxs: pv.vaultTxs, payeesSuspended: pv.payeesSuspended, radius: pv.radius };
+        }
+        return quarantine.seed(spec, req.reason, req.evidence ?? {});
+      }
+      case "blast":
+        return quarantine.blast(req.seedId);
       case "ledger":
         return control.relayLedger(req.action, req.message, req.signature as `0x${string}`);
       case "show": {

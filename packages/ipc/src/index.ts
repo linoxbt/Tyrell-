@@ -25,6 +25,18 @@ export const Proposal = z
   .strict();
 export type Proposal = z.infer<typeof Proposal>;
 
+const addr = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
+const hex32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
+
+/** A quarantine seed as the CLI or ingest asks for it (spec section 7, seed types). */
+export const SeedSpecMsg = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("memory"), id: id16 }),
+  z.object({ type: z.literal("source"), ref: z.union([addr, hex32]) }),
+  z.object({ type: z.literal("signer-window"), signer: addr, fromBlock: digits, toBlock: digits }),
+  z.object({ type: z.literal("turn"), turn: id16 }),
+]);
+export type SeedSpecMsg = z.infer<typeof SeedSpecMsg>;
+
 export const LEDGER_ACTIONS = ["AddPayee", "RemovePayee", "ReinstatePayee", "ReleaseQuarantine"] as const;
 
 export const Request = z.discriminatedUnion("type", [
@@ -36,6 +48,12 @@ export const Request = z.discriminatedUnion("type", [
   z.object({ type: z.literal("refresh") }),
   /** Steward: a payment proposal, with the turn's readSet set by the runtime (I-3). */
   z.object({ type: z.literal("propose"), proposal: Proposal, readSet: z.array(id16).max(256), turn: id16 }),
+  /** Ingest: a sentinel incident (detection only proposes). */
+  z.object({ type: z.literal("incident"), incident: z.record(z.unknown()) }),
+  z.object({ type: z.literal("incidents") }),
+  /** CLI or ingest auto-quarantine: preview, or seed with the control key. */
+  z.object({ type: z.literal("quarantine"), seed: SeedSpecMsg, reason: z.string().min(1).max(2000), evidence: z.unknown().optional(), preview: z.boolean().optional() }),
+  z.object({ type: z.literal("blast"), seedId: z.number().int().nonnegative() }),
   /** Human CLI: a user-signed ledger action that control only relays as a transaction. */
   z.object({ type: z.literal("ledger"), action: z.enum(LEDGER_ACTIONS), message: z.record(z.unknown()), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) }),
   z.object({ type: z.literal("digest"), head: z.string().regex(/^\d+$/) }),

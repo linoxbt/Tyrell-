@@ -82,6 +82,14 @@ export class Control {
     return this.serial(() => this.anchorMany(raws));
   }
 
+  /**
+   * Runs `f` alone: every transaction the submitter key sends goes through here, so anchors, ledger
+   * relays and quarantine seeds never race for the same nonce.
+   */
+  exclusive<T>(f: () => Promise<T>): Promise<T> {
+    return this.serial(f);
+  }
+
   private serial<T>(f: () => Promise<T>): Promise<T> {
     const run = this.queue.then(f, f);
     this.queue = run.catch(() => undefined);

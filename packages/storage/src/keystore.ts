@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
 import { dirname } from "node:path";
-import { bytesToHex, hexToBytes, keccak256, type Hex } from "viem";
+import { bytesToHex, getAddress, hexToBytes, keccak256, type Hex } from "viem";
 import { privateKeyToAddress } from "viem/accounts";
 
 /**
@@ -119,7 +119,7 @@ export function loadKey(path: string, password: string, role: string): Hex {
 export function keystoreAddress(path: string): Hex {
   const ks = readKeystore(path);
   if (!ks.address) throw new KeystoreError(`${path} is not an EVM key`);
-  return `0x${ks.address}`;
+  return getAddress(`0x${ks.address}`);
 }
 
 export const newSecret = (): Uint8Array => new Uint8Array(randomBytes(32));

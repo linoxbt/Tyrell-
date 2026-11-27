@@ -14,6 +14,7 @@
     "@tyrell/chain": "workspace:*",
     "@tyrell/control": "workspace:*",
     "@tyrell/core": "workspace:*",
+    "@tyrell/ingest": "workspace:*",
     "@tyrell/ipc": "workspace:*",
     "@tyrell/signer": "workspace:*",
     "@tyrell/steward": "workspace:*",

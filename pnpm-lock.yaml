@@ -48,6 +48,9 @@ importers:
       '@tyrell/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@tyrell/ingest':
+        specifier: workspace:*
+        version: link:../ingest
       '@tyrell/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc
@@ -85,7 +88,17 @@ importers:
         specifier: ^2.21.0
         version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
 
-  apps/ingest: {}
+  apps/ingest:
+    dependencies:
+      '@tyrell/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
+      '@tyrell/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      viem:
+        specifier: ^2.21.0
+        version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
 
   apps/signer:
     dependencies:
@@ -129,6 +142,9 @@ importers:
       '@tyrell/control':
         specifier: workspace:*
         version: link:../control
+      '@tyrell/ingest':
+        specifier: workspace:*
+        version: link:../ingest
       '@tyrell/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc

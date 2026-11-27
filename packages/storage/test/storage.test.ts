@@ -73,7 +73,7 @@ describe("keystore v3", () => {
     const ks = encryptKeystore(newSecret(), PW, { role: "agent", evm: true, n: FAST });
     writeKeystore(path, ks);
     expect(() => writeKeystore(path, ks)).toThrow(/refusing to overwrite/);
-    expect(keystoreAddress(path)).toBe(`0x${ks.address}`);
+    expect(keystoreAddress(path).toLowerCase()).toBe(`0x${ks.address}`);
     expect(readKeystore(path).tyrell?.role).toBe("agent");
     expect(loadKey(path, PW, "agent")).toMatch(/^0x[0-9a-f]{64}$/);
     expect(() => loadKey(path, PW, "user")).toThrow(/holds the agent key, not user/);

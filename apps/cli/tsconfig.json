@@ -28,6 +28,9 @@
     },
     {
       "path": "../steward"
+    },
+    {
+      "path": "../ingest"
     }
   ]
 }

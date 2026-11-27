@@ -53,6 +53,7 @@ export class ProjectionDb {
       CREATE TABLE IF NOT EXISTS visible (id TEXT PRIMARY KEY, cls TEXT NOT NULL, body TEXT NOT NULL);
       CREATE VIRTUAL TABLE IF NOT EXISTS visible_fts USING fts5(id UNINDEXED, body);
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS incidents (n INTEGER PRIMARY KEY AUTOINCREMENT, memory_id TEXT NOT NULL UNIQUE, json TEXT NOT NULL);
     `);
   }
 
@@ -117,6 +118,23 @@ export class ProjectionDb {
 
   isVisible(id: string): boolean {
     return !!this.db.prepare("SELECT 1 FROM visible WHERE id = ?").get(id);
+  }
+
+  /**
+   * Every cached memory body, with no projection: for the unprotected comparison agent only (FR-16).
+   * Never used by Steward, whose recall goes through `search`.
+   */
+  allBodies(): Array<{ id: string; body: string }> {
+    return (this.db.prepare("SELECT id, blob FROM blobs").all() as Array<{ id: string; blob: string }>).map((r) => ({ id: r.id, body: (JSON.parse(r.blob) as { body?: string }).body ?? "" }));
+  }
+
+  /** Sentinel incidents: local detection hints, not chain state (a rebuild starts without them). */
+  addIncident(memoryId: string, incident: unknown): void {
+    this.db.prepare("INSERT OR IGNORE INTO incidents (memory_id, json) VALUES (?, ?)").run(memoryId, JSON.stringify(incident));
+  }
+
+  incidents(): unknown[] {
+    return (this.db.prepare("SELECT json FROM incidents ORDER BY n").all() as Array<{ json: string }>).map((r) => JSON.parse(r.json));
   }
 
   getMeta(key: string): string | undefined {

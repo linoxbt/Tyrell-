@@ -9,6 +9,7 @@ import { deploy } from "./deploy.js";
 import { startDaemon } from "./daemon.js";
 import { rebuild, say, show, status, verifyDigest } from "./commands.js";
 import { payeeAdd, payeeList, payeeReinstate, payeeRemove, release, startSigner, stewardTurn } from "./agent.js";
+import { blast, finishRotation, incidents, ingestScan, mermaid, parseSeed, quarantineCmd, revokeTxs } from "./response.js";
 
 const print = (v: unknown) => console.log(JSON.stringify(JSON.parse(encode(v)), (_k, x) => (x && typeof x === "object" && "$bigint" in x ? x.$bigint : x), 2));
 const addressArg = (v: string): Address => {
@@ -180,6 +181,91 @@ program
   .description("Release a quarantine seed (user key)")
   .requiredOption("--reason <cid>", "IPFS CID of the reason")
   .action(run(async (seedId: string, o: { reason: string }) => print(await release(BigInt(seedId), o.reason))));
+
+const ingest = program.command("ingest").description("The ingest worker (wallet key only)");
+ingest
+  .command("scan")
+  .description("One sentinel pass: new transfers, metadata and MCP reads, written through the wallet lane, then scored")
+  .option("--from <block>", "start block (default: after the last scan)", blockArg)
+  .option("--mcp", "also read balances through the QIE MCP server")
+  .action(run(async (o: { from?: bigint; mcp?: boolean }) => print(await ingestScan(o))));
+ingest
+  .command("start")
+  .option("--poll-ms <ms>", "poll interval", process.env.SENTINEL_POLL_MS ?? "15000")
+  .option("--mcp", "also read balances through the QIE MCP server")
+  .action(
+    run(async (o: { pollMs: string; mcp?: boolean }) => {
+      for (;;) {
+        try {
+          const r = await ingestScan({ ...(o.mcp ? { mcp: true } : {}) });
+          if (r.observations.length) console.error(`ingest: ${r.observations.length} observation(s), ${r.incidents.length} incident(s) in blocks ${r.from}-${r.to}`);
+        } catch (e) {
+          console.error(`ingest: ${(e as Error).message}`);
+        }
+        await new Promise((r) => setTimeout(r, Number(o.pollMs)));
+      }
+    }),
+  );
+
+program.command("incidents").description("Sentinel incidents recorded by control").action(run(async () => print(await incidents())));
+
+program
+  .command("quarantine")
+  .description("Seed a quarantine (control key) after a blast-radius preview")
+  .option("--source <ref>", "token contract, NFT contract, sender address or tx hash")
+  .option("--memory <id>", "one memory id")
+  .option("--signer-window <spec>", "<address>:<fromBlock>-<toBlock>")
+  .option("--turn <id>", "every write from one Steward turn")
+  .requiredOption("--reason <text>", "why; sealed and pinned, its CID goes on-chain")
+  .option("--yes", "do not ask for confirmation")
+  .action(
+    run(async (o: { source?: string; memory?: string; signerWindow?: string; turn?: string; reason: string; yes?: boolean }) =>
+      print(await quarantineCmd(parseSeed(o), o.reason, !!o.yes)),
+    ),
+  );
+
+program
+  .command("blast <seedId>")
+  .description("Print the blast radius of a seed")
+  .option("--mermaid", "print a Mermaid graph instead of JSON")
+  .action(
+    run(async (seedId: string, o: { mermaid?: boolean }) => {
+      const b = await blast(Number(seedId));
+      if (o.mermaid) console.log(mermaid(b));
+      else print(b);
+    }),
+  );
+
+program
+  .command("revoke")
+  .description("Revoke or rotate a lane key from QIE Wallet (owner)")
+  .requiredOption("--lane <role>", "user | agent | wallet | control")
+  .option("--rotate", "register a freshly generated key in the same transaction")
+  .option("--reason <text>", "recorded on-chain", "suspected compromise")
+  .option("--port <port>", "local port", "0")
+  .action(
+    run(async (o: { lane: string; rotate?: boolean; reason: string; port: string }) => {
+      const c = readConfig();
+      const d = deployment(c);
+      const pub = clients(c)[0]!;
+      const r = await revokeTxs(pub, d, o.lane, !!o.rotate, o.reason);
+      const html = ownerPageHtml({ chainId: c.chainId, chainName: c.network, rpcUrls: c.rpcs.slice(0, 2), owner: d.owner, txs: r.txs });
+      const { url, server } = await serveOwnerPage(html, Number(o.port));
+      console.log(`Open ${url} with QIE Wallet (owner ${d.owner}): ${r.txs[0]!.label}`);
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 4_000));
+        const active = await pub.readContract({ address: d.laneRegistry, abi: (await import("@tyrell/chain")).laneRegistryAbi, functionName: "isActiveFor", args: [r.oldKey, ({ user: 1, agent: 2, wallet: 3, control: 4 } as Record<string, number>)[o.lane]!] });
+        if (!active) break;
+      }
+      server.close();
+      if (r.newKey) {
+        await finishRotation(pub, d, o.lane, r.newKey);
+        console.log(`Rotated: ${o.lane} is now ${r.newKey}; the old key file is in keys/retired. Restart the ${o.lane} process.`);
+      } else {
+        console.log(`Revoked ${r.oldKey}: MemoryAnchor refuses anything it signs from now on.`);
+      }
+    }),
+  );
 
 program
   .command("say <text>")

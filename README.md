@@ -16,7 +16,8 @@ Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 | 2 | Core library | Done: envelope, EIP-712, verifier, lineage and quarantine closure, blast radius, digest, policy engine R0–R5; verifier and policy engine at 100% branch coverage |
 | 3 | Control and storage | Done on a local chain: `tyrell setup`, deploy, control (encrypt, pin, anchor, index), `rebuild --fresh`, `verify`; testnet run needs a funded deployer and a Pinata JWT |
 | 4 | Agent and payments | Done on a local chain: Steward (readSet, three tools, context labels), policy engine in control, signer process, payees via QIE ID round-trip, decision memories; M1 acceptance run passes |
-| 5–7 | Detection and response, mainnet, presentation | Planned |
+| 5 | Detection and response | Done on a local chain: ingest worker and sentinel, incidents, quarantine (four seed types, preview, auto for blocklist hits, payee suspension), release, revoke and rotate, comparison agent; the full poison-to-clean loop passes |
+| 6–7 | Mainnet and attack set, presentation | Planned |
 
 ## Repo layout
 
@@ -57,6 +58,11 @@ pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5
 pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
 export LLM_BASE_URL=... LLM_API_KEY=... LLM_MODEL=...   # any OpenAI-compatible endpoint
 pnpm tyrell steward "pay this month's rent"           # agent key only; proposes, never signs
+pnpm tyrell ingest start &                            # wallet key only; watches the vault, scores what arrives
+pnpm tyrell incidents
+pnpm tyrell quarantine --source <token> --reason "..." # preview, confirm, seed with the control key
+pnpm tyrell blast <seedId> --mermaid
+pnpm tyrell revoke --lane wallet --rotate             # owner signs in QIE Wallet
 pnpm tyrell status
 pnpm tyrell verify --head <block>                     # live digest == fresh rebuild from chain + IPFS
 ```
