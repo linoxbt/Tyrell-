@@ -1,6 +1,6 @@
 "use client";
 
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type NodeProps } from "@xyflow/react";
+import { Controls, Handle, MarkerType, Position, ReactFlow, type NodeProps } from "@xyflow/react";
 import { useMemo } from "react";
 import { bodyText, CLS_STYLE, KIND, LANE_COLOR, short, type Graph, type ViewMemory } from "@/lib/view";
 
@@ -8,8 +8,8 @@ function MemoryNode({ data }: NodeProps) {
   const m = (data as { m: ViewMemory }).m;
   return (
     <div
-      className="w-[230px] rounded-md bg-white px-2.5 py-2 text-[11px] leading-tight shadow-sm"
-      style={{ borderLeft: `4px solid ${LANE_COLOR[m.lane] ?? "#999"}`, outline: m.quarantined ? "2px dashed #dc2626" : "1px solid #e7e5e4", outlineOffset: m.quarantined ? 2 : 0 }}
+      className="w-[230px] rounded-xl bg-white px-3 py-2.5 text-[11px] leading-tight shadow-[0_2px_10px_rgba(15,16,32,0.06)]"
+      style={{ borderLeft: `4px solid ${LANE_COLOR[m.lane] ?? "#999"}`, outline: m.quarantined ? "2px dashed #e11d48" : "1px solid #ececf1", outlineOffset: m.quarantined ? 2 : 0 }}
       title={m.clsReason}
     >
       <Handle type="target" position={Position.Left} className="!bg-stone-400" />
@@ -28,7 +28,7 @@ function MemoryNode({ data }: NodeProps) {
 
 function SourceNode({ data }: NodeProps) {
   return (
-    <div className="w-[170px] rounded-full border border-red-300 bg-red-50 px-3 py-2 text-center text-[11px] font-medium text-red-800">
+    <div className="w-[170px] rounded-full border border-rose-300 bg-rose-50 px-3 py-2 text-center text-[11px] font-medium text-rose-800">
       {(data as { label: string }).label}
       <Handle type="source" position={Position.Right} className="!bg-red-400" />
     </div>
@@ -41,7 +41,7 @@ export function LineageGraph({ graph, onSelect }: { graph: Graph; onSelect?: (id
   const edges = useMemo(() => graph.edges.map((e) => ({ ...e, markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } })), [graph.edges]);
   if (graph.nodes.length === 0) return <p className="p-6 text-sm text-stone-500">Nothing to show yet.</p>;
   return (
-    <div className="h-[560px] rounded-lg border border-stone-200 bg-stone-100" data-testid="lineage-graph" data-memories={graph.memoryIds.join(",")} data-edges={graph.edges.length}>
+    <div className="grid-bg h-[600px] rounded-2xl border border-line bg-white" data-testid="lineage-graph" data-memories={graph.memoryIds.join(",")} data-edges={graph.edges.length}>
       <ReactFlow
         key={graph.memoryIds.join(",")} // remount so fitView runs for each new graph (e.g. a different seed)
         nodes={graph.nodes}
@@ -54,7 +54,7 @@ export function LineageGraph({ graph, onSelect }: { graph: Graph; onSelect?: (id
         onNodeClick={(_e, n) => n.type === "memory" && onSelect?.(n.id)}
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={20} color="#e7e5e4" />
+        
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>

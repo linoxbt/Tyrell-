@@ -147,10 +147,17 @@ Mainnet: [docs/MAINNET.md](docs/MAINNET.md).
 
 ### Web view
 
+`apps/web` has two parts. Its design follows the Argus template from the Framer marketplace (agent
+monitoring), rebuilt in Next.js with Tyrell's own content and data:
+
+- `/`: the landing page. Its product window, poisoned-source diagram, blast-radius and rebuild cards
+  show the real projection, not placeholder data.
+- `/console`: the operator console. Overview (classes, decisions, payees, seeds), lineage graph,
+  blast radius per seed, decisions with what the model had read, timeline and incidents.
+
 Control serves a read-only view document on `127.0.0.1:7878`. `TYRELL_API_URL=http://127.0.0.1:7878
 pnpm web:dev` shows it live. Without it, the web view serves `apps/web/public/snapshot.json` (write one
 with `pnpm tyrell snapshot --out apps/web/public/snapshot.json`), which is how the hosted demo runs.
-Tabs: lineage graph, blast radius per seed, timeline, decisions with what the model had read, incidents.
 
 ## Repo layout
 

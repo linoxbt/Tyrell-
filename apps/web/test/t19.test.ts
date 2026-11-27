@@ -59,7 +59,7 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 });
-      await page.goto(url);
+      await page.goto(`${url}/console`);
       await page.getByRole("button", { name: "Blast radius" }).click();
       await page.locator("select").selectOption(String(expected.seedId));
       const g = page.getByTestId("lineage-graph");
