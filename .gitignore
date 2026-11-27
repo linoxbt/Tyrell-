@@ -14,3 +14,4 @@ contracts/broadcast/*/31337/
 *.keystore.json
 keys/
 contracts/deployments/31337.json
+contracts/deployments/network-31337.json

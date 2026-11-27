@@ -7,6 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ITyrellLedger} from "./interfaces/ITyrellLedger.sol";
+import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
 
 /// @title GuardedVault
 /// @notice Holds Steward's QUSDC. `pay` is the only way money leaves to anyone but the owner, and it
@@ -24,6 +25,8 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     ITyrellLedger public immutable ledger;
+    /// @notice Phase A: the agent registry this vault charges multi-agent payments to (0 = single agent).
+    IAgentRegistry public agentRegistry;
 
     mapping(bytes32 payeeId => mapping(uint256 day => uint256)) private _spent;
     mapping(address token => mapping(uint256 day => uint256)) private _spentGlobal;
@@ -33,10 +36,13 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
     event Paid(bytes32 indexed payeeId, address indexed to, address token, uint256 amount, bytes16 decisionId);
     event Withdrawn(address indexed to, address token, uint256 amount);
     event GlobalDailyCapSet(address indexed token, uint256 cap);
+    event PaidForAgent(uint256 indexed agentId, bytes32 indexed payeeId, address token, uint256 amount, bytes16 decisionId);
+    event AgentRegistrySet(address registry);
 
     error NotPayable(bytes32 code);
     error BadDecision();
     error ZeroAddress();
+    error NoAgentRegistry();
 
     constructor(address admin, ITyrellLedger ledger_, address signer, address controlPauser) {
         if (admin == address(0) || address(ledger_) == address(0)) revert ZeroAddress();
@@ -54,6 +60,29 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
         whenNotPaused
         nonReentrant
     {
+        _pay(payeeId, token, amount, decisionId);
+    }
+
+    /// @notice Phase A: pays a registered payee for an ALLOW decision proposed by agent `agentId`.
+    ///         On top of every check `pay` makes, the agent registry must accept the spend: the agent
+    ///         is active, its human is still bound to their QIE ID and not frozen, the agent may pay and
+    ///         was delegated this payee, and the amount fits the agent's per-payment and daily limits and
+    ///         the human's shared daily quota. The registry only accepts this vault if the agent's human
+    ///         authorised it as a spender.
+    function payForAgent(uint256 agentId, bytes32 payeeId, address token, uint256 amount, bytes16 decisionId)
+        external
+        onlyRole(SIGNER_ROLE)
+        whenNotPaused
+        nonReentrant
+    {
+        IAgentRegistry r = agentRegistry;
+        if (address(r) == address(0)) revert NoAgentRegistry();
+        r.consume(agentId, payeeId, token, amount);
+        _pay(payeeId, token, amount, decisionId);
+        emit PaidForAgent(agentId, payeeId, token, amount, decisionId);
+    }
+
+    function _pay(bytes32 payeeId, address token, uint256 amount, bytes16 decisionId) private {
         if (decisionId == bytes16(0) || decisionUsed[decisionId]) revert BadDecision();
 
         (bool ok, address to, bytes32 code) = ledger.isPayable(payeeId, token, amount);
@@ -83,6 +112,12 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
     function setGlobalDailyCap(address token, uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         globalDailyCap[token] = cap;
         emit GlobalDailyCapSet(token, cap);
+    }
+
+    /// @notice Owner only: link the agent registry (phase A). Zero unlinks it.
+    function setAgentRegistry(IAgentRegistry registry) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        agentRegistry = registry;
+        emit AgentRegistrySet(address(registry));
     }
 
     /// @notice Owner or control: stop all payments.
