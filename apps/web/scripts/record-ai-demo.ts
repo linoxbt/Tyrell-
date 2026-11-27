@@ -1,5 +1,5 @@
 /**
- * Records one real run of each preset attack for the playground's Live AI tab, so the page shows a real
+ * Records one real run of each preset attack for the playground's demo, so the page shows a real
  * model's behaviour even when live runs are off or rate-limited. Needs the model key:
  *   FORTYTWO_API_KEY=... pnpm record:ai          (or any LLM_* provider settings)
  */

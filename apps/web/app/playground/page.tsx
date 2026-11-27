@@ -5,7 +5,7 @@ import { Playground } from "@/components/playground/Playground";
 
 export const metadata: Metadata = {
   title: "Playground · Tyrell",
-  description: "Tyrell's real contracts running live in your browser: 34 checks from forged memories to banned agents. No wallet, no login.",
+  description: "Can a hacker trick an AI into sending them your money? Run the same attack on an AI agent with an ordinary wallet and one protected by Tyrell. No wallet, no sign-up.",
 };
 
 export default function Page() {
