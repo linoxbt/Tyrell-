@@ -219,45 +219,54 @@ export function AttackGate() {
 }
 
 /* ---------- integrations: dark band with concentric arcs and floating badges ---------- */
-export function BuiltOnQie({ view }: { view?: ViewDocument }) {
-  const badges: Array<{ x: string; y: number; icon: Parameters<typeof Icon>[0]["name"]; c: string; label: string }> = [
-    { x: "6%", y: 60, icon: "coin", c: "text-amber", label: "QUSDC" },
-    { x: "11%", y: 255, icon: "graph", c: "text-[#a78bfa]", label: "QIE ID" },
-    { x: "5%", y: 455, icon: "list", c: "text-[#60a5fa]", label: "QIE MCP" },
-    { x: "24%", y: 245, icon: "shield", c: "text-amber", label: "QIE Wallet" },
-    { x: "74%", y: 245, icon: "check", c: "text-[#60a5fa]", label: "Blockscout" },
-    { x: "92%", y: 70, icon: "pulse", c: "text-rose", label: "MemoryAnchor" },
-    { x: "86%", y: 395, icon: "flag", c: "text-band-green", label: "GuardedVault" },
-  ];
+type Badge = { icon: Parameters<typeof Icon>[0]["name"]; c: string; label: string; x: string; y: number; mx: string; my: number };
+/** x/y: the wide orbit (lg and up). mx/my: phones and tablets, three badges above the heading and four below. */
+const BADGES: Badge[] = [
+  { icon: "coin", c: "text-amber", label: "QUSDC", x: "6%", y: 60, mx: "15%", my: 40 },
+  { icon: "graph", c: "text-[#a78bfa]", label: "QIE ID", x: "5%", y: 255, mx: "50%", my: 14 },
+  { icon: "pulse", c: "text-rose", label: "MemoryAnchor", x: "92%", y: 70, mx: "85%", my: 40 },
+  { icon: "list", c: "text-[#60a5fa]", label: "QIE MCP", x: "9%", y: 440, mx: "12%", my: 372 },
+  { icon: "shield", c: "text-amber", label: "QIE Wallet", x: "19%", y: 245, mx: "37%", my: 402 },
+  { icon: "check", c: "text-[#60a5fa]", label: "Blockscout", x: "81%", y: 245, mx: "63%", my: 402 },
+  { icon: "flag", c: "text-band-green", label: "GuardedVault", x: "91%", y: 420, mx: "88%", my: 372 },
+];
+
+function Orb({ b, compact }: { b: Badge; compact?: boolean }) {
+  return (
+    <div className={`absolute -translate-x-1/2 ${compact ? "lg:hidden" : "hidden lg:block"}`} style={compact ? { left: b.mx, top: b.my } : { left: b.x, top: b.y }}>
+      <span
+        className={`mx-auto grid place-items-center rounded-full border border-white/10 bg-night-2 ${compact ? "h-12 w-12 shadow-[0_0_0_6px_rgba(255,255,255,0.02)]" : "h-[60px] w-[60px] shadow-[0_0_0_8px_rgba(255,255,255,0.02)]"} ${b.c}`}
+      >
+        <Icon name={b.icon} className={compact ? "h-5 w-5" : "h-6 w-6"} />
+      </span>
+      <span className={`mt-2 block whitespace-nowrap text-center text-fog ${compact ? "text-[10.5px]" : "text-[11px]"}`}>{b.label}</span>
+    </div>
+  );
+}
+
+export function BuiltOnQie(_: { view?: ViewDocument }) {
   return (
     <section className="relative overflow-hidden bg-night text-snow">
-      <div className="relative mx-auto h-[420px] max-w-[1440px] md:h-[576px]">
+      <div className="relative mx-auto h-[500px] max-w-[1440px] sm:h-[520px] lg:h-[576px]">
+        {/* arcs: tighter rings around the heading on small screens */}
+        {[360, 540, 720, 900].map((d) => (
+          <div key={`s${d}`} className="absolute left-1/2 top-[235px] rounded-full border border-white/[0.08] lg:hidden" style={{ width: d, height: d * 1.1, marginLeft: -d / 2, marginTop: -(d * 1.1) / 2 }} />
+        ))}
         {[560, 820, 1080, 1340].map((d) => (
-          <div key={d} className="absolute left-1/2 top-[250px] rounded-full border border-white/[0.09]" style={{ width: d, height: d * 1.15, marginLeft: -d / 2, marginTop: -(d * 1.15) / 2 }} />
+          <div key={d} className="absolute left-1/2 top-[250px] hidden rounded-full border border-white/[0.09] lg:block" style={{ width: d, height: d * 1.15, marginLeft: -d / 2, marginTop: -(d * 1.15) / 2 }} />
         ))}
-        {badges.map((b) => (
-          <div key={b.label} className="group absolute hidden -translate-x-1/2 md:block" style={{ left: b.x, top: b.y }}>
-            <span className={`grid h-[60px] w-[60px] place-items-center rounded-full border border-white/10 bg-night-2 shadow-[0_0_0_8px_rgba(255,255,255,0.02)] ${b.c}`}>
-              <Icon name={b.icon} className="h-6 w-6" />
-            </span>
-            <span className="mt-2 block whitespace-nowrap text-center text-[11px] text-fog">{b.label}</span>
-          </div>
+        {BADGES.map((b) => (
+          <Orb key={`m${b.label}`} b={b} compact />
         ))}
-        <div className="absolute inset-x-0 top-[88px] px-4 text-center md:top-[128px]">
+        {BADGES.map((b) => (
+          <Orb key={b.label} b={b} />
+        ))}
+        <div className="absolute inset-x-0 top-[138px] px-6 text-center sm:top-[150px] lg:top-[128px]">
           <Pill dark>Built on QIE</Pill>
-          <h2 className="h-section mx-auto mt-5 max-w-[520px] text-snow">Uses what QIE already gives you</h2>
-          <ul className="mx-auto mt-6 flex max-w-[420px] flex-wrap justify-center gap-2 md:hidden">
-            {badges.map((b) => (
-              <li key={b.label} className="flex items-center gap-1.5 rounded-full border border-white/10 bg-night-2 px-3 py-1.5 text-xs text-mist">
-                <Icon name={b.icon} className={`h-3.5 w-3.5 ${b.c}`} /> {b.label}
-              </li>
-            ))}
-          </ul>
-          <p className="mono mt-5 hidden text-xs text-fog md:block">
-            {view ? `4 contracts · chain ${view.chainId} · vault ${short(view.contracts.guardedVault ?? "", 5)} · block ${view.head}` : "4 contracts on QIE Mainnet"}
-          </p>
+          <h2 className="h-section mx-auto mt-4 max-w-[520px] text-snow lg:mt-5">Uses what QIE already gives you</h2>
+          <p className="mono mx-auto mt-4 max-w-[300px] text-[11px] leading-relaxed text-fog sm:max-w-none sm:text-xs lg:mt-5">Six contracts for QIE Mainnet · chain 1990</p>
         </div>
-        <div className="absolute inset-x-0 bottom-0 hidden h-40 bg-gradient-to-b from-transparent to-night md:block" />
+        <div className="absolute inset-x-0 bottom-0 hidden h-16 bg-gradient-to-b from-transparent to-night lg:block" />
       </div>
     </section>
   );
