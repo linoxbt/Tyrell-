@@ -23,7 +23,9 @@
     "gen:abi": "pnpm contracts:build && tsx scripts/gen-abi.ts",
     "tyrell": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=ExperimentalWarning --disable-warning=UNDICI-EHPA\" tsx apps/cli/src/main.ts",
     "web:dev": "pnpm --filter @tyrell/web dev",
-    "web:build": "pnpm --filter @tyrell/web build"
+    "web:build": "pnpm --filter @tyrell/web build",
+    "gen:playground": "tsx scripts/gen-playground.ts",
+    "report:tests": "tsx scripts/test-report.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

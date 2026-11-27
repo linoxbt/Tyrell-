@@ -1,0 +1,1753 @@
+{
+ "generatedAt": "2026-11-27T18:01:31.423Z",
+ "commit": "a1297b7",
+ "node": "v22.23.5",
+ "totals": {
+  "typescript": {
+   "passed": 197,
+   "failed": 0,
+   "skipped": 0,
+   "files": 23
+  },
+  "foundry": {
+   "passed": 118,
+   "failed": 0,
+   "skipped": 0,
+   "suites": 8
+  }
+ },
+ "vitest": [
+  {
+   "file": "apps/cli/test/cli.test.ts",
+   "tests": [
+    {
+     "name": "tyrell CLI on anvil › T-02: setup keys writes distinct encrypted keys and never prints them",
+     "status": "pass",
+     "ms": 1570
+    },
+    {
+     "name": "tyrell CLI on anvil › deploys with Foundry, roles going to the generated keys",
+     "status": "pass",
+     "ms": 1563
+    },
+    {
+     "name": "tyrell CLI on anvil › T-02: registers four lane keys with the same transactions the owner page sends",
+     "status": "pass",
+     "ms": 848
+    },
+    {
+     "name": "tyrell CLI on anvil › starts the control daemon as its own process",
+     "status": "pass",
+     "ms": 1013
+    },
+    {
+     "name": "tyrell CLI on anvil › say writes a trusted user-lane statement; status and show report it",
+     "status": "pass",
+     "ms": 3450
+    },
+    {
+     "name": "tyrell CLI on anvil › rebuild refuses to replace the live database while control runs, and works side by side",
+     "status": "pass",
+     "ms": 1424
+    },
+    {
+     "name": "tyrell CLI on anvil › T-14 via the CLI: verify --head compares live and rebuilt digests",
+     "status": "pass",
+     "ms": 1640
+    },
+    {
+     "name": "tyrell CLI on anvil › M1 across processes: fund the vault, start the signer, register landlord",
+     "status": "pass",
+     "ms": 3261
+    },
+    {
+     "name": "tyrell CLI on anvil › M1 across processes: a poisoned observation arrives through the wallet lane",
+     "status": "pass",
+     "ms": 34
+    },
+    {
+     "name": "tyrell CLI on anvil › M1 across processes: Steward pays rent to the landlord, and refuses the attacker",
+     "status": "pass",
+     "ms": 1982
+    },
+    {
+     "name": "tyrell CLI on anvil › M1 across processes: rebuild fresh still matches, decisions included",
+     "status": "pass",
+     "ms": 1405
+    },
+    {
+     "name": "tyrell CLI on anvil › Phase 5 across processes: ingest scan writes the poison through the wallet lane and raises an incident",
+     "status": "pass",
+     "ms": 2013
+    },
+    {
+     "name": "tyrell CLI on anvil › Phase 5 across processes: quarantine --source with preview, blast radius as Mermaid",
+     "status": "pass",
+     "ms": 1990
+    },
+    {
+     "name": "tyrell CLI on anvil › T-17: rotate the agent key mid-session: old key refused, new key anchors, older memories keep their class",
+     "status": "pass",
+     "ms": 1400
+    },
+    {
+     "name": "tyrell CLI on anvil › T-20: the attack set, 10 of 10 blocked or excluded, no attacker funds moved",
+     "status": "pass",
+     "ms": 13223
+    },
+    {
+     "name": "tyrell CLI on anvil › NFR-08 caps check, signer-leak drill (reverted on-chain) and the evidence list",
+     "status": "pass",
+     "ms": 3038
+    },
+    {
+     "name": "tyrell CLI on anvil › the web view's read-only API serves the projection, and nothing else",
+     "status": "pass",
+     "ms": 7
+    },
+    {
+     "name": "tyrell CLI on anvil › everything still rebuilds to the same digest",
+     "status": "pass",
+     "ms": 1510
+    },
+    {
+     "name": "tyrell CLI on anvil › no command ever printed a private key or the passphrase",
+     "status": "pass",
+     "ms": 21
+    }
+   ]
+  },
+  {
+   "file": "apps/cli/test/network.test.ts",
+   "tests": [
+    {
+     "name": "agents network CLI builders › parses permissions",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "agents network CLI builders › binds (claiming on a test QIE ID store first) and registers",
+     "status": "pass",
+     "ms": 4
+    },
+    {
+     "name": "agents network CLI builders › delegates payees by label and agents by #id; links the vault; opens deals",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "DeployNetwork.s.sol › deploys a test QIE ID store, the registry and the network, linked, and writes network-31337.json",
+     "status": "pass",
+     "ms": 797
+    }
+   ]
+  },
+  {
+   "file": "apps/cli/test/seeds.test.ts",
+   "tests": [
+    {
+     "name": "quarantine seeds: CLI parsing and on-chain encoding (all four types) › parses exactly one seed flag",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "quarantine seeds: CLI parsing and on-chain encoding (all four types) › encodes each type the way TyrellLedger stores it",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "quarantine seeds: CLI parsing and on-chain encoding (all four types) › renders a blast radius as Mermaid",
+     "status": "pass",
+     "ms": 0
+    }
+   ]
+  },
+  {
+   "file": "apps/cli/test/sentinel-ai.test.ts",
+   "tests": [
+    {
+     "name": "AI sentinel configuration › is off without a model, prefers SENTINEL_LLM_*, falls back to LLM_*, and can be disabled",
+     "status": "pass",
+     "ms": 1
+    }
+   ]
+  },
+  {
+   "file": "apps/control/test/e2e.test.ts",
+   "tests": [
+    {
+     "name": "control on a real chain (anvil) › refuses to start without one active key per lane, then starts",
+     "status": "pass",
+     "ms": 16
+    },
+    {
+     "name": "control on a real chain (anvil) › anchors a user statement, a poisoned wallet observation and an agent summary that read both",
+     "status": "pass",
+     "ms": 56
+    },
+    {
+     "name": "control on a real chain (anvil) › anchors a batch of agent notes in one transaction",
+     "status": "pass",
+     "ms": 30
+    },
+    {
+     "name": "control on a real chain (anvil) › T-03: an agent key claiming the user lane is rejected by control and by MemoryAnchor",
+     "status": "pass",
+     "ms": 9
+    },
+    {
+     "name": "control on a real chain (anvil) › T-04: after the owner revokes the wallet key, nothing it signs can anchor",
+     "status": "pass",
+     "ms": 9
+    },
+    {
+     "name": "control on a real chain (anvil) › rejects malformed envelopes, wrong accounts and future refBlocks before spending gas",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "control on a real chain (anvil) › projection: classes, old wallet memories still bind after revocation, quarantine by source",
+     "status": "pass",
+     "ms": 68
+    },
+    {
+     "name": "control on a real chain (anvil) › recall returns only visible memories: the poison never comes back through search",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "control on a real chain (anvil) › T-14: delete the local database and rebuild from chain and IPFS: the digest matches",
+     "status": "pass",
+     "ms": 86
+    },
+    {
+     "name": "control on a real chain (anvil) › rebuild without the right data key, or with a body swapped on IPFS, is unverified and the digest says so",
+     "status": "pass",
+     "ms": 93
+    }
+   ]
+  },
+  {
+   "file": "apps/control/test/perf.test.ts",
+   "tests": [
+    {
+     "name": "rebuilds 500 memories well inside 90 s",
+     "status": "pass",
+     "ms": 5934
+    }
+   ]
+  },
+  {
+   "file": "apps/ingest/test/judge.test.ts",
+   "tests": [
+    {
+     "name": "AI sentinel judge › fences untrusted text so it cannot close the data block",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "AI sentinel judge › parses a verdict and clamps confidence; rejects malformed replies",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "AI sentinel judge › counts only confident positive verdicts",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "AI sentinel judge › sends the text as fenced data under a fixed system prompt, at temperature 0",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "AI sentinel judge › fails open to the rules: HTTP errors, garbage and timeouts give no verdict",
+     "status": "pass",
+     "ms": 51
+    },
+    {
+     "name": "AI sentinel judge › does not call the model for empty text, and caches repeated text",
+     "status": "pass",
+     "ms": 1
+    }
+   ]
+  },
+  {
+   "file": "apps/ingest/test/score.test.ts",
+   "tests": [
+    {
+     "name": "sentinel scoring (spec section 10) › the demo token name scores 85: imperative + embedded address + payee words",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › a plain token scores 0",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › blocklist alone crosses any threshold",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › address poisoning: a dust transfer from a look-alike of the landlord",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › look-alike detection: prefix and suffix collide, address differs",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › homoglyphs: mixed Latin and Cyrillic in one word, or invisible characters",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › imperatives and URLs in many shapes",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "sentinel scoring (spec section 10) › scores cap at 100",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "metadata fetching limits › decodes data: URIs, plain and base64",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "metadata fetching limits › refuses http, private and loopback hosts, and redirects",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "metadata fetching limits › enforces the 64 KB limit and maps ipfs:// to a gateway",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "metadata fetching limits › private IP ranges",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "metadata fetching limits › extracts the readable fields of NFT metadata",
+     "status": "pass",
+     "ms": 0
+    }
+   ]
+  },
+  {
+   "file": "apps/ingest/test/worker-ai.test.ts",
+   "tests": [
+    {
+     "name": "AI sentinel in the ingest worker › raises an incident the rules alone miss, and records the AI's reason",
+     "status": "pass",
+     "ms": 54
+    },
+    {
+     "name": "AI sentinel in the ingest worker › cannot clear what the rules caught",
+     "status": "pass",
+     "ms": 21
+    },
+    {
+     "name": "AI sentinel in the ingest worker › falls back to the rules when the judge fails",
+     "status": "pass",
+     "ms": 17
+    }
+   ]
+  },
+  {
+   "file": "apps/steward/test/agents.test.ts",
+   "tests": [
+    {
+     "name": "agents network phase A, end to end › pays through GuardedVault.payForAgent and charges the agent and the human's quota",
+     "status": "pass",
+     "ms": 81
+    },
+    {
+     "name": "agents network phase A, end to end › blocks over the agent's per-payment limit with the registry's code (R4a)",
+     "status": "pass",
+     "ms": 59
+    },
+    {
+     "name": "agents network phase A, end to end › shares one daily quota between the human's agents",
+     "status": "pass",
+     "ms": 121
+    },
+    {
+     "name": "agents network phase A, end to end › stops every agent the moment the human's QIE ID stops resolving to them",
+     "status": "pass",
+     "ms": 56
+    },
+    {
+     "name": "agents network phase A, end to end › refuses an agent id whose registered key is not this deployment's agent-lane key",
+     "status": "pass",
+     "ms": 58
+    },
+    {
+     "name": "agents network phase A, end to end › the signer refuses a control-signed request for a different agent",
+     "status": "pass",
+     "ms": 1
+    }
+   ]
+  },
+  {
+   "file": "apps/steward/test/loop.test.ts",
+   "tests": [
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › T-12: a token named with an instruction is written through the wallet lane as untrusted, and raises an incident (score 85)",
+     "status": "pass",
+     "ms": 64
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › T-15: address poisoning (forged zero-value transfers to and from a look-alike of the landlord) raises a look-alike incident",
+     "status": "pass",
+     "ms": 74
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › an NFT whose metadata carries an instruction is caught, and a blocklisted contract is auto-quarantined",
+     "status": "pass",
+     "ms": 146
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › the baited model is blocked with UNKNOWN_RECIPIENT; the unprotected agent would have sent 5 to the attacker (T-18)",
+     "status": "pass",
+     "ms": 117
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › blast radius preview: poisoned token -> wallet memory -> Steward's summary -> decision",
+     "status": "pass",
+     "ms": 39
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › quarantine the source: one on-chain seed; poison, summary and decision leave the model's context",
+     "status": "pass",
+     "ms": 119
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › pay rent again: the poison is not recalled, ALLOW to the registered landlord, Paid on-chain",
+     "status": "pass",
+     "ms": 106
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › writes the web view snapshot and the CLI's blast radius for T-19 (when DEMO_SNAPSHOT_OUT is set)",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › quarantining a payee's own address suspends the payee; the policy then blocks with PAYEE_SUSPENDED",
+     "status": "pass",
+     "ms": 209
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › T-16: releasing needs the user key; control's key is refused on-chain",
+     "status": "pass",
+     "ms": 55
+    },
+    {
+     "name": "poisoned memory -> blocked payment -> blast radius -> quarantine -> clean restoration › rebuild fresh from chain and IPFS: the digest matches, seeds and releases included",
+     "status": "pass",
+     "ms": 135
+    }
+   ]
+  },
+  {
+   "file": "apps/steward/test/m1.test.ts",
+   "tests": [
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › T-09: a QIE ID that does not reverse-resolve is rejected before anything is signed",
+     "status": "pass",
+     "ms": 6
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › registers landlord (cap 5, daily 5) by QIE ID, and school by address, from the human process",
+     "status": "pass",
+     "ms": 52
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › the user says pay rent; a poisoned token lands in the wallet lane",
+     "status": "pass",
+     "ms": 36
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › honest model: ALLOW to the registered address only, Paid on-chain, decision memory with parents = readSet (T-13)",
+     "status": "pass",
+     "ms": 101
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › baited model: rent to the attacker blocks with UNKNOWN_RECIPIENT; nothing is signed or sent",
+     "status": "pass",
+     "ms": 111
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › correct address under the wrong label blocks with LABEL_MISMATCH; over the cap with OVER_CAP",
+     "status": "pass",
+     "ms": 164
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › the vault's daily cap holds: a second rent payment today blocks with OVER_DAILY_CAP",
+     "status": "pass",
+     "ms": 86
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › the model's tool arguments are validated, never trusted",
+     "status": "pass",
+     "ms": 28
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › the signer refuses anything not signed by the control key, and never pays a decision twice",
+     "status": "pass",
+     "ms": 21
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › the signer re-simulates: a control-signed request the vault would refuse is never broadcast",
+     "status": "pass",
+     "ms": 8
+    },
+    {
+     "name": "M1 acceptance run (spec section 17), on anvil › rebuild fresh: the digest matches, decisions included",
+     "status": "pass",
+     "ms": 74
+    }
+   ]
+  },
+  {
+   "file": "apps/web/test/playground.test.ts",
+   "tests": [
+    {
+     "name": "playground › its contract artifacts and pure-code copies match the repository (pnpm gen:playground --check)",
+     "status": "pass",
+     "ms": 134
+    },
+    {
+     "name": "playground › every live check passes in the in-browser EVM (run here in Node)",
+     "status": "pass",
+     "ms": 441
+    }
+   ]
+  },
+  {
+   "file": "apps/web/test/t19.test.ts",
+   "tests": [
+    {
+     "name": "T-19: the web view's blast radius matches `tyrell blast` › serves the snapshot in read-only mode",
+     "status": "pass",
+     "ms": 20
+    },
+    {
+     "name": "T-19: the web view's blast radius matches `tyrell blast` › draws the same memories, decisions and parent -> child edges for the demo seed",
+     "status": "pass",
+     "ms": 1467
+    }
+   ]
+  },
+  {
+   "file": "apps/web/test/wallet.test.ts",
+   "tests": [
+    {
+     "name": "wallet login and owner actions (injected) › connects QIE Wallet, signs in, reads the owner role and revokes a lane key on-chain",
+     "status": "pass",
+     "ms": 2895
+    },
+    {
+     "name": "wallet login and owner actions (reown) › connects QIE Wallet, signs in, reads the owner role and revokes a lane key on-chain",
+     "status": "pass",
+     "ms": 5995
+    }
+   ]
+  },
+  {
+   "file": "packages/core/test/agents.test.ts",
+   "tests": [
+    {
+     "name": "agents network helpers › permission bits match AgentRegistry",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "agents network helpers › deal payee ids and codes",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "agents network helpers › signs and recovers an agent-to-agent message",
+     "status": "pass",
+     "ms": 36
+    },
+    {
+     "name": "policy R4a: agent registry check › passes through blocks and proposals without an agent",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy R4a: agent registry check › fails closed on an unverified read and blocks with the registry's code",
+     "status": "pass",
+     "ms": 1
+    }
+   ]
+  },
+  {
+   "file": "packages/core/test/envelope.test.ts",
+   "tests": [
+    {
+     "name": "canonical JSON (RFC 8785) › sorts keys and is stable",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "canonical JSON (RFC 8785) › throws for values JSON cannot hold",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "ids › uuidv7 has version 7, variant 10 and sorts by time",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "ids › rejects bad input",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "envelope schema › accepts a fixture header and rejects broken ones",
+     "status": "pass",
+     "ms": 8
+    },
+    {
+     "name": "envelope schema › normaliseParents sorts, lower-cases and de-duplicates; the empty parents hash is keccak of no bytes",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "KeyHistory › binds by position, block then log index",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "KeyHistory › startup refuses unless every lane has exactly one active key",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "KeyHistory › rejects histories LaneRegistry cannot produce",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "projection digest (I-10) › is independent of input order and changes when anything that matters changes",
+     "status": "pass",
+     "ms": 22
+    },
+    {
+     "name": "projection digest (I-10) › records memories without a body hash as null",
+     "status": "pass",
+     "ms": 0
+    }
+   ]
+  },
+  {
+   "file": "packages/core/test/lineage.test.ts",
+   "tests": [
+    {
+     "name": "trust classes (spec section 7) › lane bases: user trusted, agent and control derived, wallet untrusted",
+     "status": "pass",
+     "ms": 32
+    },
+    {
+     "name": "trust classes (spec section 7) › agent with trusted and derived parents stays derived; control decisions are never trusted",
+     "status": "pass",
+     "ms": 12
+    },
+    {
+     "name": "trust classes (spec section 7) › T-06: an agent output that read an untrusted memory is untrusted, whatever it cites",
+     "status": "pass",
+     "ms": 13
+    },
+    {
+     "name": "trust classes (spec section 7) › T-07: three generations from one wallet memory are all untrusted",
+     "status": "pass",
+     "ms": 20
+    },
+    {
+     "name": "trust classes (spec section 7) › a user statement with an untrusted parent is not trusted",
+     "status": "pass",
+     "ms": 6
+    },
+    {
+     "name": "trust classes (spec section 7) › unverified memories, and children of unverified parents",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "trust classes (spec section 7) › a dangling parent makes the child untrusted",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "trust classes (spec section 7) › a parent anchored after its child makes the child unverified",
+     "status": "pass",
+     "ms": 6
+    },
+    {
+     "name": "trust classes (spec section 7) › memories with no anchor sort last and stay unverified",
+     "status": "pass",
+     "ms": 4
+    },
+    {
+     "name": "trust classes (spec section 7) › lowestClass and visible",
+     "status": "pass",
+     "ms": 10
+    },
+    {
+     "name": "quarantine closure (I-8) › source seed by token contract, sender and transaction hash",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "quarantine closure (I-8) › T-08: a summary written after the quarantine, reading a descendant, is quarantined without a new seed",
+     "status": "pass",
+     "ms": 8
+    },
+    {
+     "name": "quarantine closure (I-8) › memory, turn and signer-window seeds; released seeds do nothing",
+     "status": "pass",
+     "ms": 10
+    },
+    {
+     "name": "quarantine closure (I-8) › a zero turn never matches a turn seed",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "quarantine closure (I-8) › signer-window outside the range does not match",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "quarantine closure (I-8) › seeds reach unverified memories through their anchor and parsed header",
+     "status": "pass",
+     "ms": 4
+    },
+    {
+     "name": "quarantine closure (I-8) › sourceSeedValue rejects anything but an address or a 32-byte hash",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "blast radius › poisoned token -> wallet memory -> Steward summary -> decision with its vault tx",
+     "status": "pass",
+     "ms": 23
+    },
+    {
+     "name": "blast radius › labels fall back to the id when a body is unavailable",
+     "status": "pass",
+     "ms": 1
+    }
+   ]
+  },
+  {
+   "file": "packages/core/test/policy.test.ts",
+   "tests": [
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › ALLOW",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R0 endpoints disagree",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R0 ledger unverified",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R0 context unverified",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R0 stale spend day",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R1 a QIE ID instead of an address",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R1 bad checksum",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R2 attacker address",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R2 removed payee",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R2 suspended payee",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R3 label names another payee",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R3 homoglyph label landIord",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R4 fake QUSDC token",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R4 over per-tx cap",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R4 zero amount",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R4 over payee daily cap",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R4 over vault daily cap",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R4 token without a vault cap",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R5 simulation reverted",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › R5 not simulated",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment: T-10, one case per block code plus ALLOW › covers every block code",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › ALLOW returns the exact call to simulate and sign",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "policy details › the demo attack blocks with UNKNOWN_RECIPIENT: R2 runs before R3",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › citations and reasons never change the verdict",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › no label: picks the payee at the address whose token matches",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › labels match after trim and case-folding",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › lowercase recipient addresses are accepted",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › blocks carry the payee id once a payee is resolved",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › checkRules stops before R5 so control can simulate",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › the UTC day matches GuardedVault (timestamp / 1 days)",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "policy details › payee ids are stable",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "evaluatePayment with an agent (phase A) › allows when the registry allows, blocks with AGENT_BLOCKED when it refuses",
+     "status": "pass",
+     "ms": 0
+    }
+   ]
+  },
+  {
+   "file": "packages/core/test/vectors.test.ts",
+   "tests": [
+    {
+     "name": "cross-language vectors › contracts/test/vectors/core.json is current (run `pnpm --filter ./packages/core vectors` if not)",
+     "status": "pass",
+     "ms": 41
+    },
+    {
+     "name": "cross-language vectors › every ledger action names its signing lane",
+     "status": "pass",
+     "ms": 0
+    }
+   ]
+  },
+  {
+   "file": "packages/core/test/verifier.test.ts",
+   "tests": [
+    {
+     "name": "verifyMemory (spec section 6 order) › verifies a correctly signed and anchored memory",
+     "status": "pass",
+     "ms": 10
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 1. NO_ANCHOR",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 2. BODY_UNAVAILABLE and DECRYPT_FAILED keep the fetch's reason and detail",
+     "status": "pass",
+     "ms": 2
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 2. MALFORMED_ENVELOPE for anything that is not a valid blob",
+     "status": "pass",
+     "ms": 6
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 2. ID_MISMATCH when the blob's id differs from the anchor or the requested id",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 2. ACCOUNT_MISMATCH",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 3. T-05 BODY_HASH_MISMATCH when the body on IPFS was swapped",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 3. BODY_LEN_MISMATCH",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 3. PARENTS_HASH_MISMATCH, NAMESPACE_MISMATCH, HEADER_HASH_MISMATCH",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 4. BAD_SIGNATURE for a signature that cannot be recovered",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 4. SIGNER_MISMATCH when the anchor names someone else",
+     "status": "pass",
+     "ms": 7
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 5. UNBOUND_KEY for a key LaneRegistry never bound",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 5. LANE_MISMATCH: the agent key claims the user lane (off-chain T-03)",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 5. historical binding: a revoked key's earlier memories still verify, later ones do not",
+     "status": "pass",
+     "ms": 7
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › 6. REFBLOCK_AFTER_ANCHOR",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "verifyMemory (spec section 6 order) › accepts mixed-case hex in anchor records",
+     "status": "pass",
+     "ms": 3
+    }
+   ]
+  },
+  {
+   "file": "packages/storage/test/nfr07.test.ts",
+   "tests": [
+    {
+     "name": "NFR-07: no delete or unpin path › source contains no IPFS unpin",
+     "status": "pass",
+     "ms": 6
+    },
+    {
+     "name": "NFR-07: no delete or unpin path › source contains no HTTP DELETE to a pinning service",
+     "status": "pass",
+     "ms": 4
+    },
+    {
+     "name": "NFR-07: no delete or unpin path › source contains no deleting anchors from the cache",
+     "status": "pass",
+     "ms": 2
+    }
+   ]
+  },
+  {
+   "file": "packages/storage/test/storage.test.ts",
+   "tests": [
+    {
+     "name": "keystore v3 › round-trips an EVM key and records its address and role",
+     "status": "pass",
+     "ms": 40
+    },
+    {
+     "name": "keystore v3 › the data key has no address",
+     "status": "pass",
+     "ms": 3
+    },
+    {
+     "name": "keystore v3 › wrong passphrase, tampering and bad input fail without leaking the key",
+     "status": "pass",
+     "ms": 9
+    },
+    {
+     "name": "keystore v3 › detects an address that does not match the key",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "keystore v3 › writes 0600 files, never overwrites, and refuses another role's file (I-12)",
+     "status": "pass",
+     "ms": 9
+    },
+    {
+     "name": "keystore v3 › Foundry's cast reads Tyrell keystores",
+     "status": "pass",
+     "ms": 62
+    },
+    {
+     "name": "AES-256-GCM sealing › round-trips and binds the account and memory id",
+     "status": "pass",
+     "ms": 5
+    },
+    {
+     "name": "AES-256-GCM sealing › two seals of the same blob differ (random nonce)",
+     "status": "pass",
+     "ms": 0
+    },
+    {
+     "name": "AES-256-GCM sealing › rejects non-JSON plaintext and wrong key sizes",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "blob stores › cidOf matches IPFS for the empty raw block",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "blob stores › memory and dir stores round-trip; the dir store catches swapped content",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "blob stores › Pinata: uploads with the JWT, reads through gateways in order, rejects bad content",
+     "status": "pass",
+     "ms": 4
+    },
+    {
+     "name": "ProjectionDb › stores anchors in chain order and blobs by id",
+     "status": "pass",
+     "ms": 1
+    },
+    {
+     "name": "ProjectionDb › recall searches only the visible set, and FTS syntax in queries is inert",
+     "status": "pass",
+     "ms": 15
+    },
+    {
+     "name": "ProjectionDb › setVisible is atomic",
+     "status": "pass",
+     "ms": 1
+    }
+   ]
+  }
+ ],
+ "forge": [
+  {
+   "suite": "Agents.t.sol:AgentsTest",
+   "tests": [
+    {
+     "name": "testFuzz_sharedQuotaNeverExceeded(uint96[6],uint8)",
+     "status": "pass",
+     "fuzzRuns": 1000
+    },
+    {
+     "name": "test_agentMessages",
+     "status": "pass",
+     "gas": 310460
+    },
+    {
+     "name": "test_agentsStopWhenTheQieIdLapses",
+     "status": "pass",
+     "gas": 62236
+    },
+    {
+     "name": "test_agentsStopWhenTheQieIdMoves",
+     "status": "pass",
+     "gas": 128683
+    },
+    {
+     "name": "test_bindEmitsAndRebindReplaces",
+     "status": "pass",
+     "gas": 91339
+    },
+    {
+     "name": "test_bindRequiresHoldingTheQieId",
+     "status": "pass",
+     "gas": 62165
+    },
+    {
+     "name": "test_bondAndWithdraw",
+     "status": "pass",
+     "gas": 130231
+    },
+    {
+     "name": "test_constructorRejectsBadParams",
+     "status": "pass",
+     "gas": 190496
+    },
+    {
+     "name": "test_contestWindowCloses",
+     "status": "pass",
+     "gas": 264992
+    },
+    {
+     "name": "test_contestedReportArbiterDismisses",
+     "status": "pass",
+     "gas": 359077
+    },
+    {
+     "name": "test_contestedReportArbiterUpholds",
+     "status": "pass",
+     "gas": 361484
+    },
+    {
+     "name": "test_dealCancelAndReclaim",
+     "status": "pass",
+     "gas": 726154
+    },
+    {
+     "name": "test_dealConfirmedPaysAndBuildsReputation",
+     "status": "pass",
+     "gas": 564326
+    },
+    {
+     "name": "test_dealRules",
+     "status": "pass",
+     "gas": 373944
+    },
+    {
+     "name": "test_delegatedPermissionsAndPayees",
+     "status": "pass",
+     "gas": 118909
+    },
+    {
+     "name": "test_freezeStopsEveryAgent",
+     "status": "pass",
+     "gas": 82811
+    },
+    {
+     "name": "test_maxAgentsPerHuman",
+     "status": "pass",
+     "gas": 13782795
+    },
+    {
+     "name": "test_networkLinkAndBanAreGuarded",
+     "status": "pass",
+     "gas": 28754
+    },
+    {
+     "name": "test_newHolderOfAMovedNameTakesTheBinding",
+     "status": "pass",
+     "gas": 98707
+    },
+    {
+     "name": "test_noQuotaFailsClosed",
+     "status": "pass",
+     "gas": 54657
+    },
+    {
+     "name": "test_onlyAuthorisedSpendersCanCharge",
+     "status": "pass",
+     "gas": 53089
+    },
+    {
+     "name": "test_onlyTheHumanManagesTheirAgents",
+     "status": "pass",
+     "gas": 45895
+    },
+    {
+     "name": "test_payForAgentHappyPath",
+     "status": "pass",
+     "gas": 250464
+    },
+    {
+     "name": "test_payForAgentNeedsARegistry",
+     "status": "pass",
+     "gas": 32483
+    },
+    {
+     "name": "test_payForAgentStillAppliesEveryVaultRule",
+     "status": "pass",
+     "gas": 390489
+    },
+    {
+     "name": "test_perAgentLimits",
+     "status": "pass",
+     "gas": 285190
+    },
+    {
+     "name": "test_registerAgentRules",
+     "status": "pass",
+     "gas": 387772
+    },
+    {
+     "name": "test_reportRules",
+     "status": "pass",
+     "gas": 97318
+    },
+    {
+     "name": "test_reputationReflectsHistory",
+     "status": "pass",
+     "gas": 388028
+    },
+    {
+     "name": "test_resolverOnlyCountsTheQieRecord",
+     "status": "pass",
+     "gas": 15145
+    },
+    {
+     "name": "test_revokeIsPermanentAndPerAgent",
+     "status": "pass",
+     "gas": 122651
+    },
+    {
+     "name": "test_sharedHumanQuotaAcrossAgents",
+     "status": "pass",
+     "gas": 319141
+    },
+    {
+     "name": "test_threeUpheldReportsBanTheAgent",
+     "status": "pass",
+     "gas": 735275
+    },
+    {
+     "name": "test_uncontestedReportIsUpheldAndSlashes",
+     "status": "pass",
+     "gas": 365788
+    }
+   ]
+  },
+  {
+   "suite": "GuardedVault.t.sol:GuardedVaultTest",
+   "tests": [
+    {
+     "name": "testFuzz_payNeverToNonPayeeOrOverCap(bytes32,bool,bool,uint256,bytes16)",
+     "status": "pass",
+     "fuzzRuns": 1000
+    },
+    {
+     "name": "test_T11_signerCannotPayUnregistered",
+     "status": "pass",
+     "gas": 39464
+    },
+    {
+     "name": "test_attackerCannotPause",
+     "status": "pass",
+     "gas": 14752
+    },
+    {
+     "name": "test_constructorChecks",
+     "status": "pass",
+     "gas": 124668
+    },
+    {
+     "name": "test_dailyCapAndRollover",
+     "status": "pass",
+     "gas": 285582
+    },
+    {
+     "name": "test_dayBoundaryIsUtcMidnight",
+     "status": "pass",
+     "gas": 244021
+    },
+    {
+     "name": "test_decisionIdOnceAndNonZero",
+     "status": "pass",
+     "gas": 156334
+    },
+    {
+     "name": "test_globalDailyCapAcrossPayees",
+     "status": "pass",
+     "gas": 397470
+    },
+    {
+     "name": "test_onlySigner",
+     "status": "pass",
+     "gas": 34170
+    },
+    {
+     "name": "test_overCapPerTx",
+     "status": "pass",
+     "gas": 38576
+    },
+    {
+     "name": "test_pauseByControlUnpauseByOwnerOnly",
+     "status": "pass",
+     "gas": 168684
+    },
+    {
+     "name": "test_payHappyPath",
+     "status": "pass",
+     "gas": 155540
+    },
+    {
+     "name": "test_rejectsNativeCoin",
+     "status": "pass",
+     "gas": 17417
+    },
+    {
+     "name": "test_setGlobalCapOwnerOnly",
+     "status": "pass",
+     "gas": 17194
+    },
+    {
+     "name": "test_suspendedAndRemovedPayeesBlocked",
+     "status": "pass",
+     "gas": 343247
+    },
+    {
+     "name": "test_tokenWithoutGlobalCapCannotBePaid",
+     "status": "pass",
+     "gas": 57516
+    },
+    {
+     "name": "test_withdrawOwnerOnly",
+     "status": "pass",
+     "gas": 61618
+    },
+    {
+     "name": "test_wrongToken",
+     "status": "pass",
+     "gas": 618664
+    },
+    {
+     "name": "test_zeroAmount",
+     "status": "pass",
+     "gas": 36360
+    }
+   ]
+  },
+  {
+   "suite": "Invariants.t.sol:AnchorInvariants",
+   "tests": [
+    {
+     "name": "invariant_oneActiveKeyPerLane",
+     "status": "pass",
+     "invariantRuns": 256
+    },
+    {
+     "name": "invariant_revokedKeyNeverAnchors",
+     "status": "pass",
+     "invariantRuns": 256
+    }
+   ]
+  },
+  {
+   "suite": "Invariants.t.sol:VaultInvariants",
+   "tests": [
+    {
+     "name": "invariant_capsHold",
+     "status": "pass",
+     "invariantRuns": 256
+    },
+    {
+     "name": "invariant_outflowOnlyToRegisteredPayees",
+     "status": "pass",
+     "invariantRuns": 256
+    }
+   ]
+  },
+  {
+   "suite": "LaneRegistry.t.sol:LaneRegistryTest",
+   "tests": [
+    {
+     "name": "test_addEmitsEvent",
+     "status": "pass",
+     "gas": 713465
+    },
+    {
+     "name": "test_invalidLaneAndZeroKey",
+     "status": "pass",
+     "gas": 29455
+    },
+    {
+     "name": "test_invalidLaneOutOfRange",
+     "status": "pass",
+     "gas": 10141
+    },
+    {
+     "name": "test_keyCannotJoinTwoLanes",
+     "status": "pass",
+     "gas": 31113
+    },
+    {
+     "name": "test_oneActiveKeyPerLane",
+     "status": "pass",
+     "gas": 18250
+    },
+    {
+     "name": "test_onlyOwner",
+     "status": "pass",
+     "gas": 26254
+    },
+    {
+     "name": "test_ownershipIsTwoStep",
+     "status": "pass",
+     "gas": 33148
+    },
+    {
+     "name": "test_revoke",
+     "status": "pass",
+     "gas": 31307
+    },
+    {
+     "name": "test_revokeTwiceOrUnknownReverts",
+     "status": "pass",
+     "gas": 33542
+    },
+    {
+     "name": "test_revokedKeyCanNeverBeReAdded",
+     "status": "pass",
+     "gas": 27216
+    },
+    {
+     "name": "test_rotateIsAtomic",
+     "status": "pass",
+     "gas": 59664
+    },
+    {
+     "name": "test_rotateToUsedKeyRevertsWhole",
+     "status": "pass",
+     "gas": 33352
+    },
+    {
+     "name": "test_setUpBindsFourLanes",
+     "status": "pass",
+     "gas": 34964
+    }
+   ]
+  },
+  {
+   "suite": "MemoryAnchor.t.sol:MemoryAnchorTest",
+   "tests": [
+    {
+     "name": "testFuzz_onlyActiveLaneKeysAnchor(uint256,uint8,bool)",
+     "status": "pass",
+     "fuzzRuns": 1000
+    },
+    {
+     "name": "test_T03_agentClaimingUserLaneReverts",
+     "status": "pass",
+     "gas": 35260
+    },
+    {
+     "name": "test_T04_revokedKeyReverts",
+     "status": "pass",
+     "gas": 51604
+    },
+    {
+     "name": "test_anchorHappyPath",
+     "status": "pass",
+     "gas": 97450
+    },
+    {
+     "name": "test_anchorOnceOnly",
+     "status": "pass",
+     "gas": 87466
+    },
+    {
+     "name": "test_badAccountReverts",
+     "status": "pass",
+     "gas": 19556
+    },
+    {
+     "name": "test_badMemoryFields",
+     "status": "pass",
+     "gas": 80626
+    },
+    {
+     "name": "test_batch",
+     "status": "pass",
+     "gas": 1323186
+    },
+    {
+     "name": "test_batchIsAtomic",
+     "status": "pass",
+     "gas": 108095
+    },
+    {
+     "name": "test_batchSizeChecks",
+     "status": "pass",
+     "gas": 68262
+    },
+    {
+     "name": "test_domainSeparatorBindsChainAndContract",
+     "status": "pass",
+     "gas": 5936
+    },
+    {
+     "name": "test_everyLaneCanAnchorItsOwn",
+     "status": "pass",
+     "gas": 290023
+    },
+    {
+     "name": "test_frontRunWithJunkCidBlocked",
+     "status": "pass",
+     "gas": 89992
+    },
+    {
+     "name": "test_highSSignatureRejected",
+     "status": "pass",
+     "gas": 25458
+    },
+    {
+     "name": "test_malformedSignatureReverts",
+     "status": "pass",
+     "gas": 35354
+    },
+    {
+     "name": "test_onlySubmitter",
+     "status": "pass",
+     "gas": 19406
+    },
+    {
+     "name": "test_rotatedKeyAnchorsOldKeyRefused",
+     "status": "pass",
+     "gas": 151926
+    },
+    {
+     "name": "test_setSubmitterOnlyOwner",
+     "status": "pass",
+     "gas": 32796
+    },
+    {
+     "name": "test_signatureNotReplayableOnAnotherDeployment",
+     "status": "pass",
+     "gas": 1245220
+    },
+    {
+     "name": "test_tamperedFieldBreaksSignature",
+     "status": "pass",
+     "gas": 35160
+    },
+    {
+     "name": "test_typehashAndDigestMatchSpec",
+     "status": "pass",
+     "gas": 10505
+    },
+    {
+     "name": "test_unknownSignerReverts",
+     "status": "pass",
+     "gas": 34653
+    }
+   ]
+  },
+  {
+   "suite": "TyrellLedger.t.sol:TyrellLedgerTest",
+   "tests": [
+    {
+     "name": "test_T16_releaseNeedsUserKey",
+     "status": "pass",
+     "gas": 262188
+    },
+    {
+     "name": "test_activeSeedsTracksReleases",
+     "status": "pass",
+     "gas": 569454
+    },
+    {
+     "name": "test_badPayeeFields",
+     "status": "pass",
+     "gas": 303911
+    },
+    {
+     "name": "test_badSeeds",
+     "status": "pass",
+     "gas": 257354
+    },
+    {
+     "name": "test_controlCanSuspendButNeverReinstateOrRemove",
+     "status": "pass",
+     "gas": 506266
+    },
+    {
+     "name": "test_controlSeedsQuarantine",
+     "status": "pass",
+     "gas": 248592
+    },
+    {
+     "name": "test_duplicatePayeeId",
+     "status": "pass",
+     "gas": 212533
+    },
+    {
+     "name": "test_expiredDeadline",
+     "status": "pass",
+     "gas": 21525
+    },
+    {
+     "name": "test_hashAddPayeeMatchesSpecEncoding",
+     "status": "pass",
+     "gas": 13621
+    },
+    {
+     "name": "test_isPayableCodes",
+     "status": "pass",
+     "gas": 209893
+    },
+    {
+     "name": "test_nonceReplayAndStaleNonce",
+     "status": "pass",
+     "gas": 196580
+    },
+    {
+     "name": "test_onlyUserLaneAddsPayee",
+     "status": "pass",
+     "gas": 78633
+    },
+    {
+     "name": "test_releaseChecks",
+     "status": "pass",
+     "gas": 326214
+    },
+    {
+     "name": "test_removeAndReinstate",
+     "status": "pass",
+     "gas": 242928
+    },
+    {
+     "name": "test_revokedUserKeyCannotAdd",
+     "status": "pass",
+     "gas": 48487
+    },
+    {
+     "name": "test_signatureCoversEveryField",
+     "status": "pass",
+     "gas": 33551
+    },
+    {
+     "name": "test_signerWindowSeed",
+     "status": "pass",
+     "gas": 259591
+    },
+    {
+     "name": "test_suspendNeedsActiveSeed",
+     "status": "pass",
+     "gas": 234356
+    },
+    {
+     "name": "test_unknownPayee",
+     "status": "pass",
+     "gas": 49593
+    },
+    {
+     "name": "test_userAddsPayee",
+     "status": "pass",
+     "gas": 185718
+    },
+    {
+     "name": "test_userCannotSeed",
+     "status": "pass",
+     "gas": 29198
+    },
+    {
+     "name": "test_userCannotSuspend",
+     "status": "pass",
+     "gas": 453148
+    },
+    {
+     "name": "test_zeroNonceRejected",
+     "status": "pass",
+     "gas": 34247
+    }
+   ]
+  },
+  {
+   "suite": "Vectors.t.sol:VectorsTest",
+   "tests": [
+    {
+     "name": "test_ledgerVectorsAndTypeScriptSignatureAddsPayee",
+     "status": "pass",
+     "gas": 1401436
+    },
+    {
+     "name": "test_memoryVectorsAndTypeScriptSignatureAnchor",
+     "status": "pass",
+     "gas": 1407544
+    },
+    {
+     "name": "test_otherLedgerTypehashes",
+     "status": "pass",
+     "gas": 3251551
+    }
+   ]
+  }
+ ]
+}
