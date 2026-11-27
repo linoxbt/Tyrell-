@@ -10,6 +10,8 @@ import { startDaemon } from "./daemon.js";
 import { rebuild, say, show, status, verifyDigest } from "./commands.js";
 import { payeeAdd, payeeList, payeeReinstate, payeeRemove, release, startSigner, stewardTurn } from "./agent.js";
 import { blast, finishRotation, incidents, ingestScan, mermaid, parseSeed, quarantineCmd, revokeTxs } from "./response.js";
+import { attackTable, runAttacks } from "./attacks.js";
+import { capsCheck, evidence, signerLeakDrill } from "./mainnet.js";
 
 const print = (v: unknown) => console.log(JSON.stringify(JSON.parse(encode(v)), (_k, x) => (x && typeof x === "object" && "$bigint" in x ? x.$bigint : x), 2));
 const addressArg = (v: string): Address => {
@@ -266,6 +268,45 @@ program
       }
     }),
   );
+
+program
+  .command("attack")
+  .description("The attack set (T-20)")
+  .command("run")
+  .option("--variant <n>", "run one variant")
+  .option("--markdown", "print the result table as Markdown")
+  .action(
+    run(async (o: { variant?: string; markdown?: boolean }) => {
+      const rs = await runAttacks({ ...(o.variant ? { only: Number(o.variant) } : {}) });
+      if (o.markdown) console.log(attackTable(rs));
+      else print(rs);
+      if (rs.some((r) => !r.pass)) process.exitCode = 3;
+    }),
+  );
+
+program
+  .command("check")
+  .description("Pre-funding checks")
+  .command("caps")
+  .description("NFR-08: worst-case daily loss = min(vault cap, sum of payee daily caps, balance)")
+  .option("--max <units>", "the most you accept losing in a day, in token units", "20")
+  .action(
+    run(async (o: { max: string }) => {
+      const r = await capsCheck(o.max);
+      print(r);
+      if (!r.ok) process.exitCode = 4;
+    }),
+  );
+
+program
+  .command("drill")
+  .description("Demo drills")
+  .command("signer-leak")
+  .description("The vault signer key pays an unregistered address directly; the vault reverts on-chain")
+  .option("--amount <units>", "amount in token units", "1")
+  .action(run(async (o: { amount: string }) => print(await signerLeakDrill(o.amount))));
+
+program.command("evidence").description("Contract links and example transactions for the submission").action(run(async () => print(await evidence())));
 
 program
   .command("say <text>")

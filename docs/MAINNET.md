@@ -1,0 +1,94 @@
+# Mainnet runbook (Phase 6)
+
+Everything below runs on your machine: the owner steps need QIE Wallet in a browser. Do the testnet
+run first (README, "Running on QIE testnet") and keep this order. Money at risk is capped by design:
+the vault holds the demo amount only, and `tyrell check caps` must pass before you fund it (NFR-08).
+
+## 0. Before you start
+
+- [ ] M1 passed on testnet; `pnpm tyrell verify --head <block>` matched there.
+- [ ] `pnpm probe` re-run today; PROBE.md committed. Mainnet RPCs 1-5 answer, EVM is still Shanghai.
+- [ ] QUSDC confirmed in the QIE Discord as the official stablecoin (probe P-7 matched the report and
+      the QIE MCP token list includes it, but the spec asks for a human confirmation).
+- [ ] A fresh home for mainnet, so testnet keys are never reused: `export TYRELL_HOME=~/.tyrell-mainnet`.
+- [ ] The attacker address for the demo is one you control, and it never receives real funds.
+
+## 1. Keys and gas
+
+```sh
+export TYRELL_HOME=~/.tyrell-mainnet
+pnpm tyrell setup keys --network mainnet --store pinata --gateway https://<you>.mypinata.cloud --new-passphrase
+```
+
+Send a little QIEV3 for gas (a few cents' worth each; GAS.md: a full deploy is about 6.6M gas, an
+anchor about 93k) to:
+
+| Address | Why |
+| --- | --- |
+| a throwaway deployer (`cast wallet import tyrell-deployer --interactive`) | deploys the contracts, holds nothing afterwards |
+| `submitter` from `keys/addresses.json` | pays gas for anchors, ledger relays and quarantine seeds |
+| `signer` | pays gas for vault payments |
+| `attacker` (created by `tyrell attack run`) | deploys the attack-set contracts; never receives QUSDC |
+
+## 2. Deploy and verify
+
+```sh
+export PINATA_JWT=...
+pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer \
+  --token 0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5 --verify
+```
+
+If Blockscout verification through forge fails, use the explorer's web form with flattened sources
+(`forge flatten src/<Contract>.sol`), compiler 0.8.28, optimizer 200 runs, EVM version shanghai.
+Verified source on all four contracts is a submission requirement.
+
+## 3. Owner setup in QIE Wallet
+
+```sh
+pnpm tyrell setup register --daily-cap 5000000     # lane keys + vault cap of 5 QUSDC per day
+```
+
+Then send the demo amount (for example 10 QUSDC) from QIE Wallet to the `guardedVault` address, and:
+
+```sh
+pnpm tyrell check caps --max 20                    # must print "ok": true before anything else
+```
+
+## 4. Run the processes
+
+```sh
+pnpm tyrell control start &
+pnpm tyrell signer start &
+pnpm tyrell ingest start &
+pnpm tyrell payee add --label landlord --qie-id <landlord>.qie --cap 5 --daily 5
+pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
+```
+
+## 5. M1 and M2 on mainnet (record the video here)
+
+```sh
+# send the poisoned token from the attacker (see the attack set, variant 1), then:
+pnpm tyrell incidents
+pnpm tyrell steward "pay this month's rent"                     # BLOCK with the lineage
+pnpm tyrell quarantine --source <poison token> --reason "..."    # preview, confirm
+pnpm tyrell blast <seedId> --mermaid
+pnpm tyrell steward "pay this month's rent"                     # ALLOW, Paid on the explorer
+pnpm tyrell drill signer-leak                                    # vault reverts on-chain
+pnpm tyrell revoke --lane wallet --rotate                        # optional (cut order: keep revoke)
+pnpm tyrell rebuild --fresh --out /tmp/rebuild.sqlite && pnpm tyrell verify --head <block>
+```
+
+## 6. Attack set and evidence
+
+```sh
+pnpm tyrell attack run --markdown > ATTACKS.md                   # must say 10 of 10
+pnpm tyrell evidence                                             # links for the submission form
+pnpm scan-keys:history                                           # no key anywhere in git history
+```
+
+## If something goes wrong
+
+- A key may have leaked: `pnpm tyrell revoke --lane <lane>` (owner signs), then `--rotate`.
+- Payments look wrong: `GuardedVault.pause()` from QIE Wallet or the control key stops all of them;
+  only the owner can unpause.
+- Take the money back: `GuardedVault.withdraw(token, to, amount)` from QIE Wallet (owner only).

@@ -287,6 +287,33 @@ describe("tyrell CLI on anvil", () => {
     expect(after.classes.trusted).toBe(before.classes.trusted);
   });
 
+  it("T-20: the attack set, 10 of 10 blocked or excluded, no attacker funds moved", async () => {
+    const r = await new Promise<{ code: number | null; out: string; err: string }>((resolve) => {
+      const p = spawn(TSX, [MAIN, "attack", "run", "--markdown"], { env, cwd: ROOT });
+      let out = "";
+      let err = "";
+      p.stdout.on("data", (b: Buffer) => (out += b.toString()));
+      p.stderr.on("data", (b: Buffer) => (err += b.toString()));
+      p.on("close", (code) => resolve({ code, out, err }));
+    });
+    logs.push(r.out, r.err);
+    expect(r.err).not.toMatch(/^FAIL/m);
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toContain("10 of 10 blocked or excluded.");
+    if (process.env.ATTACK_TABLE_OUT) (await import("node:fs")).writeFileSync(process.env.ATTACK_TABLE_OUT, r.out);
+  }, 600_000);
+
+  it("NFR-08 caps check, signer-leak drill (reverted on-chain) and the evidence list", () => {
+    const caps = json(tyrell("check", "caps", "--max", "20").out) as { ok: boolean; worstCaseDailyLoss: string };
+    expect(caps.ok).toBe(true);
+    expect(caps.worstCaseDailyLoss).toMatch(/^5 /); // vault cap 5 per day
+    expect(tyrell("check", "caps", "--max", "1").code).toBe(4);
+    const drill = json(tyrell("drill", "signer-leak").out);
+    expect(drill).toMatchObject({ status: "reverted" });
+    const ev = json(tyrell("evidence").out) as { transactions: Record<string, string> };
+    for (const k of ["MemoryAnchored", "QuarantineSeeded", "Paid", "revertedUnauthorizedPay"]) expect(ev.transactions[k], k).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
   it("everything still rebuilds to the same digest", () => {
     const head = json(tyrell("status").out).head as string;
     expect(json(tyrell("verify", "--head", head).out)).toMatchObject({ match: true });
@@ -297,7 +324,7 @@ describe("tyrell CLI on anvil", () => {
     const all = logs.join("\n");
     const { readdirSync } = require("node:fs") as typeof import("node:fs");
     const files = [...readdirSync(join(homeDir, "keys")).filter((f) => f.endsWith(".json") && f !== "addresses.json").map((f) => join(homeDir, "keys", f)), ...readdirSync(join(homeDir, "keys", "retired")).map((f) => join(homeDir, "keys", "retired", f))];
-    expect(files.length).toBe(8); // seven current keys and the retired agent key
+    expect(files.length).toBe(9); // seven current keys, the attack runner's key and the retired agent key
     for (const f of files) expect(all).not.toContain(Buffer.from(decryptKeystore(readKeystore(f), pass)).toString("hex"));
     expect(all).not.toContain(pass);
   });
