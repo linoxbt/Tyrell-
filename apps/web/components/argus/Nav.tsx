@@ -79,8 +79,8 @@ export function Nav() {
         </div>
       </div>
 
-      {/* the mobile sheet: animates its height with a grid-rows transition */}
-      <div id="mobile-menu" className={`grid transition-[grid-template-rows] duration-300 ease-out md:hidden ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+      {/* the mobile sheet overlays the page (so closing it never shifts the scroll target) and animates its height */}
+      <div id="mobile-menu" className={`absolute inset-x-0 top-full grid bg-white transition-[grid-template-rows,box-shadow] duration-300 ease-out md:hidden ${open ? "grid-rows-[1fr] border-b border-line shadow-[0_16px_30px_rgba(15,18,32,0.08)]" : "grid-rows-[0fr]"}`}>
         <div className="overflow-hidden">
           <nav className="flex flex-col px-4 pb-5 pt-1 sm:px-6">
             {[...LINKS, ["GitHub", REPO] as [string, string]].map(([l, h], i) => (
