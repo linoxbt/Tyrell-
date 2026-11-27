@@ -6,9 +6,10 @@ import type { Group, Result } from "@/lib/playground/suite";
 import type { Step } from "@/lib/playground/chain";
 import { Check, Pill } from "../argus/ui";
 import { TryIt } from "./TryIt";
+import { LiveAI } from "./LiveAI";
 import { Recorded } from "./Recorded";
 
-type Tab = "suite" | "try" | "recorded";
+type Tab = "suite" | "ai" | "try" | "recorded";
 type Run = { results: Result[]; done: boolean; gas: bigint; txs: number; ms: number; started: number };
 
 const KIND: Record<Step["kind"], string> = {
@@ -24,6 +25,9 @@ const KIND: Record<Step["kind"], string> = {
 
 export function Playground() {
   const [tab, setTab] = useState<Tab>("suite");
+  useEffect(() => {
+    if (window.location.hash === "#live-ai") setTab("ai");
+  }, []);
   const [groups, setGroups] = useState<Group[]>([]);
   const [total, setTotal] = useState(0);
   const [run, setRun] = useState<Run>();
@@ -100,6 +104,7 @@ export function Playground() {
             {(
               [
                 ["suite", "Live suite"],
+                ["ai", "Live AI"],
                 ["try", "Try it yourself"],
                 ["recorded", "Recorded runs"],
               ] as const
@@ -183,6 +188,7 @@ export function Playground() {
               </p>
             </div>
           )}
+          {tab === "ai" && <LiveAI />}
           {tab === "try" && <TryIt />}
           {tab === "recorded" && <Recorded />}
         </div>

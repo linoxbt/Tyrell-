@@ -71,10 +71,11 @@ When a model is configured, an AI judge reads the same attacker-controlled text 
 | `SENTINEL_LLM_BASE_URL` | `LLM_BASE_URL` | OpenAI-compatible endpoint for the judge |
 | `SENTINEL_LLM_API_KEY` | `LLM_API_KEY` | API key for the judge |
 | `SENTINEL_LLM_MODEL` | `LLM_MODEL` | Model name for the judge |
+| `SENTINEL_LLM_REASONING_EFFORT` | `none` on Fortytwo | Sent as `reasoning_effort`, so the short JSON answer is not spent on reasoning |
 | `SENTINEL_AI` | `auto` | `off` disables the judge |
 | `SENTINEL_AI_TIMEOUT_MS` | `15000` | Per-call timeout |
 
-The judge runs whenever a base URL, key and model are available from either set of variables and `SENTINEL_AI` is not `off`.
+The judge runs whenever a base URL, key and model are available from either set of variables and `SENTINEL_AI` is not `off`. `FORTYTWO_API_KEY` alone is enough: it selects Qwen on Fortytwo for both Steward and the judge.
 
 > [!TIP]
 > Use a different model for the judge than for Steward. An attacker then has to fool two models, and only the judge's failure costs anything (a missed warning).

@@ -59,12 +59,16 @@ Tyrell is configured with a few files in `TYRELL_HOME` and environment variables
 
 | Variable | Default | Used by | Meaning |
 | --- | --- | --- | --- |
-| `LLM_BASE_URL` | none | Steward | OpenAI-compatible endpoint (required for `tyrell steward`) |
-| `LLM_API_KEY` | none | Steward | API key (required) |
-| `LLM_MODEL` | none | Steward | Model name (required) |
+| `FORTYTWO_API_KEY` | none | Steward, ingest | Fortytwo key: selects Qwen on Fortytwo when `LLM_BASE_URL` is unset |
+| `LLM_PROVIDER` | auto | Steward | `fortytwo` to use Fortytwo with `LLM_API_KEY` |
+| `LLM_BASE_URL` | Fortytwo's, with a Fortytwo key | Steward | OpenAI-compatible endpoint |
+| `LLM_API_KEY` | `FORTYTWO_API_KEY` | Steward | API key |
+| `LLM_MODEL` | `qwen/qwen3.8-27b` on Fortytwo | Steward | Model name |
+| `LLM_REASONING_EFFORT` | `low` on Fortytwo | Steward | Sent as `reasoning_effort` |
 | `SENTINEL_LLM_BASE_URL` | `LLM_BASE_URL` | Ingest | Endpoint for the AI judge |
 | `SENTINEL_LLM_API_KEY` | `LLM_API_KEY` | Ingest | Key for the AI judge |
 | `SENTINEL_LLM_MODEL` | `LLM_MODEL` | Ingest | Model for the AI judge |
+| `SENTINEL_LLM_PROVIDER`, `SENTINEL_LLM_REASONING_EFFORT` | the agent's; effort `none` on Fortytwo | Ingest | Provider and reasoning effort for the AI judge |
 | `SENTINEL_AI` | `auto` | Ingest | `off` disables the AI judge |
 | `SENTINEL_AI_TIMEOUT_MS` | `15000` | Ingest | AI judge timeout |
 

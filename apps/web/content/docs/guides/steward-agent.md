@@ -8,10 +8,14 @@ Steward is the AI agent that runs inside Tyrell. It pays your recurring bills fr
 ## Run one turn
 
 ```sh
-export LLM_BASE_URL=https://api.example.com/v1
-export LLM_API_KEY=...
-export LLM_MODEL=...
+export FORTYTWO_API_KEY=sk-ft-v1-...      # Qwen on Fortytwo: the key is all you need
 pnpm tyrell steward "pay this month's rent"
+```
+
+Any other OpenAI-compatible provider works too:
+
+```sh
+export LLM_BASE_URL=https://api.example.com/v1 LLM_API_KEY=... LLM_MODEL=...
 ```
 
 Each `tyrell steward` invocation runs one turn in a process that loads only the agent key, and prints:
@@ -28,7 +32,24 @@ Control, and the signer if you expect payments, must be running.
 
 ## Model requirements
 
-Steward talks to any **OpenAI-compatible chat completions endpoint with tool calling**: `POST {LLM_BASE_URL}/chat/completions` with `tools` and `tool_choice: "auto"`, at temperature 0, with a 120-second timeout. All three variables are required; the command fails if any is missing.
+Steward talks to any **OpenAI-compatible chat completions endpoint with tool calling**: `POST {LLM_BASE_URL}/chat/completions` with `tools` and `tool_choice: "auto"`, at temperature 0, with a 120-second timeout.
+
+### Fortytwo (Qwen), built in
+
+[Fortytwo](https://fortytwo.network) serves Qwen and other open-weight models over an OpenAI-compatible API. With `FORTYTWO_API_KEY` set and no `LLM_BASE_URL`, Tyrell uses it:
+
+| Setting | Value |
+| --- | --- |
+| Endpoint | `https://api.fortytwo.network/v1` |
+| Model | `qwen/qwen3.8-27b` (override with `LLM_MODEL`) |
+| Auth | `Authorization: Bearer $FORTYTWO_API_KEY` |
+| Reasoning | Qwen reasons by default; Tyrell sends `reasoning_effort: "low"` for Steward and `"none"` for the AI judge (override with `LLM_REASONING_EFFORT`) |
+
+`LLM_PROVIDER=fortytwo` with `LLM_API_KEY` works too. Set a spend limit on the key in Fortytwo's dashboard.
+
+### Other providers
+
+Set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`; all three are required, and an explicit `LLM_BASE_URL` wins over `FORTYTWO_API_KEY`. `LLM_REASONING_EFFORT` is sent only when you set it.
 
 > [!IMPORTANT]
 > The model is treated as untrusted code. Nothing in Tyrell's guarantees depends on which model you use or on it following instructions. A better model makes Steward more useful, not safer.

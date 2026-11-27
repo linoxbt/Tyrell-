@@ -12,7 +12,7 @@ This guide takes you from an empty machine to a running Tyrell deployment on QIE
 | QIE Wallet in a browser | It becomes the owner of every contract: it registers lane keys and sets the vault cap |
 | A little QIEV3 for gas | For a throwaway deployer, the `submitter` key and the `signer` key |
 | A Pinata account and JWT (recommended) | Encrypted envelopes are pinned to IPFS. A local directory store also works, but only on the machine that wrote it |
-| An OpenAI-compatible model endpoint | For the Steward agent: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` |
+| A model API key | For the Steward agent and the AI judge: `FORTYTWO_API_KEY` (Qwen on Fortytwo), or `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` for any OpenAI-compatible endpoint |
 | Mainnet only: QUSDC | The vault's payment token, `0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5` (6 decimals) |
 
 Gas costs are small. A full deploy of all five contracts is about 6.6M gas; anchoring one memory is about 93k gas (see `contracts/GAS.md`).
@@ -98,7 +98,7 @@ Control refuses to start unless each lane has exactly one active key. Run each p
 pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5   # mainnet
 pnpm tyrell payee add --label landlord --address 0x… --cap 5 --daily 5          # testnet
 pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
-export LLM_BASE_URL=... LLM_API_KEY=... LLM_MODEL=...
+export FORTYTWO_API_KEY=...      # or LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
 pnpm tyrell steward "pay this month's rent"
 ```
 

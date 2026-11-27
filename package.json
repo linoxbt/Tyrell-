@@ -25,7 +25,8 @@
     "web:dev": "pnpm --filter @tyrell/web dev",
     "web:build": "pnpm --filter @tyrell/web build",
     "gen:playground": "tsx scripts/gen-playground.ts",
-    "report:tests": "tsx scripts/test-report.ts"
+    "report:tests": "tsx scripts/test-report.ts",
+    "record:ai": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=UNDICI-EHPA\" tsx apps/web/scripts/record-ai-demo.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

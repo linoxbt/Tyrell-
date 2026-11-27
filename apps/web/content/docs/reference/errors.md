@@ -136,7 +136,7 @@ A refusal becomes the decision's `payError`.
 | `the <process> process may not hold the <role> key (I-12)` | A process tried to load a foreign key |
 | `<process> can read keys that are not its own: …` | `TYRELL_STRICT_KEYS=1` and foreign key files are readable |
 | `PINATA_JWT is not set` | Pinata store without a JWT |
-| `set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (any OpenAI-compatible endpoint)` | `tyrell steward` without a model |
+| `set FORTYTWO_API_KEY (Fortytwo, Qwen), or LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (any OpenAI-compatible endpoint)` | `tyrell steward` without a model |
 | `--token (QUSDC) is required on mainnet` | `tyrell deploy` on mainnet without `--token` |
 | `pass --account <foundry keystore name>` | `tyrell deploy` without a deployer |
 | `--unlocked-sender is for local chains only` | Wrong network |

@@ -73,6 +73,10 @@ closed: no payment without two agreeing endpoints).
   persuaded to call poison benign: that is why it cannot lower the rule score. Running the judge on a
   different model from Steward's means an attacker has to fool both. Judging sends incoming on-chain
   text (already public) to the configured model provider.
+- **The website's Live AI demo** calls the model provider from the site's server with the site
+  owner's key. Visitors' attack text (at most 280 characters) is sent to the provider. Runs are
+  rate-limited per visitor and per minute, and presets are cached, but those counters are per server
+  instance: set a spend limit on the key. The demo never touches a real chain or real funds.
 - **Incidents are local.** They live in control's cache and are not rebuilt from the chain.
 - **Refresh cost.** Control re-reads events from the deployment block on each refresh; fine for a
   hackathon-sized history, not for years of memories.

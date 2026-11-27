@@ -699,3 +699,4 @@ export async function runSuite(onResult: (r: Result) => void, onGroup?: (g: Grou
 }
 
 export { numberToHex, toHex };
+export { addr, D, payeeIdOf, USD, vaultWorld };

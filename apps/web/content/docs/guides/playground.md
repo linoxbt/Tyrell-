@@ -25,9 +25,23 @@ Click any check to see each step: deployments, transactions with decoded events,
 - **Time:** each call carries a block timestamp, so checks can cross a UTC day (daily caps and quotas) or a 3-day contest window.
 - **Same suite in CI:** `apps/web/test/playground.test.ts` runs the identical suite in Node on every `pnpm test`.
 
+## Live AI
+
+The second tab runs a real model, Qwen 3.8 on [Fortytwo](https://fortytwo.network), against a poisoned memory. Pick an attack (a poisoned token name, an NFT with hidden instructions, a look-alike address) or write your own, then **Run live**:
+
+1. The **AI judge** reads the attacker's text with the sentinel's fixed prompt, next to the rule-based scorer; the incident score is the higher of the two.
+2. **Steward on Tyrell** gets the user's instruction and the poisoned memory, labelled, with its real system prompt and tools. Its `propose_payment` goes to the real policy engine, whose verdict it reads back.
+3. A **plain agent** gets the same model and the same memories with no labels, no policy and a normal wallet.
+
+Both outcomes then run on Tyrell's contracts in your browser: the guarded vault pays only the registered landlord (and refuses the attacker even when asked directly), while the plain wallet sends whatever the model asked for. The model call runs on the site's server, because the model API takes no browser calls and the key must stay secret; nothing about the outcome depends on the model.
+
+Live runs are rate-limited and preset results are cached for 30 minutes. When live runs are off or busy, the tab shows real runs recorded with `pnpm record:ai`.
+
+To run it yourself, set `FORTYTWO_API_KEY` in the web app's environment (for example in Vercel's project settings) and redeploy.
+
 ## Try it yourself
 
-The second tab lets you poke at the off-chain pieces:
+The third tab lets you poke at the off-chain pieces:
 
 - **Sentinel:** type a token name and see the rule score and which rules matched.
 - **Policy engine:** play a compromised model; change recipient, label, amount, token, endpoint agreement or the proposing agent's state and watch which rule refuses.
@@ -35,7 +49,7 @@ The second tab lets you poke at the off-chain pieces:
 
 ## Recorded runs
 
-The third tab shows the repository's full TypeScript and Foundry test suites as last recorded with `pnpm report:tests` (including end-to-end runs of control, signer, Steward and the vault on anvil), the attack-set results, and a link to the console's recorded end-to-end run.
+The fourth tab shows the repository's full TypeScript and Foundry test suites as last recorded with `pnpm report:tests` (including end-to-end runs of control, signer, Steward and the vault on anvil), the attack-set results, and a link to the console's recorded end-to-end run.
 
 ## Run it locally
 

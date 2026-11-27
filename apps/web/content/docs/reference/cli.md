@@ -106,7 +106,7 @@ Starts the vault signer on `signer.sock`. It pays only requests signed by the ac
 tyrell steward "<task>"
 ```
 
-Runs one Steward turn in a process that holds only the agent key. Requires `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`. Prints `turn`, `readSet`, `writes`, `decisions` and `final`. See [Steward agent](/docs/guides/steward-agent).
+Runs one Steward turn in a process that holds only the agent key. Requires `FORTYTWO_API_KEY`, or `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`. Prints `turn`, `readSet`, `writes`, `decisions` and `final`. See [Steward agent](/docs/guides/steward-agent).
 
 ### tyrell ingest scan
 
