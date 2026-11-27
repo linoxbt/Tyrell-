@@ -35,8 +35,16 @@ import {
  * ships in the page); the project's domain allowlist is what restricts where it can be used.
  */
 
-export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID ?? "";
-export const reownEnabled = REOWN_PROJECT_ID.length > 0;
+/**
+ * Reown AppKit is the wallet connection. NEXT_PUBLIC_REOWN_PROJECT_ID (dashboard.reown.com) unlocks the
+ * WalletConnect relay (QR codes, mobile deep links) and Reown's wallet directory; without it AppKit still
+ * runs and connects browser wallets (QIE Wallet first). NEXT_PUBLIC_WALLET_MODE=injected selects the
+ * plain browser-wallet picker instead (used by tests).
+ */
+const PLACEHOLDER_PROJECT_ID = "00000000000000000000000000000000";
+export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || PLACEHOLDER_PROJECT_ID;
+export const reownConfigured = REOWN_PROJECT_ID !== PLACEHOLDER_PROJECT_ID;
+export const reownEnabled = process.env.NEXT_PUBLIC_WALLET_MODE !== "injected";
 
 const qie = (id: 1990 | 1983, testnet: boolean) => {
   const c = CHAINS[id]!;

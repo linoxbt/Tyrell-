@@ -99,7 +99,7 @@ export default function Console() {
           {!view && !error && <p className="text-muted">Loading…</p>}
           {view && source === "snapshot" && (
             <p className="mb-5 rounded-xl border border-amber/40 bg-tint-peach px-4 py-2.5 text-[13px] text-body sm:text-sm">
-              Read-only snapshot from {new Date(view.generatedAt).toLocaleString()}. Run <span className="mono">tyrell daemon</span> and set TYRELL_API_URL for live data.
+              Read-only snapshot from {new Date(view.generatedAt).toLocaleString()}. Run <span className="mono">tyrell control start</span> and set TYRELL_API_URL for live data.
             </p>
           )}
           {view && graph && (

@@ -63,6 +63,7 @@ const FAILS_AT: Record<string, number> = {
   ASSET_MISMATCH: 4,
   OVER_CAP: 4,
   OVER_DAILY_CAP: 4,
+  AGENT_BLOCKED: 4,
   SIMULATION_FAILED: 5,
 };
 

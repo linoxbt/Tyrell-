@@ -7,10 +7,9 @@ import { ConnectButton } from "../wallet/Wallet";
 import { REPO } from "./ui";
 
 const LINKS: Array<[string, string]> = [
-  ["Problem", "/#problem"],
   ["Platform", "/#platform"],
-  ["Attack set", "/#attacks"],
-  ["Guarantees", "/#guarantees"],
+  ["Playground", "/playground"],
+  ["Docs", "/docs"],
   ["Get started", "/start"],
 ];
 
@@ -54,13 +53,13 @@ export function Nav() {
             </a>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-2 sm:gap-3 lg:ml-0 xl:gap-4">
+        <div className="ml-auto flex items-center gap-1.5 min-[360px]:gap-2 sm:gap-3 lg:ml-0 xl:gap-4">
           <a href={REPO} className="mr-2 hidden text-base text-nav transition-colors hover:text-ink xl:block">
             GitHub
           </a>
           <Link
             href="/console"
-            className="whitespace-nowrap rounded-lg bg-brand px-4 py-2.5 text-[15px] leading-none text-snow transition-[background-color,transform] duration-200 hover:bg-brand-deep active:scale-[0.98] sm:px-[19px] sm:py-3 sm:text-base"
+            className="whitespace-nowrap rounded-lg bg-brand px-3 py-2.5 text-[14px] min-[360px]:px-4 min-[360px]:text-[15px] leading-none text-snow transition-[background-color,transform] duration-200 hover:bg-brand-deep active:scale-[0.98] sm:px-[19px] sm:py-3 sm:text-base"
           >
             Open console
           </Link>

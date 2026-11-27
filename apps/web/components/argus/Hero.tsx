@@ -13,11 +13,7 @@ export function Hero({ view }: { view?: ViewDocument }) {
       <div className="grid-lines absolute inset-0" />
       <div className="absolute inset-x-0 bottom-0 h-[420px] bg-gradient-to-b from-transparent via-white/70 to-white" />
       <div className="relative mx-auto max-w-[1200px] px-6 pt-16 text-center sm:pt-24 lg:pt-[142px] xl:px-0">
-        <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1 text-sm text-ink shadow-[0_1px_2px_rgba(15,18,32,0.06)]">
-          <span className="h-1.5 w-1.5 rounded-full bg-band-green" />
-          New · Built on QIE {view ? `· ${view.network}` : "mainnet"}
-        </span>
-        <h1 className="h-hero mx-auto mt-6 max-w-[960px]">Know where your agent&apos;s memories came from</h1>
+        <h1 className="h-hero mx-auto max-w-[960px]">Know where your agent&apos;s memories came from</h1>
         <p className="t-lead mx-auto mt-6 max-w-[660px] text-body">
           Sign, anchor and trace everything your AI agent reads on QIE. Catch poisoned tokens and redirected payments before money moves.
         </p>

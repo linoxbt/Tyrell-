@@ -373,7 +373,7 @@ export function Cta() {
 
 export function Footer({ view }: { view?: ViewDocument }) {
   const cols: Array<[string, Array<[string, string]>]> = [
-    ["Product", [["Console", "/console"], ["How it works", "#how"], ["Attack set", "#attacks"], ["Guarantees", "#guarantees"]]],
+    ["Product", [["Console", "/console"], ["Playground", "/playground"], ["Docs", "/docs"], ["Get started", "/start"]]],
     ["Developers", [["GitHub", REPO], ["SECURITY.md", `${REPO}/blob/main/SECURITY.md`], ["Mainnet runbook", `${REPO}/blob/main/docs/MAINNET.md`]]],
     ["QIE", [["Explorer", "https://mainnet.qie.digital"], ["Testnet faucet", "https://qie.digital/faucet"], ["QIE MCP", "https://mcp.qie.digital/mcp"]]],
   ];

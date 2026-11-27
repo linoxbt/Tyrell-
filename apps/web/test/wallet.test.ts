@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
@@ -11,8 +11,8 @@ import { startChainlab, type Chainlab } from "../../../test/support/anvil";
 
 /*
  * Wallet login and owner actions in a real browser, in both wallet modes:
- *  - "injected": browser wallets only (no Reown project id), Tyrell's own picker;
- *  - "reown": Reown AppKit (built with a placeholder project id; browser wallets need no relay).
+ *  - "reown": Reown AppKit, the site's wallet connection (browser wallets need no relay, so no project id);
+ *  - "injected": NEXT_PUBLIC_WALLET_MODE=injected, the plain browser-wallet picker.
  * A fresh anvil chain gets the same contract addresses as the demo snapshot, and a test wallet
  * announced over EIP-6963 as QIE Wallet forwards every request to anvil's unlocked owner account.
  */
@@ -21,8 +21,8 @@ const WEB = join(__dirname, "..");
 const NEXT = join(WEB, "node_modules/.bin/next");
 const SNAPSHOT = join(WEB, "public/snapshot.json");
 const MODES = {
-  injected: { distDir: ".next", env: {} as Record<string, string> },
-  reown: { distDir: ".next-reown", env: { NEXT_PUBLIC_REOWN_PROJECT_ID: "00000000000000000000000000000000" } },
+  injected: { distDir: ".next-injected", env: { NEXT_PUBLIC_WALLET_MODE: "injected" } as Record<string, string> },
+  reown: { distDir: ".next", env: {} as Record<string, string> },
 } as const;
 type Mode = keyof typeof MODES;
 
@@ -42,10 +42,17 @@ async function serve(mode: Mode): Promise<string> {
   const { distDir, env: extra } = MODES[mode];
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra, NEXT_TELEMETRY_DISABLED: "1", NEXT_DIST_DIR: distDir };
   delete env.TYRELL_API_URL;
-  if (mode === "injected") delete env.NEXT_PUBLIC_REOWN_PROJECT_ID;
+  delete env.NEXT_PUBLIC_REOWN_PROJECT_ID;
+  if (mode === "reown") delete env.NEXT_PUBLIC_WALLET_MODE;
   if (!existsSync(join(WEB, distDir, "BUILD_ID"))) {
-    const b = spawnSync(NEXT, ["build"], { cwd: WEB, env, encoding: "utf8" });
-    if (b.status !== 0) throw new Error(b.stderr || b.stdout);
+    // async, so the vitest worker keeps answering its RPC heartbeats during the build
+    await new Promise<void>((resolve, reject) => {
+      const b = spawn(NEXT, ["build"], { cwd: WEB, env });
+      let out = "";
+      b.stdout.on("data", (d) => (out += d));
+      b.stderr.on("data", (d) => (out += d));
+      b.on("close", (code) => (code === 0 ? resolve() : reject(new Error(out.slice(-4000)))));
+    });
   }
   const port = await freePort();
   servers.push(spawn(NEXT, ["start", "-p", String(port), "-H", "127.0.0.1"], { cwd: WEB, env, stdio: "ignore" }));

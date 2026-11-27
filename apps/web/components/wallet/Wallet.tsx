@@ -64,7 +64,7 @@ export function WalletSheet() {
   }, [sheetOpen, closeSheet]);
 
   return (
-    <div className={`fixed inset-0 z-[60] ${sheetOpen ? "" : "pointer-events-none"}`} aria-hidden={!sheetOpen}>
+    <div className={`fixed inset-0 z-[60] transition-[visibility] duration-300 ${sheetOpen ? "visible" : "pointer-events-none invisible"}`} aria-hidden={!sheetOpen}>
       <div onClick={closeSheet} className={`absolute inset-0 bg-ink/40 backdrop-blur-[2px] transition-opacity duration-300 ${sheetOpen ? "opacity-100" : "opacity-0"}`} />
       <div
         role="dialog"
