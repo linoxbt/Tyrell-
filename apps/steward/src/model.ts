@@ -35,6 +35,8 @@ export interface OpenAICompatibleOptions {
   apiKey: string;
   model: string;
   temperature?: number;
+  /** Sent as reasoning_effort when set (e.g. Qwen on Fortytwo). */
+  reasoningEffort?: string;
   fetch?: typeof fetch;
 }
 
@@ -57,6 +59,7 @@ export class OpenAICompatibleModel implements ChatModel {
         ),
         tools: tools.map((t) => ({ type: "function", function: t })),
         tool_choice: "auto",
+        ...(this.o.reasoningEffort ? { reasoning_effort: this.o.reasoningEffort } : {}),
       }),
       signal: AbortSignal.timeout(120_000),
     });

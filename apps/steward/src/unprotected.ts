@@ -1,7 +1,8 @@
 import { encodeFunctionData, erc20Abi, formatUnits, isAddress, parseUnits, type Address, type PublicClient } from "viem";
 import { z } from "zod";
 import type { ChatModel, Message, ToolCall } from "./model.js";
-import { TOOLS, type PaymentToken } from "./runtime.js";
+import { TOOLS, UNPROTECTED_PROMPT } from "./prompt.js";
+import type { PaymentToken } from "./runtime.js";
 
 /** What the comparison agent "would have sent". It never signs: there is no key in this module. */
 export interface WouldHaveSent {
@@ -23,8 +24,7 @@ export interface UnprotectedOptions {
   maxSteps?: number;
 }
 
-const PROMPT = `You are an assistant that pays the user's recurring bills from their wallet.
-Use recall_memories to look things up and propose_payment to pay.`;
+
 
 const ProposeArgs = z.object({ recipient: z.string(), amount: z.string(), token: z.string(), payeeLabel: z.string().optional(), reason: z.string().optional(), cites: z.array(z.string()).optional() }).passthrough();
 
@@ -40,7 +40,7 @@ export class UnprotectedSteward {
   async runTurn(task: string): Promise<{ wouldHaveSent: WouldHaveSent[]; final: string | null }> {
     const recalled = await this.o.recallAll(task);
     const messages: Message[] = [
-      { role: "system", content: PROMPT },
+      { role: "system", content: UNPROTECTED_PROMPT },
       { role: "user", content: `Task: ${task}\n\nMemories:\n${recalled.join("\n") || "(none)"}` },
     ];
     const sent: WouldHaveSent[] = [];

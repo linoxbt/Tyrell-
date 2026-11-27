@@ -34,6 +34,8 @@ export interface LlmJudgeOptions {
   fetch?: typeof fetch;
   /** Text longer than this is cut before it is sent (cost and context bound). */
   maxChars?: number;
+  /** Sent as reasoning_effort when set (e.g. "none" for Qwen on Fortytwo, so the short answer is not spent on reasoning). */
+  reasoningEffort?: string;
 }
 
 const CATEGORIES: readonly JudgeCategory[] = ["payment_redirect", "instruction", "impersonation", "phishing_link", "benign"];
@@ -95,6 +97,7 @@ export class LlmJudge implements Judge {
             { role: "system", content: JUDGE_SYSTEM },
             { role: "user", content: `Classify this on-chain text:\n${input}` },
           ],
+          ...(this.o.reasoningEffort ? { reasoning_effort: this.o.reasoningEffort } : {}),
         }),
         signal: AbortSignal.timeout(this.o.timeoutMs ?? 15_000),
       });

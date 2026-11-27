@@ -5,6 +5,7 @@ import { encodeFunctionData, getAddress, type Address, type Hex, type PublicClie
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { BlastRadius, Blob, Id16 } from "@tyrell/core";
+import { llmFromEnv } from "@tyrell/core";
 import { laneRegistryAbi, readLedger, type Deployment } from "@tyrell/chain";
 import { call, type SeedSpecMsg } from "@tyrell/ipc";
 import { anchorDomain } from "@tyrell/control";
@@ -34,17 +35,17 @@ class McpBalances implements McpReader {
 const stateFile = () => join(home(), "ingest-state.json");
 
 /**
- * The AI sentinel, when a model is configured: SENTINEL_LLM_* or, failing that, the agent's LLM_*.
+ * The AI sentinel, when a model is configured: SENTINEL_LLM_* or, failing that, the agent's LLM_*
+ * (FORTYTWO_API_KEY alone selects Fortytwo's Qwen).
  * A separate model is better (the attacker then has to fool two), but either works because the judge
  * can only raise alarms. SENTINEL_AI=off disables it.
  */
 export function sentinelJudge(env: NodeJS.ProcessEnv = process.env): LlmJudge | undefined {
   if ((env.SENTINEL_AI ?? "auto") === "off") return undefined;
-  const baseURL = env.SENTINEL_LLM_BASE_URL ?? env.LLM_BASE_URL;
-  const apiKey = env.SENTINEL_LLM_API_KEY ?? env.LLM_API_KEY;
-  const model = env.SENTINEL_LLM_MODEL ?? env.LLM_MODEL;
-  if (!baseURL || !apiKey || !model) return undefined;
-  return new LlmJudge({ baseURL, apiKey, model, timeoutMs: Number(env.SENTINEL_AI_TIMEOUT_MS ?? 15_000) });
+  const cfg = llmFromEnv(env, "judge");
+  if (!cfg) return undefined;
+  const { baseURL, apiKey, model, reasoningEffort } = cfg;
+  return new LlmJudge({ baseURL, apiKey, model, ...(reasoningEffort ? { reasoningEffort } : {}), timeoutMs: Number(env.SENTINEL_AI_TIMEOUT_MS ?? 15_000) });
 }
 
 /** The ingest worker process: wallet key only (I-12). */

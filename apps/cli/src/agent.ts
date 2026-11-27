@@ -1,5 +1,6 @@
 import { erc20Abi, type Address, type Hex } from "viem";
 import type { Blob, Id16 } from "@tyrell/core";
+import { llmFromEnv } from "@tyrell/core";
 import { call } from "@tyrell/ipc";
 import { anchorDomain } from "@tyrell/control";
 import { VaultSigner } from "@tyrell/signer";
@@ -33,8 +34,8 @@ export async function stewardTurn(task: string): Promise<TurnResult> {
   const c = readConfig();
   const d = deployment(c);
   const pub = clients(c)[0]!;
-  const { LLM_BASE_URL, LLM_API_KEY, LLM_MODEL } = process.env;
-  if (!LLM_BASE_URL || !LLM_API_KEY || !LLM_MODEL) throw new Error("set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (any OpenAI-compatible endpoint)");
+  const llm = llmFromEnv(process.env, "agent");
+  if (!llm) throw new Error("set FORTYTWO_API_KEY (Fortytwo, Qwen), or LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (any OpenAI-compatible endpoint)");
   const [decimals, symbol] = await Promise.all([
     pub.readContract({ address: d.token, abi: erc20Abi, functionName: "decimals" }),
     pub.readContract({ address: d.token, abi: erc20Abi, functionName: "symbol" }),
@@ -44,7 +45,7 @@ export async function stewardTurn(task: string): Promise<TurnResult> {
     acct: d.acct,
     domain: anchorDomain(d),
     control: ipcControl(() => pub.getBlockNumber({ cacheTime: 0 })),
-    model: new OpenAICompatibleModel({ baseURL: LLM_BASE_URL, apiKey: LLM_API_KEY, model: LLM_MODEL }),
+    model: new OpenAICompatibleModel({ baseURL: llm.baseURL, apiKey: llm.apiKey, model: llm.model, ...(llm.reasoningEffort ? { reasoningEffort: llm.reasoningEffort } : {}) }),
     token: { address: d.token, decimals, aliases: [symbol, "QUSDC"] },
   });
   return steward.runTurn(task);
