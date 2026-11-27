@@ -36,14 +36,23 @@ function tyrell(...args: string[]) {
 }
 const json = (s: string) => JSON.parse(s) as Record<string, unknown>;
 
+let apiPort = 0;
 beforeAll(async () => {
   anvil = await startAnvil();
+  apiPort = await new Promise<number>((r) => {
+    const srv = (require("node:net") as typeof import("node:net")).createServer();
+    srv.listen(0, () => {
+      const p = (srv.address() as { port: number }).port;
+      srv.close(() => r(p));
+    });
+  });
   homeDir = mkdtempSync(join(tmpdir(), "tyrell-cli-"));
   env = {
     ...process.env,
     TYRELL_HOME: homeDir,
     TYRELL_SCRYPT_N: "1024",
     QIE_RPC_URLS: `${anvil.url},${anvil.url}`,
+    TYRELL_API_PORT: String(apiPort),
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --disable-warning=ExperimentalWarning`,
   };
 }, 60_000);
@@ -312,6 +321,18 @@ describe("tyrell CLI on anvil", () => {
     expect(drill).toMatchObject({ status: "reverted" });
     const ev = json(tyrell("evidence").out) as { transactions: Record<string, string> };
     for (const k of ["MemoryAnchored", "QuarantineSeeded", "Paid", "revertedUnauthorizedPay"]) expect(ev.transactions[k], k).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  it("the web view's read-only API serves the projection, and nothing else", async () => {
+    const r = await fetch(`http://127.0.0.1:${apiPort}/api/view`);
+    expect(r.status).toBe(200);
+    const v = (await r.json()) as { v: number; memories: unknown[]; decisions: unknown[]; token: { symbol: string } };
+    expect(v.v).toBe(1);
+    expect(v.memories.length).toBeGreaterThan(5);
+    expect(v.decisions.length).toBeGreaterThan(1);
+    expect(v.token.symbol).toBe("tUSD");
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`, { method: "POST" })).status).toBe(404);
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/other`)).status).toBe(404);
   });
 
   it("everything still rebuilds to the same digest", () => {

@@ -21,7 +21,9 @@
     "coverage": "vitest run --coverage",
     "vectors": "pnpm --filter ./packages/core vectors",
     "gen:abi": "pnpm contracts:build && tsx scripts/gen-abi.ts",
-    "tyrell": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=ExperimentalWarning --disable-warning=UNDICI-EHPA\" tsx apps/cli/src/main.ts"
+    "tyrell": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=ExperimentalWarning --disable-warning=UNDICI-EHPA\" tsx apps/cli/src/main.ts",
+    "web:dev": "pnpm --filter @tyrell/web dev",
+    "web:build": "pnpm --filter @tyrell/web build"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -40,7 +42,9 @@
       "@foundry-rs/anvil",
       "@foundry-rs/cast",
       "@foundry-rs/forge",
-      "esbuild"
+      "@tailwindcss/oxide",
+      "esbuild",
+      "sharp"
     ]
   }
 }

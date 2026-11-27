@@ -54,6 +54,8 @@ export const Request = z.discriminatedUnion("type", [
   /** CLI or ingest auto-quarantine: preview, or seed with the control key. */
   z.object({ type: z.literal("quarantine"), seed: SeedSpecMsg, reason: z.string().min(1).max(2000), evidence: z.unknown().optional(), preview: z.boolean().optional() }),
   z.object({ type: z.literal("blast"), seedId: z.number().int().nonnegative() }),
+  /** The web view's document (read-only). */
+  z.object({ type: z.literal("view") }),
   /** Human CLI: a user-signed ledger action that control only relays as a transaction. */
   z.object({ type: z.literal("ledger"), action: z.enum(LEDGER_ACTIONS), message: z.record(z.unknown()), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/) }),
   z.object({ type: z.literal("digest"), head: z.string().regex(/^\d+$/) }),

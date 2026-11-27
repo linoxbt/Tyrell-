@@ -306,6 +306,20 @@ program
   .option("--amount <units>", "amount in token units", "1")
   .action(run(async (o: { amount: string }) => print(await signerLeakDrill(o.amount))));
 
+program
+  .command("snapshot")
+  .description("Write the web view's document to a file (read-only demo mode)")
+  .requiredOption("--out <file>", "e.g. apps/web/public/snapshot.json")
+  .action(
+    run(async (o: { out: string }) => {
+      const { call } = await import("@tyrell/ipc");
+      const { writeFileSync } = await import("node:fs");
+      const doc = await call(paths().socket, { type: "view" });
+      writeFileSync(o.out, JSON.stringify(doc, null, 2) + "\n");
+      console.log(`wrote ${o.out}`);
+    }),
+  );
+
 program.command("evidence").description("Contract links and example transactions for the submission").action(run(async () => print(await evidence())));
 
 program

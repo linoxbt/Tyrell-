@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+:root { color-scheme: light; }
+body { @apply bg-stone-50 text-stone-900 antialiased; font-feature-settings: "tnum"; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

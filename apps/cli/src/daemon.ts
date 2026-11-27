@@ -1,9 +1,11 @@
 import type { Server } from "node:net";
 import { readFileSync } from "node:fs";
-import { formatEther, type Address } from "viem";
+import { erc20Abi, formatEther, type Address } from "viem";
 import type { Id16 } from "@tyrell/core";
 import { call, serve, type Request } from "@tyrell/ipc";
-import { Control, Payments, Quarantine, type BuiltProjection, type SeedSpec, type SignedPayRequest } from "@tyrell/control";
+import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
+import { networks } from "@tyrell/chain";
+import { Control, Payments, Quarantine, viewDocument, type BuiltProjection, type SeedSpec, type SignedPayRequest } from "@tyrell/control";
 import type { SeedSpecMsg } from "@tyrell/ipc";
 import { ProjectionDb } from "@tyrell/storage";
 import { account, blobStore, checkKeyIsolation, clients, dataKey, deployment, paths, readConfig } from "./config.js";
@@ -60,6 +62,20 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
           : { type: "turn", turn: m.turn as `0x${string}` };
   log(`control: ${first.projection.size} memories at block ${first.head}, digest ${first.digest}`);
 
+  const [decimals, symbol] = await Promise.all([
+    cs[0]!.readContract({ address: d.token, abi: erc20Abi, functionName: "decimals" }),
+    cs[0]!.readContract({ address: d.token, abi: erc20Abi, functionName: "symbol" }),
+  ]);
+  const view = (p: BuiltProjection) =>
+    viewDocument(p, {
+      network: c.network,
+      chainId: c.chainId,
+      contracts: { laneRegistry: d.laneRegistry, memoryAnchor: d.memoryAnchor, tyrellLedger: d.tyrellLedger, guardedVault: d.guardedVault, token: d.token },
+      ...(c.network !== "local" ? { explorer: networks[c.network].explorer } : {}),
+      token: { address: d.token, decimals, symbol },
+      incidents: db.incidents(),
+    });
+
   const handler = async (req: Request): Promise<unknown> => {
     switch (req.type) {
       case "submit":
@@ -102,6 +118,8 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
       }
       case "blast":
         return quarantine.blast(req.seedId);
+      case "view":
+        return view(await control.refresh());
       case "ledger":
         return control.relayLedger(req.action, req.message, req.signature as `0x${string}`);
       case "show": {
@@ -135,6 +153,20 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
   };
 
   const server = await serve(paths().socket, handler);
+
+  // Read-only HTTP API for the web view, on 127.0.0.1 only. GET /api/view; nothing writes.
+  const apiPort = Number(process.env.TYRELL_API_PORT ?? 7878);
+  let http: HttpServer | undefined;
+  if (apiPort > 0) {
+    http = createHttpServer((req, res) => {
+      if (req.method !== "GET" || req.url !== "/api/view") return void res.writeHead(404).end();
+      const p = control.projection;
+      if (!p) return void res.writeHead(503).end();
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(view(p)));
+    });
+    await new Promise<void>((r) => http!.listen(apiPort, "127.0.0.1", () => r()));
+    log(`control: read-only web API on http://127.0.0.1:${apiPort}/api/view`);
+  }
   const timer = setInterval(() => void control.refresh().catch((e: Error) => log(`refresh failed: ${e.message}`)), o.refreshMs ?? 15_000);
   log(`control: listening on ${paths().socket}`);
   return {
@@ -142,6 +174,7 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
     server,
     stop: async () => {
       clearInterval(timer);
+      http?.close();
       await new Promise<void>((r) => server.close(() => r()));
       db.close();
     },

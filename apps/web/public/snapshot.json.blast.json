@@ -1,0 +1,12 @@
+{
+  "seedId": 2,
+  "memories": [
+    "0x01a21ba15cd7781493c6648ab32fce28",
+    "0x01a21ba15df17df58e0ba59f87b537fd",
+    "0x01a21ba15dfd7078a78de18780e64b8c"
+  ],
+  "decisions": [
+    "0x01a21ba15dfd7078a78de18780e64b8c"
+  ],
+  "memoryEdges": 2
+}

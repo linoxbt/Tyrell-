@@ -2,3 +2,4 @@
 # Never add a path that could hold a private key.
 contracts/test/vectors/*.json
 contracts/deployments/*.json
+apps/web/public/snapshot.json*

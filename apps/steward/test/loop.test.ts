@@ -6,7 +6,8 @@ import { createPublicClient, createWalletClient, erc20Abi, getAddress, http, kec
 import { Kind, Lane, ledgerTypedData, payeeIdOf, signEnvelope, type Id16 } from "@tyrell/core";
 import { guardedVaultAbi, readLedger, tyrellLedgerAbi, tyrellTestUSDAbi } from "@tyrell/chain";
 import { importDataKey, MemoryBlobStore, newSecret, ProjectionDb } from "@tyrell/storage";
-import { anchorDomain, Control, Payments, Quarantine, rebuildFresh } from "@tyrell/control";
+import { anchorDomain, Control, Payments, Quarantine, rebuildFresh, viewDocument } from "@tyrell/control";
+import { writeFileSync } from "node:fs";
 import { VaultSigner } from "@tyrell/signer";
 import { IngestWorker, type Incident } from "@tyrell/ingest";
 import { ScriptedModel, say, Steward, UnprotectedSteward, useTool, type ControlApi } from "../src/index.js";
@@ -209,6 +210,16 @@ describe("poisoned memory -> blocked payment -> blast radius -> quarantine -> cl
     expect(t.readSet).not.toContain(poisonMemory);
     expect(t.decisions[0]).toMatchObject({ verdict: { decision: "ALLOW", code: "OK" } });
     expect(await clients[0]!.readContract({ address: lab.deployment.token, abi: erc20Abi, functionName: "balanceOf", args: [LANDLORD] })).toBe(5_000_000n);
+  });
+
+  it("writes the web view snapshot and the CLI's blast radius for T-19 (when DEMO_SNAPSHOT_OUT is set)", async () => {
+    const out = process.env.DEMO_SNAPSHOT_OUT;
+    if (!out) return;
+    const p = await control.refresh();
+    const doc = viewDocument(p, { network: "local", chainId: 31337, contracts: { guardedVault: lab.deployment.guardedVault, memoryAnchor: lab.deployment.memoryAnchor }, token: { address: lab.deployment.token, decimals: 6, symbol: "tUSD" }, incidents });
+    writeFileSync(out, JSON.stringify(doc, null, 2) + "\n");
+    const b = await quarantine.blast(seedId);
+    writeFileSync(`${out}.blast.json`, JSON.stringify({ seedId, memories: b.memories, decisions: b.decisions, memoryEdges: b.edges.filter((e) => !e.from.startsWith("src:")).length }, null, 2));
   });
 
   it("quarantining a payee's own address suspends the payee; the policy then blocks with PAYEE_SUSPENDED", async () => {
