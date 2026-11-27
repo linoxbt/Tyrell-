@@ -58,6 +58,12 @@ closed: no payment without two agreeing endpoints).
 - **Detection is heuristic.** Scores propose quarantines; they do not protect payments. A split
   instruction can score below the threshold in its second half (attack 4), and payments are still
   blocked by the policy engine.
+- **The AI sentinel is a detector, not a guard.** Its score is combined as max(rules, AI), so it can
+  only add incidents; a fooled, jailbroken or offline judge costs a missed early warning, never a
+  payment. The untrusted text is fenced and the system prompt is fixed, but a model can still be
+  persuaded to call poison benign: that is why it cannot lower the rule score. Running the judge on a
+  different model from Steward's means an attacker has to fool both. Judging sends incoming on-chain
+  text (already public) to the configured model provider.
 - **Incidents are local.** They live in control's cache and are not rebuilt from the chain.
 - **Refresh cost.** Control re-reads events from the deployment block on each refresh; fine for a
   hackathon-sized history, not for years of memories.

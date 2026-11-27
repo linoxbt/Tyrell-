@@ -99,6 +99,10 @@ importers:
       viem:
         specifier: ^2.21.0
         version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
+    devDependencies:
+      '@tyrell/control':
+        specifier: workspace:*
+        version: link:../control
 
   apps/signer:
     dependencies:
@@ -175,6 +179,9 @@ importers:
       react-dom:
         specifier: ^19.1.0
         version: 19.3.1(react@19.3.1)
+      viem:
+        specifier: ^2.21.0
+        version: 2.58.7(typescript@5.9.3)(zod@4.6.7)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.1.0

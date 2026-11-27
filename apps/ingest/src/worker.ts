@@ -3,6 +3,7 @@ import type { LocalAccount } from "viem/accounts";
 import { Kind, Lane, signEnvelope, sourceSeedValue, type AnchorDomain, type Blob, type Id16, type SrcRef } from "@tyrell/core";
 import { TRANSFER_TOPIC0 } from "@tyrell/chain";
 import { erc20Meta, fetchMetadata, metadataText, nftUri, type FetchMetaOptions } from "./metadata.js";
+import { aiScore, type Judge, type JudgeVerdict } from "./judge.js";
 import { looksAlike, score, type ScoreContext } from "./score.js";
 
 const TRANSFER_SINGLE = keccak256(toBytes("TransferSingle(address,address,address,uint256,uint256)"));
@@ -16,6 +17,8 @@ export interface Incident {
   proposedSeed: { type: "source"; value: Hex; ref: Address };
   block: string;
   summary: string;
+  /** The AI sentinel's verdict, when one ran. A hint for humans; nothing that pays reads it. */
+  ai?: Omit<JudgeVerdict, "injection"> & { injection: boolean; score: number };
 }
 
 /** What the ingest worker may ask of control: anchor its observations, record incidents. */
@@ -49,6 +52,8 @@ export interface IngestOptions {
   mcp?: McpReader;
   fetch?: FetchMetaOptions;
   window?: bigint;
+  /** Optional AI sentinel. It can only raise a score, never lower one; failures fall back to rules. */
+  judge?: Judge;
 }
 
 interface Observation {
@@ -193,11 +198,25 @@ export class IngestWorker {
     for (let i = 0; i < obs.length; i++) {
       const o = obs[i]!;
       const s = score({ texts: o.texts, addresses: o.addresses, ...(o.amount !== undefined ? { amount: o.amount } : {}), dust: this.o.dust ?? 0n }, ctx);
+      // The AI judge reads only attacker-controlled text, and only adds: final = max(rules, ai).
+      const verdict = this.o.judge && o.texts.some((t) => t.trim()) ? await this.o.judge.judge(o.texts) : undefined;
+      const ai = aiScore(verdict);
+      if (ai > s.score) s.score = ai;
+      if (ai > 0) s.rules.push(`ai:${verdict!.category}`);
       if (s.score < (this.o.threshold ?? 60)) continue;
       // For address poisoning, the source to quarantine is the look-alike address, not the token.
       const lookalike = s.rules.includes("lookalike") ? o.addresses.find((a) => known.some((k) => looksAlike(a, k))) : undefined;
       const ref = lookalike ?? o.source;
-      const inc: Incident = { memoryId: ids[i]!, source: ref, score: s.score, rules: s.rules, proposedSeed: { type: "source", value: sourceSeedValue(ref), ref }, block: to.toString(), summary: o.body.slice(0, 240) };
+      const inc: Incident = {
+        memoryId: ids[i]!,
+        source: ref,
+        score: s.score,
+        rules: s.rules,
+        proposedSeed: { type: "source", value: sourceSeedValue(ref), ref },
+        block: to.toString(),
+        summary: o.body.slice(0, 240),
+        ...(verdict ? { ai: { ...verdict, score: ai } } : {}),
+      };
       incidents.push(inc);
       await this.o.control.incident(inc);
       if (s.rules.includes("blocklist") && this.o.autoQuarantineBlocklist && this.o.control.quarantineSource) {

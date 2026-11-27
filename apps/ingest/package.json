@@ -13,5 +13,8 @@
     "@tyrell/chain": "workspace:*",
     "@tyrell/core": "workspace:*",
     "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@tyrell/control": "workspace:*"
   }
 }

@@ -62,7 +62,11 @@ graph LR
 4. **When a source turns out to be poisoned,** Tyrell shows its blast radius (every memory and decision
    it reached) and quarantines it with one on-chain seed. Descendants written later are excluded too.
    Nothing is deleted: evidence stays anchored and pinned.
-5. **The local database is a cache.** `tyrell rebuild --fresh` reconstructs everything from QIE and
+5. **An AI sentinel watches what arrives.** Every token name, NFT description, transfer and MCP read
+   is scored by rules and, when a model is configured, by an AI judge that reads the text as fenced
+   data. The final score is the higher of the two: the AI can catch what rules miss and explain why,
+   but it can never clear something the rules flagged, and it never touches payments.
+6. **The local database is a cache.** `tyrell rebuild --fresh` reconstructs everything from QIE and
    IPFS alone, and `tyrell verify` proves the digest matches the live process.
 
 The design and its invariants are in [SECURITY.md](SECURITY.md).
@@ -134,6 +138,7 @@ pnpm tyrell setup register --mint 10000000            # QIE Wallet page: lane ke
 pnpm tyrell control start &                           # control, submitter and data keys
 pnpm tyrell signer start &                            # vault signer key only
 pnpm tyrell ingest start &                            # wallet key only
+# optional AI sentinel: SENTINEL_LLM_BASE_URL / _API_KEY / _MODEL (falls back to LLM_*; SENTINEL_AI=off disables)
 pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5
 pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
 export LLM_BASE_URL=... LLM_API_KEY=... LLM_MODEL=...   # any OpenAI-compatible endpoint

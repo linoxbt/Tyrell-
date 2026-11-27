@@ -8,7 +8,7 @@ import type { BlastRadius, Blob, Id16 } from "@tyrell/core";
 import { laneRegistryAbi, readLedger, type Deployment } from "@tyrell/chain";
 import { call, type SeedSpecMsg } from "@tyrell/ipc";
 import { anchorDomain } from "@tyrell/control";
-import { IngestWorker, type Incident, type McpReader } from "@tyrell/ingest";
+import { IngestWorker, LlmJudge, type Incident, type McpReader } from "@tyrell/ingest";
 import { encryptKeystore, keystoreAddress, newSecret, writeKeystore } from "@tyrell/storage";
 import { account, checkKeyIsolation, clients, deployment, home, passphrase, paths, readConfig } from "./config.js";
 import type { OwnerTx } from "./setup.js";
@@ -33,6 +33,20 @@ class McpBalances implements McpReader {
 
 const stateFile = () => join(home(), "ingest-state.json");
 
+/**
+ * The AI sentinel, when a model is configured: SENTINEL_LLM_* or, failing that, the agent's LLM_*.
+ * A separate model is better (the attacker then has to fool two), but either works because the judge
+ * can only raise alarms. SENTINEL_AI=off disables it.
+ */
+export function sentinelJudge(env: NodeJS.ProcessEnv = process.env): LlmJudge | undefined {
+  if ((env.SENTINEL_AI ?? "auto") === "off") return undefined;
+  const baseURL = env.SENTINEL_LLM_BASE_URL ?? env.LLM_BASE_URL;
+  const apiKey = env.SENTINEL_LLM_API_KEY ?? env.LLM_API_KEY;
+  const model = env.SENTINEL_LLM_MODEL ?? env.LLM_MODEL;
+  if (!baseURL || !apiKey || !model) return undefined;
+  return new LlmJudge({ baseURL, apiKey, model, timeoutMs: Number(env.SENTINEL_AI_TIMEOUT_MS ?? 15_000) });
+}
+
 /** The ingest worker process: wallet key only (I-12). */
 export function ingestWorker(o: { mcp?: boolean } = {}): { worker: IngestWorker; pub: PublicClient; d: Deployment; close: () => Promise<void> | undefined } {
   checkKeyIsolation("ingest");
@@ -42,6 +56,7 @@ export function ingestWorker(o: { mcp?: boolean } = {}): { worker: IngestWorker;
   const blocklistPath = process.env.TYRELL_BLOCKLIST ?? join(home(), "blocklist.json");
   const blocklist = new Set<string>(existsSync(blocklistPath) ? (JSON.parse(readFileSync(blocklistPath, "utf8")) as string[]).map((a) => a.toLowerCase()) : []);
   const mcp = o.mcp && c.network !== "local" ? new McpBalances(undefined, c.network) : undefined;
+  const judge = sentinelJudge();
   const worker = new IngestWorker({
     client: pub,
     watch: [d.guardedVault, ...(process.env.TYRELL_WATCH ? process.env.TYRELL_WATCH.split(",").map((a) => getAddress(a.trim())) : [])],
@@ -59,6 +74,7 @@ export function ingestWorker(o: { mcp?: boolean } = {}): { worker: IngestWorker;
     dust: BigInt(process.env.SENTINEL_DUST ?? 1000),
     autoQuarantineBlocklist: (process.env.AUTO_QUARANTINE_BLOCKLIST ?? "true") === "true",
     ...(mcp ? { mcp } : {}),
+    ...(judge ? { judge } : {}),
   });
   return { worker, pub, d, close: () => mcp?.close() };
 }
