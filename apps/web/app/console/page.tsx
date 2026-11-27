@@ -41,7 +41,7 @@ export default function Console() {
     setTab(t);
     setMenu(false);
   };
-  const navItems = (compact: boolean) =>
+  const navItems = () =>
     TABS.map(([t, l, icon]) => {
       const active = tab === t;
       const count = t === "incidents" && view ? view.incidents.length : 0;
@@ -50,25 +50,16 @@ export default function Console() {
           key={t}
           onClick={() => go(t)}
           aria-current={active ? "page" : undefined}
-          className={
-            compact
-              ? `relative flex w-[60px] flex-col items-center gap-1 rounded-lg py-2 text-[10.5px] leading-none transition-colors ${active ? "bg-brand-50 text-brand" : "text-muted hover:bg-paper hover:text-ink"}`
-              : `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors ${active ? "bg-brand-50 text-brand" : "text-body hover:bg-paper hover:text-ink"}`
-          }
+          className={`relative flex w-[60px] flex-col items-center gap-1 rounded-lg py-2 text-[10.5px] leading-none transition-colors ${active ? "bg-brand-50 text-brand" : "text-muted hover:bg-paper hover:text-ink"}`}
         >
           <Icon name={icon} />
-          <span className={compact ? "whitespace-nowrap" : ""}>{l}</span>
-          {count > 0 &&
-            (compact ? (
-              <span className="mono absolute right-1.5 top-1 min-w-4 rounded-full bg-rose px-1 text-[9px] leading-4 text-white">{count}</span>
-            ) : (
-              <span className="mono ml-auto rounded-full bg-paper px-2 text-[12px] text-muted">{count}</span>
-            ))}
+          <span className="whitespace-nowrap">{l}</span>
+          {count > 0 && <span className="mono absolute right-1.5 top-1 min-w-4 rounded-full bg-rose px-1 text-[9px] leading-4 text-white">{count}</span>}
         </button>
       );
     });
 
-  // The Argus product dashboard: a slim labelled rail on desktop, a menu drawer on phones.
+  // The Argus product dashboard: a slim labelled rail, always on desktop and behind the menu button on phones.
   return (
     <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] bg-[#f7f8fa] md:grid-cols-[76px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-screen flex-col items-center gap-1 overflow-y-auto border-r border-line bg-white py-4 md:flex">
@@ -76,7 +67,7 @@ export default function Console() {
           <Mark size={28} />
         </Link>
         <nav className="flex flex-col items-center gap-1" aria-label="Console">
-          {navItems(true)}
+          {navItems()}
         </nav>
       </aside>
 
@@ -97,17 +88,12 @@ export default function Console() {
         {/* phone menu */}
         <div className={`fixed inset-0 z-50 transition-[visibility] duration-300 md:hidden ${menu ? "visible" : "pointer-events-none invisible"}`}>
           <div onClick={() => setMenu(false)} className={`absolute inset-0 bg-ink/30 transition-opacity duration-300 ${menu ? "opacity-100" : "opacity-0"}`} />
-          <div className={`absolute inset-y-0 left-0 flex w-[78%] max-w-[300px] flex-col bg-white px-3 pb-6 pt-4 shadow-xl transition-transform duration-300 ${menu ? "translate-x-0" : "-translate-x-full"}`}>
-            <div className="mb-4 flex items-center justify-between px-2">
-              <Link href="/" aria-label="Tyrell home" onClick={() => setMenu(false)}>
-                <Mark size={28} />
-              </Link>
-              <button onClick={() => setMenu(false)} className="grid h-9 w-9 place-items-center rounded-lg text-muted hover:bg-paper" aria-label="Close menu">
-                ✕
-              </button>
-            </div>
-            <nav className="space-y-0.5" aria-label="Console">
-              {navItems(false)}
+          <div className={`absolute inset-y-0 left-0 flex w-[84px] flex-col items-center gap-1 overflow-y-auto border-r border-line bg-white pb-6 pt-4 shadow-xl transition-transform duration-300 ${menu ? "translate-x-0" : "-translate-x-full"}`}>
+            <Link href="/" aria-label="Tyrell home" onClick={() => setMenu(false)} className="mb-4">
+              <Mark size={28} />
+            </Link>
+            <nav className="flex flex-col items-center gap-1" aria-label="Console">
+              {navItems()}
             </nav>
           </div>
         </div>
