@@ -11,3 +11,4 @@ export * from "./digest.js";
 export * from "./policy.js";
 export * from "./sign.js";
 export * from "./payRequest.js";
+export * from "./agents.js";

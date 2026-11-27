@@ -145,3 +145,13 @@ describe("policy details", () => {
     expect(payeeIdOf("landlord")).toBe(expected);
   });
 });
+
+describe("evaluatePayment with an agent (phase A)", () => {
+  it("allows when the registry allows, blocks with AGENT_BLOCKED when it refuses", () => {
+    expect(evaluatePayment(rent(), ledger(), chain(), { agentId: 1n, verified: true, ok: true, code: "" }).code).toBe("OK");
+    const v = evaluatePayment(rent(), ledger(), chain(), { agentId: 1n, verified: true, ok: false, code: "OVER_HUMAN_QUOTA" });
+    expect(v).toMatchObject({ decision: "BLOCK", code: "AGENT_BLOCKED" });
+    // a rule failure still wins over the agent check
+    expect(evaluatePayment(rent({ amount: 0n }), ledger(), chain(), { agentId: 1n, verified: true, ok: false, code: "X" }).code).toBe("OVER_CAP");
+  });
+});

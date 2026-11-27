@@ -58,6 +58,7 @@ export const BLOCK_CODES = [
   "ASSET_MISMATCH",
   "OVER_CAP",
   "OVER_DAILY_CAP",
+  "AGENT_BLOCKED",
   "SIMULATION_FAILED",
 ] as const;
 export type BlockCode = (typeof BLOCK_CODES)[number];
@@ -72,6 +73,21 @@ export interface PayCall {
 export type Verdict =
   | { decision: "ALLOW"; code: "OK"; reasons: string[]; payeeId: Hex; call: PayCall }
   | { decision: "BLOCK"; code: BlockCode; reasons: string[]; payeeId?: Hex };
+
+/**
+ * Agents network, phase A: AgentRegistry.check(agentId, payeeId, token, amount) for the proposing agent,
+ * read by control at the evaluated block on two endpoints. The registry is the authority (it checks the
+ * human's live QIE ID binding, the agent's permissions, delegated payees, limits and the human's quota);
+ * the engine fails closed if the read was not verified and blocks with the registry's code otherwise.
+ */
+export interface AgentCheck {
+  agentId: bigint;
+  /** The read succeeded and matched on two endpoints. */
+  verified: boolean;
+  ok: boolean;
+  /** The registry's code when !ok, e.g. HUMAN_UNBOUND, OVER_HUMAN_QUOTA. */
+  code: string;
+}
 
 export const SECONDS_PER_DAY = 86_400n;
 export const utcDay = (timestamp: bigint): bigint => timestamp / SECONDS_PER_DAY;
@@ -139,9 +155,17 @@ export function checkRules(p: PaymentProposal, ledger: LedgerState, chain: Chain
   };
 }
 
+/** R4a: a proposal from a registered agent must also pass the agent registry for the chosen payee. */
+export function checkAgent(v: Verdict, agent: AgentCheck | undefined): Verdict {
+  if (v.decision === "BLOCK" || !agent) return v;
+  if (!agent.verified) return block("LEDGER_UNVERIFIED", `agent ${agent.agentId} registry state not verified on two endpoints`, v.payeeId);
+  if (!agent.ok) return block("AGENT_BLOCKED", `agent ${agent.agentId}: ${agent.code}`, v.payeeId);
+  return v;
+}
+
 /** Rules R0-R5 in order; the first BLOCK wins. Without a successful simulation nothing is allowed. */
-export function evaluatePayment(p: PaymentProposal, ledger: LedgerState, chain: ChainState): Verdict {
-  const v = checkRules(p, ledger, chain);
+export function evaluatePayment(p: PaymentProposal, ledger: LedgerState, chain: ChainState, agent?: AgentCheck): Verdict {
+  const v = checkAgent(checkRules(p, ledger, chain), agent);
   if (v.decision === "BLOCK") return v;
   // R5
   if (!chain.simulation) return block("SIMULATION_FAILED", "GuardedVault.pay was not simulated", v.payeeId);

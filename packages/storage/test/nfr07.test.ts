@@ -8,7 +8,8 @@ const SOURCES = ["packages", "apps", "scripts"];
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
-    if (name === "node_modules" || name === "dist" || name === "test") return [];
+    // our source only: dependencies and build output (Next.js bundles third-party HTTP clients) are not code paths we own
+    if (name === "node_modules" || name === "dist" || name === "test" || name.startsWith(".next") || name === ".vercel") return [];
     return statSync(p).isDirectory() ? files(p) : /\.(ts|mjs|js)$/.test(name) ? [p] : [];
   });
 }

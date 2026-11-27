@@ -12,6 +12,14 @@ import { payeeAdd, payeeList, payeeReinstate, payeeRemove, release, startSigner,
 import { blast, finishRotation, incidents, ingestScan, mermaid, parseSeed, quarantineCmd, revokeTxs } from "./response.js";
 import { attackTable, runAttacks } from "./attacks.js";
 import { capsCheck, evidence, signerLeakDrill } from "./mainnet.js";
+import * as nw from "./network.js";
+import { McpQieIdResolver } from "./payee.js";
+import { account } from "./config.js";
+import { agentNetworkAbi, agentRegistryAbi, laneRegistryAbi } from "@tyrell/chain";
+import { codeText, messageBodyHash, signAgentMessage } from "@tyrell/core";
+import { erc20Abi, type Hex } from "viem";
+import { join } from "node:path";
+import type { OwnerTx } from "./setup.js";
 
 const print = (v: unknown) => console.log(JSON.stringify(JSON.parse(encode(v)), (_k, x) => (x && typeof x === "object" && "$bigint" in x ? x.$bigint : x), 2));
 const addressArg = (v: string): Address => {
@@ -370,6 +378,211 @@ program
       const cid = await store.put(new TextEncoder().encode(`tyrell store check ${Date.now()}`));
       await store.get(cid);
       console.log(`${store.name}: ${cid} round-trip ${Math.round(performance.now() - t0)} ms`);
+    }),
+  );
+
+
+// ------------------------------------------------------------------ agents network (phase A and B)
+
+/** Send owner transactions from QIE Wallet through the local owner page; wait until they are mined. */
+async function ownerSend(txs: OwnerTx[], port = "0") {
+  const c = readConfig();
+  const d = deployment(c);
+  const pub = clients(c)[0]!;
+  const start = await pub.getTransactionCount({ address: d.owner, blockTag: "latest" });
+  const html = ownerPageHtml({ chainId: c.chainId, chainName: c.network === "mainnet" ? "QIE Mainnet" : c.network === "testnet" ? "QIE Testnet" : "Local", rpcUrls: c.rpcs.slice(0, 2), owner: d.owner, txs });
+  const { url, server } = await serveOwnerPage(html, Number(port));
+  console.log(`Open ${url} in the browser that has QIE Wallet (owner ${d.owner}). ${txs.length} transaction(s):`);
+  for (const t of txs) console.log(`  - ${t.label}`);
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3_000));
+    if ((await pub.getTransactionCount({ address: d.owner, blockTag: "latest" })) >= start + txs.length) break;
+  }
+  server.close();
+  console.log("Done.");
+}
+
+const ctx = () => {
+  const c = readConfig();
+  return { c, d: deployment(c), pub: clients(c)[0]! };
+};
+const tokenUnits = async (amount: string) => {
+  const { d, pub } = ctx();
+  const decimals = await pub.readContract({ address: d.token, abi: erc20Abi, functionName: "decimals" });
+  return nw.units(amount, decimals);
+};
+
+const agentsCmd = program.command("agents").description("Agents network phase A: your QIE ID binding, your agents, their limits and your shared quota");
+agentsCmd.command("list").description("Your QIE ID binding, quota and agents with live status").action(run(async () => print(await nw.agentsReport(ctx().pub, ctx().d))));
+agentsCmd
+  .command("bind <qieId>")
+  .description("Bind your owner account to your QIE ID (verified on-chain against the QIE ID record store)")
+  .option("--port <port>", "local port", "0")
+  .action(
+    run(async (qieId: string, o: { port: string }) => {
+      const { c, d } = ctx();
+      const test = (JSON.parse(readFileSync(c.deploymentFile!, "utf8")) as { testQieId?: boolean }).testQieId === true;
+      if (c.network === "mainnet") {
+        const r = new McpQieIdResolver();
+        const a = await r.resolve(qieId);
+        await r.close?.();
+        if (!a || a.toLowerCase() !== d.owner.toLowerCase()) throw new Error(`${qieId} resolves to ${a ?? "nobody"}, not your owner address ${d.owner}`);
+      }
+      await ownerSend(nw.bindTxs(d, qieId, test), o.port);
+    }),
+  );
+agentsCmd
+  .command("register")
+  .description("Register an agent under you (default: this deployment's agent-lane key, recorded as this deployment's agent)")
+  .requiredOption("--label <label>", "a name for people")
+  .requiredOption("--per-tx <amount>", "most the agent may pay at once, in token units")
+  .requiredOption("--daily <amount>", "most the agent may spend per UTC day, in token units")
+  .option("--key <address>", "the agent's key (another deployment's agent-lane key)")
+  .option("--perms <list>", "pay, memory, message, deal", "pay")
+  .option("--any-payee", "may pay any registered payee (default: only delegated payees)")
+  .option("--model <text>", "model/operator description, stored as a hash")
+  .option("--port <port>", "local port", "0")
+  .action(
+    run(async (o: { label: string; perTx: string; daily: string; key?: string; perms: string; anyPayee?: boolean; model?: string; port: string }) => {
+      const { c, d, pub } = ctx();
+      const laneKey = await pub.readContract({ address: d.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] });
+      const key = getAddress(o.key ?? laneKey);
+      const t = nw.registerTx(d, { key, label: o.label, perms: nw.parsePerms(o.perms), perTx: await tokenUnits(o.perTx), daily: await tokenUnits(o.daily), anyPayee: !!o.anyPayee, ...(o.model ? { model: o.model } : {}) });
+      await ownerSend([t], o.port);
+      const id = await pub.readContract({ address: d.agentRegistry!, abi: agentRegistryAbi, functionName: "agentIdOf", args: [key] });
+      if (key.toLowerCase() === laneKey.toLowerCase()) {
+        nw.linkNetwork(c, "", id);
+        console.log(`This deployment is now agent #${id}: payments go through GuardedVault.payForAgent.`);
+      } else console.log(`Registered agent #${id}.`);
+    }),
+  );
+agentsCmd.command("link-vault").description("Let your vault (and the agents network, for deals) charge your agents; the vault pays through payForAgent").option("--port <port>", "local port", "0").action(run(async (o: { port: string }) => ownerSend(nw.spenderTxs(ctx().d), o.port)));
+agentsCmd.command("quota <daily>").description("Your daily quota in token units, shared by all your agents").option("--port <port>", "local port", "0").action(run(async (daily: string, o: { port: string }) => ownerSend([nw.quotaTx(ctx().d, ctx().d.token, await tokenUnits(daily))], o.port)));
+agentsCmd.command("limits <agentId> <perTx> <daily>").description("Set an agent's per-payment and daily limits (token units)").option("--port <port>", "local port", "0").action(run(async (id: string, perTx: string, daily: string, o: { port: string }) => ownerSend([nw.limitsTx(ctx().d, BigInt(id), await tokenUnits(perTx), await tokenUnits(daily))], o.port)));
+agentsCmd.command("perms <agentId> <list>").description("Set permissions: pay, memory, message, deal").option("--port <port>", "local port", "0").action(run(async (id: string, list: string, o: { port: string }) => ownerSend([nw.permsTx(ctx().d, BigInt(id), nw.parsePerms(list))], o.port)));
+agentsCmd
+  .command("payees <agentId> <labels>")
+  .description("Delegate payees (comma-separated labels; #N for agent N as a deal counterparty)")
+  .option("--remove", "withdraw instead of delegate")
+  .option("--port <port>", "local port", "0")
+  .action(run(async (id: string, labels: string, o: { remove?: boolean; port: string }) => ownerSend([nw.payeesTx(ctx().d, BigInt(id), labels.split(",").map((x) => x.trim()), !o.remove)], o.port)));
+agentsCmd.command("any-payee <agentId> <onOff>").description("Allow an agent to pay any registered payee (on) or only delegated ones (off)").option("--port <port>", "local port", "0").action(run(async (id: string, v: string, o: { port: string }) => ownerSend([nw.anyPayeeTx(ctx().d, BigInt(id), v === "on")], o.port)));
+agentsCmd.command("revoke <agentId>").description("Revoke one agent for good (its key can never be reused)").option("--reason <text>", "recorded on-chain", "revoked by its human").option("--port <port>", "local port", "0").action(run(async (id: string, o: { reason: string; port: string }) => ownerSend([nw.revokeAgentTx(ctx().d, BigInt(id), o.reason)], o.port)));
+agentsCmd.command("freeze").description("Stop all of your agents at once").option("--port <port>", "local port", "0").action(run(async (o: { port: string }) => ownerSend([nw.freezeTx(ctx().d, true)], o.port)));
+agentsCmd.command("unfreeze").description("Restart your agents").option("--port <port>", "local port", "0").action(run(async (o: { port: string }) => ownerSend([nw.freezeTx(ctx().d, false)], o.port)));
+
+const networkCmd = program.command("network").description("Agents network phase B: deploy, bonds, reports and disputes, deals, reputation, agent messages");
+networkCmd
+  .command("deploy")
+  .description("Deploy AgentRegistry and AgentNetwork once per chain (a TestQieId off mainnet)")
+  .requiredOption("--arbiter <address>", "who decides contested reports (a council multisig)")
+  .option("--bond-token <address>", "bond token (default: this deployment's token)")
+  .option("--account <name>", "Foundry keystore of a funded deployer")
+  .option("--unlocked-sender <address>", "local chains: an unlocked node account")
+  .action(
+    run(async (o: { arbiter: string; bondToken?: string; account?: string; unlockedSender?: string }) => {
+      const { d } = ctx();
+      const file = nw.deployNetwork({ arbiter: getAddress(o.arbiter), bondToken: getAddress(o.bondToken ?? d.token), ...(o.account ? { account: o.account } : {}), ...(o.unlockedSender ? { unlockedSender: getAddress(o.unlockedSender) } : {}) });
+      console.log(`Wrote ${file}. Next: \`tyrell network link\`.`);
+    }),
+  );
+networkCmd
+  .command("link [file]")
+  .description("Point this deployment at the agents network (default: contracts/deployments/network-<chainId>.json)")
+  .action(
+    run(async (file?: string) => {
+      const c = readConfig();
+      const root = process.env.TYRELL_REPO ?? join(import.meta.dirname, "../../..");
+      print(nw.linkNetwork(c, file ?? join(root, "contracts/deployments", `network-${c.chainId}.json`)));
+    }),
+  );
+networkCmd.command("bond <agentId> <amount>").description("Post bond for an agent (token units)").option("--port <port>", "local port", "0").action(run(async (id: string, amt: string, o: { port: string }) => ownerSend(nw.bondTxs(ctx().d, ctx().d.token, BigInt(id), await tokenUnits(amt)), o.port)));
+networkCmd.command("withdraw <agentId> <amount>").description("Withdraw bond (never with open reports; keep the minimum or take it all)").option("--port <port>", "local port", "0").action(run(async (id: string, amt: string, o: { port: string }) => ownerSend([nw.withdrawBondTx(ctx().d, BigInt(id), await tokenUnits(amt))], o.port)));
+networkCmd
+  .command("report <agentId>")
+  .description("Report another human's agent, with evidence (posts the report bond)")
+  .requiredOption("--evidence <ref>", "memory id, IPFS CID or URL of the evidence")
+  .option("--category <n>", "1 payment manipulation, 2 impersonation, 3 spam, 4 non-delivery, 5 other", "1")
+  .option("--port <port>", "local port", "0")
+  .action(run(async (id: string, o: { evidence: string; category: string; port: string }) => ownerSend(nw.reportTxs(ctx().d, ctx().d.token, BigInt(id), Number(o.category), o.evidence), o.port)));
+networkCmd.command("contest <reportId>").description("Contest a report against your agent (matches the report bond)").option("--port <port>", "local port", "0").action(run(async (id: string, o: { port: string }) => ownerSend(nw.contestTxs(ctx().d, ctx().d.token, BigInt(id)), o.port)));
+networkCmd.command("finalize <reportId>").description("Uphold an uncontested report after the window").option("--port <port>", "local port", "0").action(run(async (id: string, o: { port: string }) => ownerSend([nw.finalizeTx(ctx().d, BigInt(id))], o.port)));
+networkCmd
+  .command("resolve <reportId>")
+  .description("Arbiter only: decide a contested report")
+  .option("--uphold", "uphold (default: dismiss)")
+  .option("--port <port>", "local port", "0")
+  .action(run(async (id: string, o: { uphold?: boolean; port: string }) => ownerSend([nw.resolveTx(ctx().d, BigInt(id), !!o.uphold)], o.port)));
+networkCmd
+  .command("deal-open <fromAgent> <toAgent> <amount>")
+  .description("Escrow a payment from your agent to another human's agent")
+  .requiredOption("--terms <text>", "what is being bought; stored as a hash")
+  .option("--days <n>", "deadline in days", "3")
+  .option("--port <port>", "local port", "0")
+  .action(
+    run(async (from: string, to: string, amt: string, o: { terms: string; days: string; port: string }) => {
+      const { d, pub } = ctx();
+      const now = (await pub.getBlock()).timestamp;
+      await ownerSend(nw.openDealTxs(d, d.token, BigInt(from), BigInt(to), await tokenUnits(amt), o.terms, now + BigInt(Number(o.days) * 86_400)), o.port);
+    }),
+  );
+networkCmd
+  .command("deal <action> <dealId>")
+  .description("confirm (you are the payer), cancel (you are the payee) or reclaim (payer, after the deadline)")
+  .option("--port <port>", "local port", "0")
+  .action(
+    run(async (action: string, id: string, o: { port: string }) => {
+      const fn = ({ confirm: "confirmDeal", cancel: "cancelDeal", reclaim: "reclaim" } as const)[action as "confirm"];
+      if (!fn) throw new InvalidArgumentError("action: confirm | cancel | reclaim");
+      await ownerSend([nw.dealTx(ctx().d, fn, BigInt(id))], o.port);
+    }),
+  );
+networkCmd
+  .command("rep <agentId>")
+  .description("An agent's reputation, record and bond")
+  .action(
+    run(async (id: string) => {
+      const { d, pub } = ctx();
+      const n = d.agentNetwork!;
+      const [ok, code] = await pub.readContract({ address: d.agentRegistry!, abi: agentRegistryAbi, functionName: "status", args: [BigInt(id)] });
+      print({
+        agentId: id,
+        status: ok ? "active" : codeText(code),
+        reputation: await pub.readContract({ address: n, abi: agentNetworkAbi, functionName: "reputation", args: [BigInt(id)] }),
+        bond: await pub.readContract({ address: n, abi: agentNetworkAbi, functionName: "bondOf", args: [BigInt(id)] }),
+        record: await pub.readContract({ address: n, abi: agentNetworkAbi, functionName: "record", args: [BigInt(id)] }),
+      });
+    }),
+  );
+networkCmd
+  .command("message <toAgent> <text>")
+  .description("Sign a message to another agent with this deployment's agent key (prints JSON to send)")
+  .option("--ttl <seconds>", "valid for", "3600")
+  .action(
+    run(async (to: string, text: string, o: { ttl: string }) => {
+      const { d, pub } = ctx();
+      if (d.agentId === undefined || !d.agentNetwork) throw new Error("this deployment is not a registered agent: run `tyrell agents register`");
+      const now = (await pub.getBlock()).timestamp;
+      const m = { fromAgent: d.agentId, toAgent: BigInt(to), bodyHash: messageBodyHash(text), nonce: BigInt(Date.now()), deadline: now + BigInt(o.ttl) };
+      const signature = await signAgentMessage(account("steward", "agent"), d.chainId, d.agentNetwork, m);
+      print({ ...m, body: text, signature });
+    }),
+  );
+networkCmd
+  .command("verify <json>")
+  .description("Verify a received agent message on-chain (file path or inline JSON)")
+  .action(
+    run(async (arg: string) => {
+      const { d, pub } = ctx();
+      const raw = JSON.parse(arg.trim().startsWith("{") ? arg : readFileSync(arg, "utf8")) as Record<string, string>;
+      const bodyHash = raw.body !== undefined ? messageBodyHash(raw.body) : (raw.bodyHash as Hex);
+      const [ok, code] = await pub.readContract({
+        address: d.agentNetwork!,
+        abi: agentNetworkAbi,
+        functionName: "verifyMessage",
+        args: [BigInt(raw.fromAgent!), BigInt(raw.toAgent!), bodyHash, BigInt(raw.nonce!), BigInt(raw.deadline!), raw.signature as Hex],
+      });
+      print({ ok, ...(ok ? {} : { code: codeText(code) }), note: ok ? "trusted: a live, bonded agent bound to an accountable human signed this" : "do not trust this message" });
     }),
   );
 

@@ -11,6 +11,7 @@ export default defineConfig({
       thresholds: {
         "packages/core/src/verifier.ts": { branches: 100, functions: 100, lines: 100, statements: 100 },
         "packages/core/src/policy.ts": { branches: 100, functions: 100, lines: 100, statements: 100 },
+        "packages/core/src/agents.ts": { branches: 100, functions: 100, lines: 100, statements: 100 },
       },
     },
   },

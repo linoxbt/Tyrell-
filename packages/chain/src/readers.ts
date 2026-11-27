@@ -14,6 +14,13 @@ export interface Deployment {
   tyrellLedger: Address;
   guardedVault: Address;
   token: Address;
+  /** Agents network (shared per chain, optional): phase A registry and phase B network. */
+  agentRegistry?: Address;
+  agentNetwork?: Address;
+  /** The QIE ID record store the registry verifies names against. */
+  qieId?: Address;
+  /** This deployment's agent in the registry: its agent-lane key is the registered agent key. */
+  agentId?: bigint;
 }
 
 export interface ReadOptions {
@@ -189,5 +196,9 @@ export function parseDeployment(json: string): Deployment {
     tyrellLedger: v.tyrellLedger as Address,
     guardedVault: v.guardedVault as Address,
     token: v.token as Address,
+    ...(v.agentRegistry ? { agentRegistry: v.agentRegistry as Address } : {}),
+    ...(v.agentNetwork ? { agentNetwork: v.agentNetwork as Address } : {}),
+    ...(v.qieId ? { qieId: v.qieId as Address } : {}),
+    ...(v.agentId !== undefined && v.agentId !== null ? { agentId: BigInt(v.agentId as string | number) } : {}),
   };
 }

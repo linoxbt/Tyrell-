@@ -14,6 +14,7 @@ export const PayRequestSchema = z
     amount: z.string().regex(/^\d{1,78}$/),
     decisionId: z.string().regex(/^0x[0-9a-f]{32}$/),
     controlSig: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
+    agentId: z.string().regex(/^\d{1,78}$/).optional(),
   })
   .strict();
 export type PayRequestMsg = z.infer<typeof PayRequestSchema>;
@@ -59,7 +60,17 @@ export class VaultSigner {
     const r = parsed.data;
     const d = this.o.deployment;
     const c = this.o.client;
-    const req = { chainId: d.chainId, vault: d.guardedVault, payeeId: r.payeeId as Hex, token: r.token as Address, amount: BigInt(r.amount), decisionId: r.decisionId as Id16 };
+    const req = {
+      chainId: d.chainId,
+      vault: d.guardedVault,
+      payeeId: r.payeeId as Hex,
+      token: r.token as Address,
+      amount: BigInt(r.amount),
+      decisionId: r.decisionId as Id16,
+      ...(r.agentId !== undefined ? { agentId: BigInt(r.agentId) } : {}),
+    };
+    // a registered-agent deployment pays only for its own agent, and only through payForAgent
+    if ((req.agentId ?? null) !== (d.agentRegistry ? (d.agentId ?? null) : null)) throw new SignerRefused("agent id does not match this deployment");
 
     // 1. Only control may ask: the request must be signed by the active control lane key.
     const from = await recoverMessageAddress({ message: { raw: payRequestDigest(req) }, signature: r.controlSig as Hex });
@@ -72,15 +83,20 @@ export class VaultSigner {
     if (used) throw new SignerRefused("decision already paid on-chain");
 
     // 3. The exact call must simulate cleanly now (the vault re-checks everything on-chain anyway).
-    const call = { address: d.guardedVault, abi: guardedVaultAbi, functionName: "pay", args: [req.payeeId, req.token, req.amount, req.decisionId], account: this.o.key } as const;
+    const base = { address: d.guardedVault, abi: guardedVaultAbi, account: this.o.key } as const;
+    const agentId = req.agentId;
     try {
-      await c.simulateContract(call);
+      if (agentId !== undefined) await c.simulateContract({ ...base, functionName: "payForAgent", args: [agentId, req.payeeId, req.token, req.amount, req.decisionId] });
+      else await c.simulateContract({ ...base, functionName: "pay", args: [req.payeeId, req.token, req.amount, req.decisionId] });
     } catch (e) {
       throw new SignerRefused(`simulation failed: ${(e as Error).message.split("\n")[0]}`);
     }
 
     this.seen.add(r.decisionId);
-    const txHash = await this.wallet.writeContract({ ...call, chain: this.wallet.chain });
+    const txHash =
+      agentId !== undefined
+        ? await this.wallet.writeContract({ ...base, functionName: "payForAgent", args: [agentId, req.payeeId, req.token, req.amount, req.decisionId], chain: this.wallet.chain })
+        : await this.wallet.writeContract({ ...base, functionName: "pay", args: [req.payeeId, req.token, req.amount, req.decisionId], chain: this.wallet.chain });
     const receipt = await c.waitForTransactionReceipt({ hash: txHash });
     if (receipt.status !== "success") throw new SignerRefused(`pay transaction ${txHash} reverted`);
     return { txHash };

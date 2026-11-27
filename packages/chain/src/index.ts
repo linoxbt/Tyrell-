@@ -53,6 +53,13 @@ export const networks = {
 /** Probe P-4: both networks run Shanghai (PUSH0 yes, Cancun opcodes no). Compile with evm_version = "shanghai". */
 export const QIE_EVM_VERSION = "shanghai" as const;
 
+/**
+ * The QIE ID record store on mainnet (ERC1967 proxy, implementation "PaymentMetadata"), the store the QIE
+ * MCP server reads. resolveCurrency("name.qie", "qie") returns the holder's address; AgentRegistry binds
+ * humans against it. QIE ID is not deployed on testnet: there the agents network uses TestQieId.
+ */
+export const QIE_ID_STORE_MAINNET = "0x8777d01d509D0eA71FB38F88F79867da558d5018" as const;
+
 /** Reported QUSDC address on mainnet. Unconfirmed until probe P-7 and the QIE team agree. */
 export const QUSDC_MAINNET = "0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5" as const;
 

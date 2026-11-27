@@ -1,7 +1,9 @@
 import { BaseError, ContractFunctionRevertedError, type Address, type Hex, type PublicClient } from "viem";
 import type { LocalAccount } from "viem/accounts";
 import {
+  checkAgent,
   checkRules,
+  codeText,
   evaluatePayment,
   Kind,
   Lane,
@@ -9,6 +11,7 @@ import {
   signEnvelope,
   utcDay,
   uuidv7,
+  type AgentCheck,
   type ChainState,
   type Id16,
   type LedgerState,
@@ -17,7 +20,7 @@ import {
   type Simulation,
   type Verdict,
 } from "@tyrell/core";
-import { guardedVaultAbi } from "@tyrell/chain";
+import { agentRegistryAbi, guardedVaultAbi, laneRegistryAbi } from "@tyrell/chain";
 import type { Proposal } from "@tyrell/ipc";
 import { anchorDomain, type BuiltProjection } from "./projection.js";
 import type { Control } from "./control.js";
@@ -29,6 +32,8 @@ export interface SignedPayRequest {
   amount: string;
   decisionId: Id16;
   controlSig: Hex;
+  /** Agents network: present when this deployment is a registered agent (GuardedVault.payForAgent). */
+  agentId?: string;
 }
 
 export type SignerTransport = (r: SignedPayRequest) => Promise<{ txHash: Hex }>;
@@ -104,13 +109,47 @@ export class Payments {
     };
   }
 
-  /** R5: eth_call and gas estimate of GuardedVault.pay from the signer address. */
+  /**
+   * R4a (agents network): this deployment's agent must be the registered agent whose key is the active
+   * agent-lane key, and AgentRegistry.check must accept the spend (live QIE ID binding, permissions,
+   * delegated payee, agent limits, the human's shared quota). Read at `head` on two endpoints.
+   */
+  async agentCheck(head: bigint, payeeId: Hex, token: Address, amount: bigint): Promise<AgentCheck | undefined> {
+    const registry = this.d.agentRegistry;
+    const agentId = this.d.agentId;
+    if (!registry || agentId === undefined) return undefined;
+    const read = async (c: PublicClient) => {
+      const [ok, code] = await c.readContract({ address: registry, abi: agentRegistryAbi, functionName: "check", args: [agentId, payeeId, token, amount], blockNumber: head });
+      const a = await c.readContract({ address: registry, abi: agentRegistryAbi, functionName: "agent", args: [agentId], blockNumber: head });
+      const laneKey = await c.readContract({ address: this.d.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2], blockNumber: head });
+      return { ok, code: codeText(code), keyMatches: a.key.toLowerCase() === laneKey.toLowerCase() };
+    };
+    try {
+      const [x, y] = await Promise.all([read(this.o.clients[0]!), read(this.o.clients[1] ?? this.o.clients[0]!)]);
+      const verified = this.o.clients.length >= 2 && JSON.stringify(x) === JSON.stringify(y);
+      if (!x.keyMatches) return { agentId, verified, ok: false, code: "AGENT_KEY_MISMATCH" };
+      return { agentId, verified, ok: x.ok, code: x.code };
+    } catch {
+      return { agentId, verified: false, ok: false, code: "REGISTRY_UNAVAILABLE" };
+    }
+  }
+
+  /** R5: eth_call and gas estimate of GuardedVault.pay (payForAgent for a registered agent) from the signer address. */
   async simulate(payeeId: Hex, token: Address, amount: bigint, decisionId: Id16): Promise<Simulation> {
     const c = this.o.clients[0]!;
-    const call = { address: this.d.guardedVault, abi: guardedVaultAbi, functionName: "pay", args: [payeeId, token, amount, decisionId], account: this.o.signerAddress } as const;
+    const agentId = this.d.agentRegistry ? this.d.agentId : undefined;
+    const base = { address: this.d.guardedVault, abi: guardedVaultAbi, account: this.o.signerAddress } as const;
     try {
-      await c.simulateContract(call);
-      const gas = await c.estimateContractGas(call);
+      let gas: bigint;
+      if (agentId !== undefined) {
+        const call = { ...base, functionName: "payForAgent", args: [agentId, payeeId, token, amount, decisionId] } as const;
+        await c.simulateContract(call);
+        gas = await c.estimateContractGas(call);
+      } else {
+        const call = { ...base, functionName: "pay", args: [payeeId, token, amount, decisionId] } as const;
+        await c.simulateContract(call);
+        gas = await c.estimateContractGas(call);
+      }
       return { ok: true, gas };
     } catch (e) {
       const revert = e instanceof BaseError ? e.walk((x) => x instanceof ContractFunctionRevertedError) : undefined;
@@ -148,18 +187,30 @@ export class Payments {
         return !!m && m.cls !== "unverified" && !m.quarantined;
       });
       const { ledger, chain } = await this.ledgerState(p);
-      const pre = checkRules(proposal, ledger, { ...chain, contextVerified });
+      const rules = checkRules(proposal, ledger, { ...chain, contextVerified });
+      const agent = rules.decision === "ALLOW" ? await this.agentCheck(p.head, rules.call.payeeId, rules.call.token, rules.call.amount) : undefined;
+      const pre = checkAgent(rules, agent);
       if (pre.decision === "ALLOW") {
         const simulation = await this.simulate(pre.call.payeeId, pre.call.token, pre.call.amount, decisionId);
-        verdict = evaluatePayment(proposal, ledger, { ...chain, contextVerified, simulation });
+        verdict = evaluatePayment(proposal, ledger, { ...chain, contextVerified, simulation }, agent);
       } else {
         verdict = pre;
       }
       if (verdict.decision === "ALLOW") {
-        const req = { chainId: this.d.chainId, vault: this.d.guardedVault, payeeId: verdict.call.payeeId, token: verdict.call.token, amount: verdict.call.amount, decisionId };
+        const req = {
+          chainId: this.d.chainId,
+          vault: this.d.guardedVault,
+          payeeId: verdict.call.payeeId,
+          token: verdict.call.token,
+          amount: verdict.call.amount,
+          decisionId,
+          ...(agent ? { agentId: agent.agentId } : {}),
+        };
         const controlSig = await this.o.controlKey.signMessage({ message: { raw: payRequestDigest(req) } });
         try {
-          txHash = (await this.o.signer({ payeeId: req.payeeId, token: req.token, amount: req.amount.toString(), decisionId, controlSig })).txHash;
+          txHash = (
+            await this.o.signer({ payeeId: req.payeeId, token: req.token, amount: req.amount.toString(), decisionId, controlSig, ...(agent ? { agentId: agent.agentId.toString() } : {}) })
+          ).txHash;
         } catch (e) {
           payError = (e as Error).message;
         }
