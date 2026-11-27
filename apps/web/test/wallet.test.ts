@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright";
 import { laneRegistryAbi } from "@tyrell/chain";
 import { startChainlab, type Chainlab } from "../../../test/support/anvil";
+import { ensureBuild, webEnv } from "./nextBuild";
 
 /*
  * Wallet login and owner actions in a real browser, in both wallet modes:
@@ -40,20 +41,8 @@ const freePort = () =>
 
 async function serve(mode: Mode): Promise<string> {
   const { distDir, env: extra } = MODES[mode];
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra, NEXT_TELEMETRY_DISABLED: "1", NEXT_DIST_DIR: distDir };
-  delete env.TYRELL_API_URL;
-  delete env.NEXT_PUBLIC_REOWN_PROJECT_ID;
-  if (mode === "reown") delete env.NEXT_PUBLIC_WALLET_MODE;
-  if (!existsSync(join(WEB, distDir, "BUILD_ID"))) {
-    // async, so the vitest worker keeps answering its RPC heartbeats during the build
-    await new Promise<void>((resolve, reject) => {
-      const b = spawn(NEXT, ["build"], { cwd: WEB, env });
-      let out = "";
-      b.stdout.on("data", (d) => (out += d));
-      b.stderr.on("data", (d) => (out += d));
-      b.on("close", (code) => (code === 0 ? resolve() : reject(new Error(out.slice(-4000)))));
-    });
-  }
+  const env = webEnv(distDir, extra);
+  await ensureBuild(distDir, env);
   const port = await freePort();
   servers.push(spawn(NEXT, ["start", "-p", String(port), "-H", "127.0.0.1"], { cwd: WEB, env, stdio: "ignore" }));
   const url = `http://127.0.0.1:${port}`;

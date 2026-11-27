@@ -29,7 +29,8 @@ import {
  * Reown AppKit (formerly WalletConnect's Web3Modal) for the wallet connection: browser wallets over
  * EIP-6963 (QIE Wallet shows up as soon as it is installed), mobile wallets over WalletConnect with a
  * QR code or a deep link, and Reown's wallet directory. Tyrell only needs a real wallet the owner
- * controls, so email/social logins, swaps, on-ramp and analytics are off.
+ * controls, so email/social logins, swaps, on-ramp and analytics are off (and kept off below even when
+ * the Reown dashboard turns them on).
  *
  * NEXT_PUBLIC_REOWN_PROJECT_ID comes from https://dashboard.reown.com. It is public by design (it
  * ships in the page); the project's domain allowlist is what restricts where it can be used.
@@ -93,7 +94,7 @@ function init(): WagmiAdapter | undefined {
     storage: createStorage({ storage: cookieStorage }),
   });
   const origin = typeof window !== "undefined" ? window.location.origin : "https://tyrell-mu.vercel.app";
-  createAppKit({
+  const modal = createAppKit({
     adapters: [adapter],
     projectId: REOWN_PROJECT_ID,
     networks,
@@ -142,6 +143,15 @@ function init(): WagmiAdapter | undefined {
       "--w3m-z-index": 70,
     },
   });
+  // With a project id, the Reown dashboard's settings replace "features" above, and the dashboard
+  // turns on email and Google sign-in by default: an embedded Reown wallet, not the owner's QIE Wallet.
+  // Wallets only, whatever the dashboard says.
+  const walletsOnly = (rf: ReturnType<typeof modal.getRemoteFeatures>) => {
+    if (rf && (rf.email || (Array.isArray(rf.socials) && rf.socials.length) || rf.swaps || rf.onramp))
+      modal.updateRemoteFeatures({ ...rf, email: false, socials: false, swaps: false, onramp: false });
+  };
+  modal.subscribeRemoteFeatures(walletsOnly);
+  walletsOnly(modal.getRemoteFeatures());
   return adapter;
 }
 init();

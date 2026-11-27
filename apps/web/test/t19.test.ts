@@ -1,9 +1,10 @@
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { ensureBuild, webEnv } from "./nextBuild";
 
 const WEB = join(__dirname, "..");
 const SNAPSHOT = join(WEB, "public/snapshot.json");
@@ -24,14 +25,10 @@ const freePort = () =>
 
 beforeAll(async () => {
   if (!ready) return;
-  if (!existsSync(join(WEB, ".next/BUILD_ID"))) {
-    const b = spawnSync(join(WEB, "node_modules/.bin/next"), ["build"], { cwd: WEB, env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" }, encoding: "utf8" });
-    if (b.status !== 0) throw new Error(b.stderr || b.stdout);
-  }
+  const env = webEnv(".next"); // snapshot mode
+  await ensureBuild(".next", env);
   const port = await freePort();
   url = `http://127.0.0.1:${port}`;
-  const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1" };
-  delete env.TYRELL_API_URL; // snapshot mode
   server = spawn(join(WEB, "node_modules/.bin/next"), ["start", "-p", String(port), "-H", "127.0.0.1"], { cwd: WEB, env, stdio: "ignore" });
   for (let i = 0; i < 200; i++) {
     try {
