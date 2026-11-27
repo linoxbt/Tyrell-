@@ -8,6 +8,8 @@ didn't approve.
 
 Built for QIE Mainnet Hackathon 3.0, track AI + Autonomous Agents.
 
+Live demo: **https://tyrell-mu.vercel.app** (landing page and [console](https://tyrell-mu.vercel.app/console), read-only snapshot).
+
 ## The problem
 
 An agent that pays bills reads its wallet's history. Anyone can create a token on QIE, send it to the
@@ -158,6 +160,11 @@ monitoring), rebuilt in Next.js with Tyrell's own content and data:
 Control serves a read-only view document on `127.0.0.1:7878`. `TYRELL_API_URL=http://127.0.0.1:7878
 pnpm web:dev` shows it live. Without it, the web view serves `apps/web/public/snapshot.json` (write one
 with `pnpm tyrell snapshot --out apps/web/public/snapshot.json`), which is how the hosted demo runs.
+
+The hosted demo is the Vercel project `tyrell`, deployed from `apps/web` with `vercel deploy --prod`. To
+refresh it, write a new snapshot from a real run and deploy again. The hosted site never gets
+`TYRELL_API_URL`: control and the signer hold lane keys and stay on the operator's machine. Social-card
+URLs use `TYRELL_SITE_URL`, or the Vercel production domain when that is unset.
 
 ## Repo layout
 
