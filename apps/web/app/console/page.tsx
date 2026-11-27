@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { LineageGraph } from "@/components/LineageGraph";
 import { Bars, Icon } from "@/components/argus/ui";
 import { Mark } from "@/components/Logo";
+import { OwnerPanel } from "@/components/wallet/OwnerPanel";
+import { ConnectButton } from "@/components/wallet/Wallet";
 import { kpis, ruleTrace } from "@/lib/kpis";
 import { useView } from "@/lib/useView";
 import { amount, bodyText, CLS_STYLE, graphFor, KIND, LANE_COLOR, SEED_TYPE, short, type ViewDecision, type ViewDocument, type ViewMemory } from "@/lib/view";
 
-type Tab = "overview" | "graph" | "blast" | "decisions" | "timeline" | "incidents";
+type Tab = "overview" | "graph" | "blast" | "decisions" | "timeline" | "incidents" | "account";
 type IconName = Parameters<typeof Icon>[0]["name"];
 const TABS: Array<[Tab, string, IconName]> = [
   ["overview", "Overview", "pulse"],
@@ -18,6 +20,7 @@ const TABS: Array<[Tab, string, IconName]> = [
   ["decisions", "Decisions", "coin"],
   ["timeline", "Timeline", "list"],
   ["incidents", "Incidents", "flag"],
+  ["account", "Account", "gear"],
 ];
 
 export default function Console() {
@@ -75,9 +78,11 @@ export default function Console() {
                   <span className={`h-1.5 w-1.5 rounded-full ${source === "live" ? "bg-band-green" : "bg-amber"}`} /> {view.network} · {source === "live" ? "live" : "snapshot"}
                 </span>
                 <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body sm:block">block {view.head}</span>
-                <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body md:block">digest {short(view.digest, 5)}</span>
+                <span className="mono hidden rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body xl:block">digest {short(view.digest, 5)}</span>
               </>
             )}
+            <ConnectButton className={`hidden sm:flex ${view ? "" : "ml-auto"}`} />
+            <ConnectButton variant="icon" className={`-mr-2 sm:hidden ${view ? "" : "ml-auto"}`} />
           </div>
           <nav className="-mx-4 mt-4 flex gap-6 overflow-x-auto px-4 text-[15px] [scrollbar-width:none] sm:mx-0 sm:mt-5 sm:gap-7 sm:px-0 [&::-webkit-scrollbar]:hidden">
             {TABS.map(([t, label]) => (
@@ -132,6 +137,7 @@ export default function Console() {
               {tab === "decisions" && <Decisions view={view} byId={byId} />}
               {tab === "timeline" && <Timeline view={view} onSelect={setSelected} />}
               {tab === "incidents" && <Incidents view={view} />}
+              {tab === "account" && <OwnerPanel view={view} />}
 
               {selected && byId.get(selected) && <Detail m={byId.get(selected)!} onClose={() => setSelected(undefined)} />}
             </>
@@ -343,6 +349,14 @@ function Incidents({ view }: { view: ViewDocument }) {
               <span className="mono text-xs text-muted">source {short(i.source)}</span>
             </div>
             <p className="mt-2 text-body">{i.summary}</p>
+            {i.ai && (
+              <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-[13px] text-ink">
+                <span className="rounded bg-brand px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">AI</span>
+                <span>{i.ai.injection ? `${i.ai.category.replace("_", " ")} · ${Math.round(i.ai.confidence * 100)}%` : "judged benign"}</span>
+                {i.ai.reason && <span className="text-body">“{i.ai.reason}”</span>}
+                <span className="mono text-[11px] text-muted">{i.ai.model}</span>
+              </p>
+            )}
           </div>
         </div>
       ))}

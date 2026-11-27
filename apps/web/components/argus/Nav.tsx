@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Wordmark } from "../Logo";
+import { ConnectButton } from "../wallet/Wallet";
 import { REPO } from "./ui";
 
 const LINKS: Array<[string, string]> = [
-  ["Problem", "#problem"],
-  ["Platform", "#platform"],
-  ["Attack set", "#attacks"],
-  ["Guarantees", "#guarantees"],
-  ["FAQ", "#faq"],
+  ["Problem", "/#problem"],
+  ["Platform", "/#platform"],
+  ["Attack set", "/#attacks"],
+  ["Guarantees", "/#guarantees"],
+  ["Get started", "/start"],
 ];
 
 export function Nav() {
@@ -26,7 +27,7 @@ export function Nav() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    const mq = window.matchMedia("(min-width: 768px)");
+    const mq = window.matchMedia("(min-width: 1024px)");
     const onMq = () => mq.matches && setOpen(false);
     window.addEventListener("keydown", onKey);
     mq.addEventListener("change", onMq);
@@ -38,23 +39,23 @@ export function Nav() {
 
   return (
     <header
-      className={`sticky top-0 z-50 border-b bg-white/85 backdrop-blur-md transition-[border-color,box-shadow] duration-300 ${
+      className={`sticky top-0 z-50 border-b bg-white transition-[border-color,box-shadow] duration-300 ${
         scrolled || open ? "border-line shadow-[0_1px_12px_rgba(15,18,32,0.05)]" : "border-transparent"
       }`}
     >
-      <div className="mx-auto flex h-16 max-w-[1200px] items-center px-4 sm:px-6 md:h-[74px] xl:px-0">
+      <div className="mx-auto flex h-16 max-w-[1200px] items-center px-4 sm:px-6 lg:h-[74px] xl:px-0">
         <Link href="/" aria-label="Tyrell home" onClick={() => setOpen(false)}>
           <Wordmark />
         </Link>
-        <nav className="mx-auto hidden gap-7 text-base text-nav md:flex">
+        <nav className="mx-auto hidden gap-7 text-base text-nav lg:flex">
           {LINKS.map(([l, h]) => (
             <a key={h} href={h} className="transition-colors hover:text-ink">
               {l}
             </a>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-3 sm:gap-6 md:ml-0">
-          <a href={REPO} className="hidden text-base text-nav transition-colors hover:text-ink lg:block">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3 lg:ml-0 xl:gap-4">
+          <a href={REPO} className="mr-2 hidden text-base text-nav transition-colors hover:text-ink xl:block">
             GitHub
           </a>
           <Link
@@ -63,8 +64,10 @@ export function Nav() {
           >
             Open console
           </Link>
+          <ConnectButton className="hidden lg:flex" />
+          <ConnectButton variant="icon" className="lg:hidden" />
           <button
-            className="-mr-2 grid h-10 w-10 place-items-center rounded-lg text-ink transition-colors hover:bg-paper md:hidden"
+            className="-mr-2 grid h-10 w-10 place-items-center rounded-lg text-ink transition-colors hover:bg-paper lg:hidden"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="mobile-menu"
@@ -80,7 +83,7 @@ export function Nav() {
       </div>
 
       {/* the mobile sheet overlays the page (so closing it never shifts the scroll target) and animates its height */}
-      <div id="mobile-menu" className={`absolute inset-x-0 top-full grid bg-white transition-[grid-template-rows,box-shadow] duration-300 ease-out md:hidden ${open ? "grid-rows-[1fr] border-b border-line shadow-[0_16px_30px_rgba(15,18,32,0.08)]" : "grid-rows-[0fr]"}`}>
+      <div id="mobile-menu" className={`absolute inset-x-0 top-full grid bg-white transition-[grid-template-rows,box-shadow] duration-300 ease-out lg:hidden ${open ? "grid-rows-[1fr] border-b border-line shadow-[0_16px_30px_rgba(15,18,32,0.08)]" : "grid-rows-[0fr]"}`}>
         <div className="overflow-hidden">
           <nav className="flex flex-col px-4 pb-5 pt-1 sm:px-6">
             {[...LINKS, ["GitHub", REPO] as [string, string]].map(([l, h], i) => (

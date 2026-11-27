@@ -79,7 +79,7 @@ body { @apply bg-white font-sans text-ink antialiased; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body { overflow-x: clip; -webkit-tap-highlight-color: transparent; text-rendering: optimizeLegibility; }
 main section[id] { scroll-margin-top: 64px; }
-@media (min-width: 768px) { main section[id] { scroll-margin-top: 74px; } }
+@media (min-width: 1024px) { main section[id] { scroll-margin-top: 74px; } }
 :where(a, button, select, summary):focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; border-radius: 8px; }
 
 /* content eases in as it scrolls into view (classes added by useReveal) */

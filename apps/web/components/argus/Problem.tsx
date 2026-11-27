@@ -66,15 +66,15 @@ export function Problem({ view }: { view?: ViewDocument }) {
           <Agent />
           <ul className="mt-12 grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
             {s.map((x, i) => (
-              <li key={i} className="flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-night-card p-4">
+              <li key={i} className="flex min-w-0 items-start gap-4 rounded-2xl border border-white/10 bg-night-card p-4">
                 <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border border-white/10 bg-night-2 ${x.tint}`}>
                   <Icon name={x.icon} className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-xs text-fog">{x.who}</span>
-                  <span className="mt-1 flex items-center gap-2 text-[14px] text-snow">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${x.hot ? "bg-rose" : "bg-amber"}`} />
-                    <span className="truncate">{x.tag}</span>
+                  <span className="mt-1 flex items-start gap-2 text-[14px] leading-snug text-snow">
+                    <span className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${x.hot ? "bg-rose" : "bg-amber"}`} />
+                    <span>{x.tag}</span>
                   </span>
                 </span>
               </li>

@@ -45,7 +45,7 @@ export interface ViewDocument {
   decisions: ViewDecision[];
   seeds: Array<{ seedId: number; type: number; value: string; fromBlock: string; toBlock: string; released: boolean }>;
   payees: Array<{ payeeId: string; label: string; addr: string; token: string; capPerTx: string; capPerDay: string; active: boolean; suspended: boolean }>;
-  incidents: Array<{ memoryId: string; source: string; score: number; rules: string[]; summary: string; block: string }>;
+  incidents: Array<{ memoryId: string; source: string; score: number; rules: string[]; summary: string; block: string; ai?: { injection: boolean; confidence: number; category: string; reason: string; model: string; score: number } }>;
 }
 
 export const KIND: Record<number, string> = { 1: "statement", 2: "observation", 3: "note", 4: "summary", 5: "decision" };

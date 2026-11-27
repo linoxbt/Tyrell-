@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ATTACKS } from "@/lib/attacks";
 import { short, type ViewDocument } from "@/lib/view";
-import { Mark, Type, Wordmark } from "../Logo";
+import { Mark, Wordmark } from "../Logo";
 import { Button, Check, Icon, Pill, REPO, SectionHead } from "./ui";
 
 /* ---------- strip under the hero: the template's customer logo marquee, carrying the QIE parts Tyrell runs on ---------- */
@@ -104,7 +104,7 @@ export function Platform({ view }: { view?: ViewDocument }) {
               </div>
             </div>
           </Card>
-          <Card tint="bg-tint-pink" title="Sentinel" body="Every transfer, token name, NFT description and MCP read enters through the wallet lane, then gets scored.">
+          <Card tint="bg-tint-pink" title="AI sentinel" body="Every transfer, token name, NFT description and MCP read is scored by rules and an AI judge. The AI can raise an alarm, never clear one.">
             <div className="mt-8 rotate-[2deg] rounded-xl bg-white p-4 shadow-[0_12px_36px_rgba(15,18,32,0.08)]">
               {(incidents.length ? incidents : [{ memoryId: "x", score: 85, rules: ["imperative", "embedded", "payeeWords"] }]).map((i) => (
                 <div key={i.memoryId} className="flex items-center gap-3 py-1 text-[12px]">
@@ -112,7 +112,7 @@ export function Platform({ view }: { view?: ViewDocument }) {
                   <span className="h-1.5 flex-1 rounded-full bg-paper">
                     <span className="block h-full rounded-full bg-[#e879f9]" style={{ width: `${i.score}%` }} />
                   </span>
-                  <span className="mono w-[96px] truncate text-[10px] text-muted">{i.rules.slice(0, 2).join(" · ")}</span>
+                  <span className="mono shrink-0 text-[10px] text-muted">{i.rules[0]}</span>
                 </div>
               ))}
             </div>
@@ -204,9 +204,9 @@ export function AttackGate() {
             </div>
             <ul className="divide-y divide-line">
               {ATTACKS.map((a, i) => (
-                <li key={a.name} className="grid grid-cols-[22px_minmax(0,1fr)] gap-x-3 gap-y-0.5 py-2 text-[13px] sm:grid-cols-[22px_minmax(0,1fr)_auto] sm:items-center">
+                <li key={a.name} className="grid grid-cols-[22px_minmax(0,1fr)] gap-x-3 gap-y-0.5 py-2 text-[13px] sm:grid-cols-[22px_minmax(0,1fr)_auto] sm:items-start">
                   <span className="mono text-muted">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="text-ink sm:truncate">{a.name}</span>
+                  <span className="text-ink">{a.name}</span>
                   <span className="mono col-start-2 text-[11px] text-rose sm:col-start-3 sm:text-right">{a.result}</span>
                 </li>
               ))}
@@ -257,7 +257,7 @@ export function BuiltOnQie({ view }: { view?: ViewDocument }) {
             {view ? `4 contracts · chain ${view.chainId} · vault ${short(view.contracts.guardedVault ?? "", 5)} · block ${view.head}` : "4 contracts on QIE Mainnet"}
           </p>
         </div>
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-night" />
+        <div className="absolute inset-x-0 bottom-0 hidden h-40 bg-gradient-to-b from-transparent to-night md:block" />
       </div>
     </section>
   );
@@ -323,6 +323,7 @@ const FAQS = [
   ["What if the vault signer key leaks?", "It can only pay payees you registered, within per-payee and vault-wide daily caps. The worst case is one day's capped spend to legitimate payees, never to an attacker."],
   ["What happens to quarantined memories?", "They leave the model's context and the policy's inputs at once, and anything written from them later is excluded too. They stay anchored, pinned and readable. Only your key releases a seed."],
   ["Can I rebuild without your server?", "Yes. With the data key, the account id and the contract addresses, `tyrell rebuild --fresh` reconstructs everything from QIE and IPFS, and `tyrell verify` compares digests."],
+  ["Is Tyrell AI-powered?", "Yes, where AI helps and cannot hurt. An AI judge reads everything that lands in your wallet and flags manipulation that rules miss, with a reason you can read. It can only raise alarms. What gets paid is decided by code and the chain, so a fooled model can never move money."],
   ["What if QIE RPCs disagree?", "Payments fail closed. The policy engine needs two endpoints that agree on chain and ledger state before anything is allowed."],
 ];
 
@@ -397,11 +398,7 @@ export function Footer({ view }: { view?: ViewDocument }) {
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-center gap-6 pb-4 pt-16 sm:gap-10 md:pt-24">
-          <Mark size={150} className="hidden shrink-0 lg:block" />
-          <Type height={190} className="h-auto w-full max-w-[720px] text-snow lg:h-[190px] lg:w-auto" />
-        </div>
-        <div className="flex flex-wrap justify-between gap-2 border-t border-white/10 py-6 text-xs text-fog">
+        <div className="mt-14 flex flex-wrap justify-between gap-2 border-t border-white/10 py-6 text-xs text-fog md:mt-20">
           <span>Built for QIE Mainnet Hackathon 3.0 · Apache 2.0</span>
           <span className="mono">{view ? `digest ${short(view.digest, 6)} · block ${view.head}` : ""}</span>
         </div>
