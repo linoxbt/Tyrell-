@@ -195,7 +195,7 @@ from QIE. The recorded sample run (`apps/web/public/snapshot.json`, written with
 plus mobile wallets over WalletConnect (QR code or deep link). Set `NEXT_PUBLIC_REOWN_PROJECT_ID` (from
 dashboard.reown.com, with the site's domain on its allowlist; see `apps/web/.env.example`). Without it the
 web app falls back to browser wallets only. Either way, signing in is an EIP-4361 message (no transaction),
-and the console's Keys tab lets the owner wallet add (or create), replace and revoke lane keys.
+and the console's Account tab lets the owner wallet add (or create), replace and revoke lane keys.
 
 The hosted demo is the Vercel project `tyrell`, deployed from `apps/web` with `vercel deploy --prod`. The hosted site never gets
 `TYRELL_API_URL`: control and the signer hold lane keys and stay on the operator's machine. Social-card

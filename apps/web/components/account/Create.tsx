@@ -61,9 +61,9 @@ export function CreateAccount({ onDone, onCancel }: { onDone: (d: Deployment) =>
 
   const field = "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-brand";
   return (
-    <div className="mx-auto max-w-[640px] rounded-2xl border border-line bg-white p-5 sm:p-7">
-      <h2 className="text-[22px] font-medium tracking-[-0.01em] text-ink">Create your Tyrell account</h2>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-body">
+    <section className="max-w-[720px] rounded-xl border border-line bg-white p-5">
+      <h3 className="mono mb-3 text-[12px] uppercase tracking-wider text-muted">Create your account</h3>
+      <p className="text-sm leading-relaxed text-body">
         Your wallet becomes the owner. Tyrell&apos;s contracts are created on {chainName(chainId)} and only your wallet can change them.
       </p>
 
@@ -102,16 +102,16 @@ export function CreateAccount({ onDone, onCancel }: { onDone: (d: Deployment) =>
             </label>
           </div>
 
-          <div className="rounded-xl bg-paper p-4 text-[13px] leading-relaxed text-body">
+          <div className="rounded-lg bg-paper p-3 text-[13px] leading-relaxed text-body">
             Your wallet will ask you to confirm <b className="font-medium text-ink">{CREATE_STEPS(mainnet).length} transactions</b>: {mainnet ? "four" : "five"} to create the contracts and four to register the keys. Each costs a little QIE for gas.
           </div>
 
           {err && <p className="rounded-lg bg-[#ffe9ed] px-3 py-2 text-[13px] text-rose">{err}</p>}
           <div className="flex flex-wrap gap-2">
-            <button onClick={start} disabled={!ok || !pw || !pw2} className="rounded-xl bg-brand px-5 py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-brand-deep disabled:opacity-50">
+            <button onClick={start} disabled={!ok || !pw || !pw2} className="rounded-lg bg-brand px-4 py-2 text-sm text-white transition-colors hover:bg-brand-deep disabled:opacity-50">
               Create my account
             </button>
-            <button onClick={onCancel} className="rounded-xl border border-line px-5 py-2.5 text-[15px] text-ink hover:bg-paper">
+            <button onClick={onCancel} className="rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-paper">
               Back
             </button>
           </div>
@@ -134,7 +134,7 @@ export function CreateAccount({ onDone, onCancel }: { onDone: (d: Deployment) =>
 
       {phase === "done" && made && (
         <div className="mt-6 space-y-4">
-          <p className="rounded-xl bg-[#e6f7f0] px-4 py-3 text-[14px] text-band-green">Your account is ready. Your account file downloaded as {fileName}.</p>
+          <p className="rounded-lg bg-[#e6f7f0] px-3 py-2 text-sm text-band-green">Your account is ready. Your account file downloaded as {fileName}.</p>
           <div className="text-[14px] leading-relaxed text-body">
             <div className="font-medium text-ink">Next, on the computer that will run Tyrell:</div>
             <pre className="mono mt-2 overflow-x-auto rounded-lg bg-night p-3 text-[12px] text-snow">{`git clone https://github.com/linoxbt/Tyrell- && cd Tyrell- && pnpm install
@@ -142,11 +142,11 @@ pnpm tyrell import ~/Downloads/${fileName}
 pnpm tyrell control start`}</pre>
             <p className="mt-2 text-[13px] text-muted">The import asks for the password you just chose. Keep the account file safe: it holds your keys (encrypted).</p>
           </div>
-          <button onClick={() => onDone(made)} className="rounded-xl bg-brand px-5 py-2.5 text-[15px] font-medium text-white hover:bg-brand-deep">
+          <button onClick={() => onDone(made)} className="rounded-lg bg-brand px-4 py-2 text-sm text-white hover:bg-brand-deep">
             Open my account
           </button>
         </div>
       )}
-    </div>
+    </section>
   );
 }

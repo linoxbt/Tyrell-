@@ -102,19 +102,6 @@ export interface Payee {
   active: boolean;
   suspended: boolean;
 }
-export interface AccountState {
-  owner: Address;
-  keys: Record<number, Address>;
-  payees: Payee[];
-  memories: { total: number; byLane: Record<number, number>; recent: Array<{ id: Hex; lane: number; signer: Address; block: bigint }> };
-  payments: Array<{ to: Address; amount: bigint; block: bigint; tx: Hex }>;
-  activeSeeds: number;
-  token: { symbol: string; decimals: number; vaultBalance: bigint };
-  head: bigint;
-  scannedFrom: bigint;
-  gas: Array<{ name: "submitter" | "signer"; address: Address; balance: bigint }>;
-}
-
 const MAX_SCAN = 400_000n;
 
 /** getLogs over a range, splitting it when the node refuses a range that large. */
@@ -128,64 +115,6 @@ async function logs(c: PublicClient, q: { address: Address; event: never; args?:
   }
 }
 const event = (n: Name, name: string) => abi(n).find((x) => x.type === "event" && x.name === name) as never;
-
-export async function readAccount(c: PublicClient, d: Deployment): Promise<AccountState> {
-  const reg = { address: d.laneRegistry, abi: abi("LaneRegistry") } as const;
-  const [owner, head, ...keys] = await Promise.all([
-    c.readContract({ ...reg, functionName: "owner" }) as Promise<Address>,
-    c.getBlockNumber(),
-    ...LANES.map((l) => c.readContract({ ...reg, functionName: "activeKey", args: [l.lane] }) as Promise<Address>),
-  ]);
-  const start = BigInt(d.startBlock || "0");
-  const from = head - start > MAX_SCAN ? head - MAX_SCAN : start;
-
-  const [added, anchored, paid, seeds, symbol, decimals, vaultBalance] = await Promise.all([
-    logs(c, { address: d.tyrellLedger, event: event("TyrellLedger", "PayeeAdded") }, from, head),
-    logs(c, { address: d.memoryAnchor, event: event("MemoryAnchor", "MemoryAnchored") }, from, head),
-    logs(c, { address: d.guardedVault, event: event("GuardedVault", "Paid") }, from, head),
-    c.readContract({ address: d.tyrellLedger, abi: abi("TyrellLedger"), functionName: "activeSeeds" }) as Promise<readonly bigint[]>,
-    c.readContract({ address: d.token, abi: abi("TyrellTestUSD"), functionName: "symbol" }).catch(() => "TOKEN") as Promise<string>,
-    c.readContract({ address: d.token, abi: abi("TyrellTestUSD"), functionName: "decimals" }).catch(() => 6) as Promise<number>,
-    c.readContract({ address: d.token, abi: abi("TyrellTestUSD"), functionName: "balanceOf", args: [d.guardedVault] }).catch(() => 0n) as Promise<bigint>,
-  ]);
-
-  const submitter = (await c.readContract({ address: d.memoryAnchor, abi: abi("MemoryAnchor"), functionName: "submitter" })) as Address;
-  const gasKeys = [{ name: "submitter" as const, address: submitter }, ...(d.signer ? [{ name: "signer" as const, address: d.signer }] : [])];
-  const gas = await Promise.all(gasKeys.map(async (k) => ({ ...k, balance: await c.getBalance({ address: k.address }) })));
-
-  const ids = [...new Set(added.map((l) => l.args.payeeId as Hex))];
-  const payees = await Promise.all(
-    ids.map(async (payeeId) => {
-      const p = (await c.readContract({ address: d.tyrellLedger, abi: abi("TyrellLedger"), functionName: "payee", args: [payeeId] })) as Omit<Payee, "payeeId">;
-      return { payeeId, label: p.label, addr: p.addr, capPerTx: p.capPerTx, capPerDay: p.capPerDay, active: p.active, suspended: p.suspended };
-    }),
-  );
-
-  const byLane: Record<number, number> = {};
-  for (const l of anchored) byLane[Number(l.args.lane)] = (byLane[Number(l.args.lane)] ?? 0) + 1;
-  return {
-    owner,
-    keys: Object.fromEntries(LANES.map((l, i) => [l.lane, keys[i]!])),
-    payees,
-    memories: {
-      total: anchored.length,
-      byLane,
-      recent: anchored
-        .slice(-12)
-        .reverse()
-        .map((l) => ({ id: l.args.id as Hex, lane: Number(l.args.lane), signer: l.args.signer as Address, block: l.blockNumber })),
-    },
-    payments: paid
-      .slice(-12)
-      .reverse()
-      .map((l) => ({ to: l.args.to as Address, amount: l.args.amount as bigint, block: l.blockNumber, tx: l.transactionHash })),
-    activeSeeds: seeds.length,
-    token: { symbol, decimals, vaultBalance },
-    head,
-    scannedFrom: from,
-    gas,
-  };
-}
 
 /* ---------- writing: owner transactions from the connected wallet ---------- */
 
@@ -263,3 +192,97 @@ export async function createAccount(provider: Eip1193, owner: Address, chainId: 
 }
 
 export const noKey = (a?: Address) => !a || isAddressEqual(a, zeroAddress);
+
+/* ---------- the console's view of an account, from the chain ---------- */
+
+const LANE_NAME: Record<number, string> = { 1: "user", 2: "agent", 3: "wallet", 4: "control" };
+const LANE_KIND: Record<number, number> = { 1: 1, 2: 3, 3: 2, 4: 5 }; // statement, note, observation, decision
+const LANE_CLS: Record<number, "trusted" | "derived" | "untrusted"> = { 1: "trusted", 2: "derived", 3: "untrusted", 4: "derived" };
+
+/**
+ * The account as the console's view document, read from QIE alone: every anchored memory (lane, signer,
+ * block; the contract already checked its signature), payments, payees and quarantine seeds. Memory
+ * bodies, lineage and incidents live with the control process; the console shows them when the web
+ * server proxies one (TYRELL_API_URL).
+ */
+export async function chainView(c: PublicClient, d: Deployment, chainName: string, explorer?: string): Promise<import("./view").ViewDocument> {
+  const head = await c.getBlockNumber();
+  const start = BigInt(d.startBlock || "0");
+  const from = head - start > MAX_SCAN ? head - MAX_SCAN : start;
+  const [anchored, paid, added, seeded, released, symbol, decimals] = await Promise.all([
+    logs(c, { address: d.memoryAnchor, event: event("MemoryAnchor", "MemoryAnchored") }, from, head),
+    logs(c, { address: d.guardedVault, event: event("GuardedVault", "Paid") }, from, head),
+    logs(c, { address: d.tyrellLedger, event: event("TyrellLedger", "PayeeAdded") }, from, head),
+    logs(c, { address: d.tyrellLedger, event: event("TyrellLedger", "QuarantineSeeded") }, from, head),
+    logs(c, { address: d.tyrellLedger, event: event("TyrellLedger", "QuarantineReleased") }, from, head),
+    c.readContract({ address: d.token, abi: abi("TyrellTestUSD"), functionName: "symbol" }).catch(() => "TOKEN") as Promise<string>,
+    c.readContract({ address: d.token, abi: abi("TyrellTestUSD"), functionName: "decimals" }).catch(() => 6) as Promise<number>,
+  ]);
+  const releasedIds = new Set(released.map((l) => Number(l.args.seedId)));
+  const seeds = seeded.map((l) => ({
+    seedId: Number(l.args.seedId),
+    type: Number(l.args.seedType),
+    value: String(l.args.seedValue),
+    fromBlock: String(l.args.fromBlock),
+    toBlock: String(l.args.toBlock),
+    released: releasedIds.has(Number(l.args.seedId)),
+  }));
+  // seeds the chain alone can resolve: a memory id, or a signer over a block window
+  const seedsOf = (id: string, signer: string, block: bigint) =>
+    seeds
+      .filter((s) => !s.released)
+      .filter((s) => (s.type === 1 && s.value.slice(0, 34).toLowerCase() === id.toLowerCase()) || (s.type === 3 && `0x${s.value.slice(-40)}`.toLowerCase() === signer.toLowerCase() && block >= BigInt(s.fromBlock) && (BigInt(s.toBlock) === 0n || block <= BigInt(s.toBlock))))
+      .map((s) => s.seedId);
+  const memories = anchored.map((l) => {
+    const lane = Number(l.args.lane);
+    const id = String(l.args.id);
+    const signer = String(l.args.signer);
+    const s = seedsOf(id, signer, l.blockNumber);
+    return {
+      id,
+      lane,
+      laneName: LANE_NAME[lane] ?? String(lane),
+      kind: LANE_KIND[lane] ?? 2,
+      cls: LANE_CLS[lane] ?? "untrusted",
+      clsReason: `${LANE_NAME[lane] ?? "unknown"} lane, signature checked by MemoryAnchor`,
+      quarantined: s.length > 0,
+      seeds: s,
+      parents: [],
+      signer,
+      block: l.blockNumber.toString(),
+      cid: String(l.args.cid ?? ""),
+      verification: "anchored on QIE; the contract checked the lane key's signature",
+      src: [],
+    };
+  });
+  const ids = [...new Set(added.map((l) => l.args.payeeId as Hex))];
+  const payees = await Promise.all(
+    ids.map(async (payeeId) => {
+      const p = (await c.readContract({ address: d.tyrellLedger, abi: abi("TyrellLedger"), functionName: "payee", args: [payeeId] })) as Omit<Payee, "payeeId"> & { token: Address };
+      return { payeeId, label: p.label, addr: p.addr, token: p.token, capPerTx: String(p.capPerTx), capPerDay: String(p.capPerDay), active: p.active, suspended: p.suspended };
+    }),
+  );
+  const decisions = paid.map((l) => ({
+    id: String(l.args.decisionId),
+    verdict: { decision: "ALLOW" as const, code: "OK", reasons: ["R0-R5 passed; paid by GuardedVault"] },
+    proposal: { recipient: String(l.args.to), amount: String(l.args.amount), token: String(l.args.token) },
+    txHash: l.transactionHash,
+    parents: [],
+  }));
+  return {
+    v: 1,
+    generatedAt: new Date().toISOString(),
+    network: chainName,
+    chainId: d.chainId,
+    head: head.toString(),
+    digest: "",
+    contracts: { laneRegistry: d.laneRegistry, memoryAnchor: d.memoryAnchor, tyrellLedger: d.tyrellLedger, guardedVault: d.guardedVault, token: d.token },
+    ...(explorer ? { explorer } : {}),
+    token: { address: d.token, decimals, symbol },
+    memories,
+    decisions,
+    seeds,
+    payees,
+    incidents: [],
+  };
+}

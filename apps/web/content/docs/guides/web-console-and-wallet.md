@@ -17,13 +17,13 @@ The web app in `apps/web` is the human's window into Tyrell. The console is your
 
 ## What the console shows
 
-The console never shows sample data. It shows, in this order:
+The console never shows sample data. Its tabs (Overview, Lineage, Blast radius, Decisions, Timeline, Incidents, Account) always show one account:
 
-| You have | The console shows | Read from |
+| You have | The tabs show | Read from |
 | --- | --- | --- |
-| A web app that proxies your control process (self-hosted) | The full view: Overview, Lineage, Blast radius, Decisions, Timeline, Incidents, Keys | Control's read-only [view document](/docs/reference/view-document) |
-| An account (created or opened in this browser) | Your account from QIE: Overview, Payees, Activity, Keys | The contracts, through your wallet or a public QIE RPC |
-| Neither | **Your Tyrell account**: create a new account or open one you have | — |
+| A web app that proxies your control process (self-hosted, `TYRELL_API_URL`) | Everything: memory bodies, lineage, decisions with what the model read, incidents | Control's read-only [view document](/docs/reference/view-document) |
+| An account created or opened in this browser | What QIE holds: every anchored memory (lane, signer, block), payments, payees and quarantine seeds. Memory bodies, lineage edges and incidents stay with your control process | The contracts, through your wallet or a public QIE RPC |
+| Neither | The Overview offers **Create a new account** or **Open an account I have** | — |
 
 Accounts you create or open are remembered in this browser (their contract addresses only), and the one on your wallet's network opens automatically.
 
@@ -62,16 +62,13 @@ The hosted site does not set it. Control refuses browser requests from any page 
 
 | Tab | Shows |
 | --- | --- |
-| Overview (account) | Lane keys set, approved payees, memories recorded, vault balance; what is left to set up (gas for the submitter and signer, payees, funding, starting Tyrell); recent payments; the account's contracts |
-| Payees | Approved payees with their caps and status |
-| Activity | Memories recorded (by lane, with signer) and payments |
-| Overview (full) | Verified memories, decisions, untrusted reads and payments blocked; the R0–R5 policy trace of the latest decision; latest decisions; payees; quarantine seeds; recent memories |
+| Overview | Verified memories, decisions, untrusted reads and payments blocked; the R0–R5 policy trace of the latest decision; latest decisions; payees with caps; quarantine seeds; recent memories |
 | Lineage | The lineage graph of the last 60 memories: sources to memories (dashed) and parent to child (solid), coloured by lane |
 | Blast radius | Pick a seed; see every memory and decision it reaches |
 | Decisions | Every payment decision with its verdict, reasons, transaction link and the memories the model had read |
 | Timeline | Every memory with block, lane, kind and class |
 | Incidents | Sentinel incidents with score, rules, source and the AI judge's verdict |
-| Keys | Your wallet, your role, the four lane keys; add, replace and revoke for the owner |
+| Account | Your wallet and role, the four lane keys (add, replace, revoke for the owner), gas for the submitter and signer keys, and this account's contracts |
 
 ## Connecting a wallet
 
@@ -116,9 +113,9 @@ The page asks the wallet to sign it (`personal_sign`), verifies the signature lo
 
 If your wallet is on another network, the wallet sheet offers **QIE Mainnet** (chain 1990) and **QIE Testnet** (chain 1983). It calls `wallet_switchEthereumChain` and, if the wallet does not know QIE yet, `wallet_addEthereumChain` with the QIE RPCs and explorer.
 
-## The Keys tab
+## Lane keys (Account tab)
 
-The Keys tab reads the account's `LaneRegistry`: its owner, `activeKey(lane)` for lanes 1 to 4, and `laneOf(yourAddress)`. Your role is **Owner** if your address is the registry's owner, a lane key if it is bound to a lane, and **Viewer** otherwise.
+The Account tab reads the account's `LaneRegistry`: its owner, `activeKey(lane)` for lanes 1 to 4, and `laneOf(yourAddress)`. Your role is **Owner** if your address is the registry's owner, a lane key if it is bound to a lane, and **Viewer** otherwise.
 
 If you are the owner and your wallet is on the account's network, each lane offers:
 

@@ -69,7 +69,7 @@ Bodies are encrypted with AES-256-GCM before they reach IPFS, so only holders of
 
 ### What if a lane key is stolen?
 
-Revoke it from QIE Wallet (`tyrell revoke --lane <lane>`, or the console's Keys tab, which can also add a replacement). `MemoryAnchor` refuses anything it signs from then on. Rotate with `--rotate`, and seed a `signer-window` quarantine to exclude what it wrote while compromised.
+Revoke it from QIE Wallet (`tyrell revoke --lane <lane>`, or the console's Account tab, which can also add a replacement). `MemoryAnchor` refuses anything it signs from then on. Rotate with `--rotate`, and seed a `signer-window` quarantine to exclude what it wrote while compromised.
 
 ### Can I rebuild without your server?
 

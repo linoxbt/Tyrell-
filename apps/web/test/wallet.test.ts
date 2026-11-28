@@ -157,9 +157,11 @@ describe.each(Object.keys(MODES) as Mode[])("wallet login and the console (%s)",
     const { page, close } = await walletPage(lab);
     try {
       await page.goto(`${urls[mode]!}/console`, { waitUntil: "networkidle" });
-      await page.getByRole("heading", { name: "Your Tyrell account" }).waitFor();
+      await page.getByText("Connect the wallet that owns your Tyrell account").waitFor();
       expect(await page.getByText("Recorded demo").count()).toBe(0);
-      expect(await page.getByRole("button", { name: "Lineage" }).count()).toBe(0);
+      // the console's own design: the labelled rail is there, with no sample data behind it
+      await page.getByRole("button", { name: "Lineage" }).waitFor();
+      expect(await page.getByText("Verified memories").count()).toBe(0);
     } finally {
       await close();
     }
@@ -202,13 +204,13 @@ describe.each(Object.keys(MODES) as Mode[])("wallet login and the console (%s)",
 
           // the console reads the new account from the chain
           await page.getByRole("button", { name: "Open my account" }).click();
-          await page.getByText("Lane keys", { exact: true }).first().waitFor();
-          await page.getByText("4/4").waitFor({ timeout: 20_000 });
-          await page.getByText("Finish setting up").waitFor();
+          await page.getByText("Verified memories").waitFor({ timeout: 20_000 });
           await shot(page, "console-overview");
 
           // lane keys: revoke the agent key, then create a new one in the browser
-          await page.getByRole("button", { name: "Keys" }).click();
+          await page.getByRole("button", { name: "Account" }).click();
+          await page.getByText("Gas for your keys").waitFor();
+          await page.getByText("needs QIE").first().waitFor({ timeout: 20_000 });
           const row = page.locator("li", { hasText: "Steward, the AI agent" });
           await row.getByRole("button", { name: "Revoke" }).click();
           await row.getByLabel("Reason").fill("e2e: rotate the agent");
@@ -248,8 +250,8 @@ describe.each(Object.keys(MODES) as Mode[])("wallet login and the console (%s)",
         await page.getByRole("button", { name: /Open an account I have/ }).click();
         await page.getByLabel("Deployment JSON").fill(JSON.stringify(lab.deployment, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
         await page.getByRole("button", { name: "Open", exact: true }).click();
-        await page.getByText("Lane keys", { exact: true }).first().waitFor();
-        await page.getByRole("button", { name: "Keys" }).click();
+        await page.getByText("Verified memories").waitFor({ timeout: 20_000 });
+        await page.getByRole("button", { name: "Account" }).click();
         await page.getByText("Role here:").locator("..").getByText("Owner", { exact: true }).waitFor({ timeout: 20_000 });
         const fresh = getAddress(`0x${"ab".repeat(20)}`);
         const row = page.locator("li", { hasText: "What arrives in your wallet" });
