@@ -13,3 +13,4 @@ export * from "./sign.js";
 export * from "./payRequest.js";
 export * from "./agents.js";
 export * from "./llm.js";
+export * from "./requestAuth.js";

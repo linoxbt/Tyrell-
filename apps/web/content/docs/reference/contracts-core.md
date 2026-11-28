@@ -7,10 +7,10 @@ Tyrell's core is four contracts on QIE, plus a test token for testnet and local 
 
 | Contract | Purpose | Admin |
 | --- | --- | --- |
-| [`LaneRegistry`](#laneregistry) | One active key per lane, with full history | Owner (`Ownable2Step`) |
-| [`MemoryAnchor`](#memoryanchor) | Anchors memory struct hashes and CIDs after checking the lane signature | Owner (`Ownable2Step`) sets the submitter |
+| [`LaneRegistry`](#laneregistry) | One active key per lane, with full history | Owner (`Ownable2Step`, never renounced) |
+| [`MemoryAnchor`](#memoryanchor) | Anchors memory struct hashes and CIDs after checking the lane signature | Owner (`Ownable2Step`, never renounced) sets the submitter and the agent link |
 | [`TyrellLedger`](#tyrellledger) | Payees and quarantine seeds, written only with lane-key EIP-712 signatures | None |
-| [`GuardedVault`](#guardedvault) | Holds the payment token; pays registered payees within caps | `AccessControl` roles |
+| [`GuardedVault`](#guardedvault) | Holds the payment token; pays registered payees within caps | `AccessControl` roles (always at least one admin) |
 | [`TyrellTestUSD`](#tyrelltestusd) | 6-decimal test token, never deployed to mainnet | Owner mints |
 
 All privileged roles go to the owner (your QIE Wallet) at construction. The many-agents contracts are documented in the [agents network](/docs/agents/overview) section.
@@ -34,7 +34,8 @@ Binds one EVM key to each lane: 1 `user`, 2 `agent`, 3 `wallet`, 4 `control` (`I
 | `laneOf(address key) → (Lane lane, bool active, uint64 addedAt, uint64 revokedAt)` | View | A key's binding |
 | `activeKey(Lane lane) → address` | View | The lane's active key, or zero |
 | `isActiveFor(address key, Lane lane) → bool` | View | True if `key` is the active key of `lane` (`lane` not `None`) |
-| `owner()`, `pendingOwner()`, `transferOwnership(address)`, `acceptOwnership()`, `renounceOwnership()` | Inherited | `Ownable2Step` |
+| `owner()`, `pendingOwner()`, `transferOwnership(address)`, `acceptOwnership()` | Inherited | `Ownable2Step`: ownership is handed over in two steps |
+| `renounceOwnership()` | | Always reverts `NoRenounce`: a registry without an owner could never revoke a leaked key |
 
 ### Events
 
@@ -88,7 +89,10 @@ Only the submitter may anchor. The CID is not covered by the lane signature, so 
 | `setSubmitter(address submitter)` | Owner | Points anchoring at a new control gas key |
 | `registry() → ILaneRegistry`, `acct() → bytes32`, `submitter() → address` | View | Configuration |
 | `MEMORY_TYPEHASH`, `MAX_BATCH`, `MAX_BODY_LEN` | Constant | Typehash, 20, 8192 |
-| `owner()`, `pendingOwner()`, `transferOwnership`, `acceptOwnership`, `renounceOwnership`, `eip712Domain()` | Inherited | `Ownable2Step`, `EIP712` |
+| `linkAgent(IAgentRegistry registry, uint256 agentId)` | Owner | Agents network: gate agent-lane memories on this agent (zero registry unlinks); emits `AgentLinked` |
+| `agentRegistry()`, `agentId()`, `PERM_MEMORY` | View, constant | The agent link; `PERM_MEMORY` is 2 |
+| `owner()`, `pendingOwner()`, `transferOwnership`, `acceptOwnership`, `eip712Domain()` | Inherited | `Ownable2Step`, `EIP712` |
+| `renounceOwnership()` | | Always reverts `NoRenounce` |
 
 ### Checks, in order
 
@@ -96,6 +100,7 @@ Only the submitter may anchor. The CID is not covered by the lane signature, so 
 2. Non-zero id; lane 1–4; kind 1–5; `bodyLen <= 8192`; `refBlock <= block.number`; non-empty CID. Else `BadMemory`.
 3. The id is not anchored yet, else `AlreadyAnchored`.
 4. The signature recovers (else `UnknownSigner`), the signer is bound in `LaneRegistry` (else `UnknownSigner`), still active (else `KeyRevoked`) and bound to `m.lane` (else `LaneMismatch`).
+5. Only for agent-lane memories, and only once `linkAgent` was called: the linked agent is active in `AgentRegistry` (else `AgentBlocked(code)`, for example `AGENT_BANNED` or `HUMAN_UNBOUND`), its registered key is the signer (else `AgentKeyMismatch`) and it holds the memory permission (else `NoMemoryPermission`). See the [agents network](/docs/agents/agents-and-limits#spenders).
 
 ### Events
 
@@ -201,18 +206,22 @@ Holds the agent's payment token. `pay` is the only way money leaves to anyone bu
 
 | Role | Granted at construction to | Can |
 | --- | --- | --- |
-| `DEFAULT_ADMIN_ROLE` | The owner | `withdraw`, `setGlobalDailyCap`, `unpause`, manage roles |
+| `DEFAULT_ADMIN_ROLE` | The owner | `withdraw`, `setGlobalDailyCap`, `setAgentRegistry`, `unpause`, manage roles. The last admin can't renounce or be revoked (`LastAdmin`) |
 | `SIGNER_ROLE` (`keccak256("SIGNER_ROLE")`) | The vault signer key | `pay` |
-| `PAUSER_ROLE` (`keccak256("PAUSER_ROLE")`) | The owner and the control lane key | `pause` |
+| `PAUSER_ROLE` (`keccak256("PAUSER_ROLE")`) | The owner, and optionally one extra pauser (the 4th constructor argument; `Deploy.s.sol` passes zero) | `pause` |
+
+Besides `PAUSER_ROLE` holders, **whichever key is the active control-lane key in the `LaneRegistry` right now** may pause (`isControlKey`). The vault reads it live through the ledger, so rotating or revoking the control key moves this right with it and needs no vault transaction.
 
 ### Functions
 
 | Function | Access | Description |
 | --- | --- | --- |
-| `pay(bytes32 payeeId, address token, uint256 amount, bytes16 decisionId)` | `SIGNER_ROLE`, not paused | Pays a registered payee for an ALLOW decision |
+| `pay(bytes32 payeeId, address token, uint256 amount, bytes16 decisionId)` | `SIGNER_ROLE`, not paused | Pays a registered payee for an ALLOW decision. Reverts `UseAgentPath` once an agent registry is linked: payments then go through [`payForAgent`](/docs/reference/contracts-agents#guardedvault-additions) |
 | `withdraw(address token, address to, uint256 amount)` | Admin | Takes funds out of the vault |
 | `setGlobalDailyCap(address token, uint256 cap)` | Admin | The most the vault may pay in `token` per UTC day, across all payees |
-| `pause()` | Pauser | Stops all payments |
+| `pause()` | Pauser or the active control-lane key | Stops all payments |
+| `isControlKey(address key) → bool` | View | Whether `key` is the active control-lane key right now |
+| `adminCount() → uint256` | View | Accounts holding `DEFAULT_ADMIN_ROLE` (never zero) |
 | `unpause()` | Admin | Resumes payments |
 | `spentToday(bytes32 payeeId) → uint256` | View | Paid to this payee today |
 | `spentTodayGlobal(address token) → uint256` | View | Paid in this token today, all payees |
@@ -248,6 +257,9 @@ Plus the inherited `Paused`, `Unpaused`, `RoleGranted`, `RoleRevoked` and `RoleA
 | `NotPayable(bytes32 code)` | A ledger code from `isPayable`, `OVER_DAILY_CAP` or `OVER_GLOBAL_DAILY_CAP` |
 | `BadDecision()` | Zero or already used decision id |
 | `ZeroAddress()` | Zero admin or ledger at construction, or zero `to` in `withdraw` |
+| `UseAgentPath()` | `pay` on a vault linked to an agent registry |
+| `LastAdmin()` | Revoking or renouncing the last `DEFAULT_ADMIN_ROLE` holder |
+| `NoAgentRegistry()`, `NotOurAgent(uint256)` | See [`payForAgent`](/docs/reference/contracts-agents#guardedvault-additions) |
 
 Plus the inherited `EnforcedPause` (paying while paused) and `AccessControlUnauthorizedAccount`.
 
@@ -263,18 +275,18 @@ A testnet stand-in for QUSDC: an ERC-20 named `Tyrell Test USD (testnet only)`, 
 
 ## Gas
 
-From `forge test --gas-report` (optimizer 200 runs, Shanghai):
+From `forge test --gas-report` (optimizer 200 runs, Shanghai); the full table is in `contracts/GAS.md`:
 
 | Contract | Deployment gas | Notable call | Median gas |
 | --- | ---: | --- | ---: |
-| `LaneRegistry` | 726,702 | `addLaneKey` | 71,858 |
-| `MemoryAnchor` | 1,338,388 | `anchor` | 44,407 (max 93,198) |
+| `LaneRegistry` | 728,221 | `addLaneKey` | 71,858 |
+| `MemoryAnchor` | 1,638,117 | `anchor` | 44,494 (a successful anchor about 95,000; up to about 145,000 on a linked agent deployment) |
 | `TyrellLedger` | 2,159,847 | `addPayee` | 178,807 |
-| `GuardedVault` | 1,082,444 | `pay` | 40,567 |
-| `TyrellTestUSD` | 1,246,710 | — | — |
+| `GuardedVault` | 1,400,030 | `pay` | 34,626 |
+| `TyrellTestUSD` | 600,248 | — | — |
 
-All five together: 6,554,091 gas, about 0.0074 QIEV3 at the probe's mainnet gas price of 1.125 gwei.
+All five together: 6,526,463 gas, about 0.0073 QIEV3 at the probe's mainnet gas price of 1.125 gwei.
 
 ## Tests
 
-The contracts have 84 Foundry tests: unit tests, fuzz tests at 1,000 runs, invariants (for example, outflows only ever go to registered payees) and vectors signed by the TypeScript code, so on-chain and off-chain encodings cannot drift apart. Run them with `pnpm contracts:test`.
+The contracts have 145 Foundry tests, core and agents network together: unit tests, fuzz tests at 1,000 runs, invariants (for example, outflows only ever go to registered payees) and vectors signed by the TypeScript code, so on-chain and off-chain encodings cannot drift apart. Run them with `pnpm contracts:test`.

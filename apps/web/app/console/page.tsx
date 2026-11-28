@@ -40,9 +40,15 @@ export default function Console() {
   const [incident, setIncident] = useState<string>();
   useEffect(() => {
     const read = () => {
-      const id = new URLSearchParams(window.location.search).get("incident") ?? undefined;
+      const q = new URLSearchParams(window.location.search);
+      const id = q.get("incident") ?? undefined;
       setIncident(id);
       if (id) setTab("incidents");
+      // `tyrell blast <seed>` prints /console?tab=blast&seed=N
+      const t = q.get("tab");
+      if (!id && t && TABS.some((x) => x[0] === t)) setTab(t as Tab);
+      const seed = Number(q.get("seed"));
+      if (q.get("seed") !== null && Number.isInteger(seed) && seed >= 0) setSeedId(seed);
     };
     read();
     window.addEventListener("popstate", read);

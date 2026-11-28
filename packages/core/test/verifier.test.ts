@@ -101,6 +101,13 @@ describe("verifyMemory (spec section 6 order)", () => {
     });
   });
 
+  it("5. DECISION_NOT_CONTROL: only the control lane may write payment decisions (S-7)", async () => {
+    const forged = await make({ lane: 2, kind: 5, body: JSON.stringify({ verdict: { decision: "ALLOW" }, txHash: "0x" + "ab".repeat(32) }) });
+    expect(await verifyMemory(forged.id, forged.anchor, ok(forged.blob), ctx())).toMatchObject({ reason: "DECISION_NOT_CONTROL", detail: "kind decision on lane 2" });
+    const real = await make({ lane: 4, kind: 5 });
+    expect((await verifyMemory(real.id, real.anchor, ok(real.blob), ctx())).status).toBe("verified");
+  });
+
   it("5. historical binding: a revoked key's earlier memories still verify, later ones do not", async () => {
     const events = [...laneEvents, { kind: "revoked" as const, lane: 2, key: accounts.agent.address, pos: { block: 150n, logIndex: 3 } }];
     const before = await make({ lane: 2, block: 150n });

@@ -187,9 +187,9 @@ const poisonNftAbi = () => artifact("PoisonNFT").abi;
 /** Loads or creates the attacker key. It must be an address you control; never fund it with real money. */
 export function attackerKey(): PrivateKeyAccount {
   const p = join(paths().keys, "attacker.json");
-  if (!existsSync(p)) writeKeystore(p, encryptKeystore(newSecret(), passphrase(), { role: "attacker", evm: true, ...(process.env.TYRELL_SCRYPT_N ? { n: Number(process.env.TYRELL_SCRYPT_N) } : {}) }));
+  if (!existsSync(p)) writeKeystore(p, encryptKeystore(newSecret(), passphrase("user"), { role: "attacker", evm: true, ...(process.env.TYRELL_SCRYPT_N ? { n: Number(process.env.TYRELL_SCRYPT_N) } : {}) }));
   void keystoreAddress(p);
-  return privateKeyToAccount(loadKey(p, passphrase(), "attacker"));
+  return privateKeyToAccount(loadKey(p, passphrase("user"), "attacker"));
 }
 
 /** `tyrell attack run`: runs the variants against the configured deployment and returns a pass table. */

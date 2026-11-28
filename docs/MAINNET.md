@@ -20,8 +20,8 @@ export TYRELL_HOME=~/.tyrell-mainnet
 pnpm tyrell setup keys --network mainnet --store pinata --gateway https://<you>.mypinata.cloud --new-passphrase
 ```
 
-Send a little QIEV3 for gas (a few cents' worth each; GAS.md: a full deploy is about 6.6M gas, an
-anchor about 93k) to:
+Send a little QIEV3 for gas (a few cents' worth each; contracts/GAS.md: a full deploy is about 6.5M gas,
+the agents network another 8.1M, an anchor about 95k) to:
 
 | Address | Why |
 | --- | --- |
@@ -34,13 +34,29 @@ anchor about 93k) to:
 
 ```sh
 export PINATA_JWT=...
-pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer \
-  --token 0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5 --verify
+pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer --verify
 ```
+
+On chain 1990 the token defaults to QUSDC (`0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5`) and the script
+refuses any other, so `--token` is only needed to be explicit.
 
 If Blockscout verification through forge fails, use the explorer's web form with flattened sources
 (`forge flatten src/<Contract>.sol`), compiler 0.8.28, optimizer 200 runs, EVM version shanghai.
 Verified source on all four contracts is a submission requirement.
+
+### Agents network (optional, once per chain)
+
+Only if you run the agents network on mainnet and nobody has deployed it yet. On chain 1990 the script
+uses QUSDC bonds and the real QIE ID record store (`0x8777d01d509D0eA71FB38F88F79867da558d5018`) and
+refuses anything else, and the council address is required:
+
+```sh
+pnpm tyrell network deploy --arbiter <arbiter> --admin <council multisig> --account tyrell-deployer
+pnpm tyrell network link
+```
+
+Then, from QIE Wallet: `agents bind`, `agents register`, `agents link-vault` (see the docs, Agents network
+→ Deploy and CLI). After `link-vault` the vault pays only through `payForAgent`.
 
 ## 3. Owner setup in QIE Wallet
 
@@ -89,6 +105,6 @@ pnpm scan-keys:history                                           # no key anywhe
 ## If something goes wrong
 
 - A key may have leaked: `pnpm tyrell revoke --lane <lane>` (owner signs), then `--rotate`.
-- Payments look wrong: `GuardedVault.pause()` from QIE Wallet or the control key stops all of them;
-  only the owner can unpause.
+- Payments look wrong: `GuardedVault.pause()` from QIE Wallet or the active control-lane key stops all
+  of them (the vault follows a rotated control key automatically); only the owner can unpause.
 - Take the money back: `GuardedVault.withdraw(token, to, amount)` from QIE Wallet (owner only).

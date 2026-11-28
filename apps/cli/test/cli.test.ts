@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createServer, type Server as HttpServer } from "node:http";
+import { createServer, request as httpRequest, type Server as HttpServer } from "node:http";
 import { bytesToHex, createTestClient, erc20Abi, getAddress, http, keccak256, parseEther, toBytes, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { laneRegistryAbi } from "@tyrell/chain";
@@ -179,6 +179,26 @@ describe("tyrell CLI on anvil", () => {
     await call(join(homeDir, "control.sock"), { type: "submit", blob: blob as never });
   });
 
+  it("S-6: control acts only on requests signed by the right lane key", async () => {
+    const { parseDeployment } = await import("@tyrell/chain");
+    const { signRequest } = await import("@tyrell/core");
+    const d = parseDeployment(readFileSync(join(homeDir, "deployment-31337.json"), "utf8"));
+    const pass = readFileSync(join(homeDir, "pass"), "utf8").trim();
+    const user = privateKeyToAccount(bytesToHex(decryptKeystore(readKeystore(join(homeDir, "keys", "user.json")), pass)));
+    const sock = join(homeDir, "control.sock");
+    const propose = { type: "propose", proposal: { recipient: ATTACKER, amount: "1", token: d.token }, readSet: [], turn: `0x${"0".repeat(31)}1` };
+    // unsigned: refused before anything runs
+    await expect(call(sock, propose as never)).rejects.toThrow(/invalid request/);
+    // signed, but by the user key: only Steward's agent key may propose
+    await expect(call(sock, (await signRequest(user, d.acct, propose)) as never)).rejects.toThrow(/not the active agent key/);
+    // an incident must come from the sentinel's wallet key
+    const q = await signRequest(user, d.acct, { type: "incident", incident: { memoryId: "x" } });
+    await expect(call(sock, q as never)).rejects.toThrow(/not the active wallet key/);
+    // a quarantine seed signed by anyone but the user (or the sentinel, for a source) is refused
+    const seed = await signRequest(privateKeyToAccount(keccak256(toBytes("stranger"))), d.acct, { type: "quarantine", seed: { type: "memory", id: `0x${"0".repeat(31)}2` }, reason: "x" });
+    await expect(call(sock, seed as never)).rejects.toThrow(/not the active user key/);
+  });
+
   it("M1 across processes: Steward pays rent to the landlord, and refuses the attacker", async () => {
     llm = createServer((req, res) => {
       let body = "";
@@ -323,16 +343,26 @@ describe("tyrell CLI on anvil", () => {
     for (const k of ["MemoryAnchored", "QuarantineSeeded", "Paid", "revertedUnauthorizedPay"]) expect(ev.transactions[k], k).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
-  it("the web view's read-only API serves the projection, and nothing else", async () => {
-    const r = await fetch(`http://127.0.0.1:${apiPort}/api/view`);
+  it("the web view's read-only API serves the projection, only with its token, and nothing else", async () => {
+    const auth = { authorization: `Bearer ${readFileSync(join(homeDir, "api-token"), "utf8").trim()}` };
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`)).status).toBe(401);
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`, { headers: { authorization: "Bearer wrong" } })).status).toBe(401);
+    // a DNS-rebinding page reaches 127.0.0.1 under its own host name: refused
+    const rebound = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({ host: "127.0.0.1", port: apiPort, path: "/api/view", headers: { ...auth, host: "evil.example:7878" } }, (res) => resolve(res.statusCode ?? 0));
+      req.on("error", reject);
+      req.end();
+    });
+    expect(rebound).toBe(421);
+    const r = await fetch(`http://127.0.0.1:${apiPort}/api/view`, { headers: auth });
     expect(r.status).toBe(200);
     const v = (await r.json()) as { v: number; memories: unknown[]; decisions: unknown[]; token: { symbol: string } };
     expect(v.v).toBe(1);
     expect(v.memories.length).toBeGreaterThan(5);
     expect(v.decisions.length).toBeGreaterThan(1);
     expect(v.token.symbol).toBe("tUSD");
-    expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`, { method: "POST" })).status).toBe(404);
-    expect((await fetch(`http://127.0.0.1:${apiPort}/api/other`)).status).toBe(404);
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`, { method: "POST", headers: auth })).status).toBe(404);
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/other`, { headers: auth })).status).toBe(404);
   });
 
   it("everything still rebuilds to the same digest", () => {

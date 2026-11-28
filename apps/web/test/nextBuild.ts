@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 /*
  * Builds the web app once for the tests, however many test files ask for it at the same time.
@@ -24,11 +25,33 @@ export function webEnv(distDir: string, extra: Record<string, string> = {}): Nod
   return env;
 }
 
+const SOURCES = ["app", "components", "lib", "content", "public", "next.config.mjs", "package.json", "postcss.config.mjs"];
+
+/** What the build depends on: every source file (path, size, mtime) and the NEXT_PUBLIC_* env it was built with. */
+function fingerprint(env: NodeJS.ProcessEnv): string {
+  const h = createHash("sha256");
+  const walk = (p: string) => {
+    if (!existsSync(p)) return;
+    const st = statSync(p);
+    if (st.isDirectory()) for (const n of readdirSync(p).sort()) walk(join(p, n));
+    else h.update(`${relative(WEB, p)}\0${st.size}\0${st.mtimeMs}\n`);
+  };
+  for (const s of SOURCES) walk(join(WEB, s));
+  for (const k of Object.keys(env).filter((x) => x.startsWith("NEXT_PUBLIC_")).sort()) h.update(`${k}=${env[k]}\n`);
+  return h.digest("hex");
+}
+
+/** A build is reused only if it was made from the current sources; otherwise it is rebuilt. */
+function fresh(distDir: string, want: string): boolean {
+  const stamp = join(WEB, distDir, "SOURCE_FINGERPRINT");
+  return existsSync(join(WEB, distDir, "BUILD_ID")) && existsSync(stamp) && readFileSync(stamp, "utf8") === want;
+}
+
 export async function ensureBuild(distDir: string, env: NodeJS.ProcessEnv): Promise<void> {
-  const done = join(WEB, distDir, "BUILD_ID");
+  const want = fingerprint(env);
   const lock = join(WEB, `${distDir}.build-lock`);
   for (;;) {
-    if (existsSync(done)) return;
+    if (fresh(distDir, want)) return;
     try {
       mkdirSync(lock);
       break;
@@ -37,7 +60,8 @@ export async function ensureBuild(distDir: string, env: NodeJS.ProcessEnv): Prom
     }
   }
   try {
-    if (existsSync(done)) return;
+    if (fresh(distDir, want)) return;
+    rmSync(join(WEB, distDir), { recursive: true, force: true });
     await new Promise<void>((resolve, reject) => {
       const b = spawn(NEXT, ["build"], { cwd: WEB, env });
       let out = "";
@@ -45,6 +69,7 @@ export async function ensureBuild(distDir: string, env: NodeJS.ProcessEnv): Prom
       b.stderr.on("data", (d) => (out += d));
       b.on("close", (code) => (code === 0 ? resolve() : reject(new Error(out.slice(-4000)))));
     });
+    writeFileSync(join(WEB, distDir, "SOURCE_FINGERPRINT"), want);
   } finally {
     rmSync(lock, { recursive: true, force: true });
   }

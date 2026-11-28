@@ -102,9 +102,12 @@ Tyrell is configured with a few files in `TYRELL_HOME` and environment variables
 | `OWNER` | Your QIE Wallet address |
 | `SUBMITTER` | Control's gas key (anchors) |
 | `VAULT_SIGNER` | The vault signer key |
-| `CONTROL` | The control lane key (may pause the vault) |
 | `TYRELL_ACCT` | The 32-byte account id |
-| `TOKEN` | Payment token; unset on a non-mainnet chain deploys `TyrellTestUSD` |
+| `TOKEN` | Payment token. On QIE Mainnet (1990) it defaults to QUSDC (`0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5`) and the script refuses any other token; unset on another chain deploys `TyrellTestUSD` |
+
+There is no `CONTROL` variable any more: the vault lets whichever key is the active control-lane key pause it, read live from the `LaneRegistry`, so the control key needs no vault role and rotating it needs no vault change. (`tyrell deploy` still passes it; the script ignores it.)
+
+The agents network has its own script, `contracts/script/DeployNetwork.s.sol` (`tyrell network deploy`): `BOND_TOKEN`, `ARBITER`, `ADMIN`, `QIE_ID`, `MIN_BOND`, `REPORT_BOND`, `CONTEST_WINDOW`, `RULE_WINDOW`, `SLASH_BPS`, `BAN_AFTER`. See [Deploy and CLI](/docs/agents/deploy-and-cli#1-deploy-the-network-once-per-chain).
 
 ## Probe variables
 

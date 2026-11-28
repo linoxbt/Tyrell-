@@ -22,7 +22,7 @@ function resolveCurrency(string domain_, string currency_) external view returns
 For `resolveCurrency("alice.qie", "qie")` it returns the address holding alice.qie, the zero address for a name with no record, and **reverts** with `Metadata:domain expired` for a free name whose validity has run out. Tyrell's interface to it is `IQieId`.
 
 > [!NOTE]
-> QIE ID is not deployed on QIE Testnet. There, and on local chains and in the playground, the agents network uses `TestQieId`: the same `resolveCurrency` interface, where anyone can `claim` a free name for themselves, `transferName` it or let it `lapse`. Never use `TestQieId` on mainnet: `DeployNetwork.s.sol` picks the real store automatically on chain 1990.
+> QIE ID is not deployed on QIE Testnet. There, and on local chains and in the playground, the agents network uses `TestQieId`: the same `resolveCurrency` interface, where anyone can `claim` a free name for themselves, `transferName` it or let it `lapse`. Never use `TestQieId` on mainnet: `DeployNetwork.s.sol` uses the real store on chain 1990 and refuses to deploy with any other.
 
 You can resolve any QIE ID against the real store from the [playground](/playground) ("Try it yourself").
 
@@ -52,12 +52,12 @@ function isBound(address h) public view returns (bool) {
 }
 ```
 
-`status(agentId)`, `check(...)` and therefore `consume(...)`, `GuardedVault.payForAgent`, `AgentNetwork.openDeal`, `AgentNetwork.verifyMessage` and `reputation` all go through it. So the moment the record store gives a different answer, every agent of that human returns `HUMAN_UNBOUND`:
+`status(agentId)`, `check(...)` and therefore `consume(...)`, `GuardedVault.payForAgent`, `AgentNetwork.openDeal`, `AgentNetwork.verifyMessage`, `reputation` and, on a linked deployment, `MemoryAnchor`'s agent-memory gate all go through it. So the moment the record store gives a different answer, every agent of that human returns `HUMAN_UNBOUND`:
 
 | What happens to `alice.qie` | Store answer | Effect on alice's agents |
 | --- | --- | --- |
 | Still held by alice | alice's address | Normal |
-| Transferred to someone else | another address | `HUMAN_UNBOUND`: payments, deals and trusted messages stop |
+| Transferred to someone else | another address | `HUMAN_UNBOUND`: payments, deals, trusted messages and agent memories stop |
 | Free name expired | reverts | Treated as unbound (`try/catch`): same as above |
 | Record deleted | zero address | Same as above |
 | Renewed or transferred back | alice's address | Agents work again: nothing to re-register |

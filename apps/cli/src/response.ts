@@ -5,7 +5,7 @@ import { encodeFunctionData, getAddress, type Address, type Hex, type PublicClie
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { BlastRadius, Blob, Id16 } from "@tyrell/core";
-import { llmFromEnv } from "@tyrell/core";
+import { llmFromEnv, signRequest } from "@tyrell/core";
 import { laneRegistryAbi, readLedger, type Deployment } from "@tyrell/chain";
 import { call, type SeedSpecMsg } from "@tyrell/ipc";
 import { anchorDomain } from "@tyrell/control";
@@ -58,16 +58,19 @@ export function ingestWorker(o: { mcp?: boolean } = {}): { worker: IngestWorker;
   const blocklist = new Set<string>(existsSync(blocklistPath) ? (JSON.parse(readFileSync(blocklistPath, "utf8")) as string[]).map((a) => a.toLowerCase()) : []);
   const mcp = o.mcp && c.network !== "local" ? new McpBalances(undefined, c.network) : undefined;
   const judge = sentinelJudge();
+  const walletKey = account("ingest", "wallet");
+  // Requests that make control act are signed with the wallet lane key (S-6).
+  const signed = <T extends Record<string, unknown>>(req: T) => signRequest(walletKey, d.acct, req);
   const worker = new IngestWorker({
     client: pub,
     watch: [d.guardedVault, ...(process.env.TYRELL_WATCH ? process.env.TYRELL_WATCH.split(",").map((a) => getAddress(a.trim())) : [])],
-    walletKey: account("ingest", "wallet"),
+    walletKey,
     acct: d.acct,
     domain: anchorDomain(d),
     control: {
       submitBatch: async (blobs: Blob[]) => (await call(paths().socket, { type: "submitBatch", blobs: blobs as never })) as Array<{ id: Id16 }>,
-      incident: (i: Incident) => call(paths().socket, { type: "incident", incident: i as unknown as Record<string, unknown> }),
-      quarantineSource: (ref: Address, reason: string) => call(paths().socket, { type: "quarantine", seed: { type: "source", ref }, reason }),
+      incident: async (i: Incident) => call(paths().socket, await signed({ type: "incident", incident: i as unknown as Record<string, unknown> })),
+      quarantineSource: async (ref: Address, reason: string) => call(paths().socket, await signed({ type: "quarantine", seed: { type: "source", ref }, reason })),
     },
     known: async () => (await readLedger(pub, d, await pub.getBlockNumber({ cacheTime: 0 }))).payees.map((p) => p.addr),
     blocklist,
@@ -80,7 +83,12 @@ export function ingestWorker(o: { mcp?: boolean } = {}): { worker: IngestWorker;
   return { worker, pub, d, close: () => mcp?.close() };
 }
 
-/** `tyrell ingest scan`: one sentinel pass from the last scanned block (or --from) to head. */
+/**
+ * `tyrell ingest scan`: one sentinel pass from the last scanned block (or --from) to head, one window
+ * at a time. The cursor advances after each window that was written and scored, so a failure (control
+ * down, an RPC error) costs at most one window of retries and never pins the sentinel to old blocks.
+ * Hostile events inside a window are handled by the worker itself (B-2).
+ */
 export async function ingestScan(o: { from?: bigint; mcp?: boolean } = {}) {
   const { worker, pub, d, close } = ingestWorker(o);
   try {
@@ -88,9 +96,17 @@ export async function ingestScan(o: { from?: bigint; mcp?: boolean } = {}) {
     const from = o.from ?? (state ? BigInt(state.last) + 1n : d.startBlock);
     const to = await pub.getBlockNumber({ cacheTime: 0 });
     if (from > to) return { from: from.toString(), to: to.toString(), observations: [], incidents: [] };
-    const r = await worker.scan(from, to);
-    writeFileSync(stateFile(), JSON.stringify({ last: to.toString() }) + "\n");
-    return { from: from.toString(), to: to.toString(), ...r };
+    const w = BigInt(process.env.SENTINEL_WINDOW ?? 5_000);
+    const observations: Id16[] = [];
+    const found: Incident[] = [];
+    for (let s = from; s <= to; s += w) {
+      const e = s + w - 1n < to ? s + w - 1n : to;
+      const r = await worker.scan(s, e);
+      observations.push(...r.observations);
+      found.push(...r.incidents);
+      writeFileSync(stateFile(), JSON.stringify({ last: e.toString() }) + "\n");
+    }
+    return { from: from.toString(), to: to.toString(), observations, incidents: found };
   } finally {
     await close();
   }
@@ -120,7 +136,11 @@ export async function quarantineCmd(seed: SeedSpecMsg, reason: string, yes: bool
     rl.close();
     if (a.trim().toLowerCase() !== "y") throw new Error("cancelled");
   }
-  return call(paths().socket, { type: "quarantine", seed, reason });
+  // Seeding is signed with the user key: only the user (or the sentinel's automatic blocklist seed)
+  // may make control quarantine (S-6).
+  checkKeyIsolation("cli");
+  const d = deployment(readConfig());
+  return call(paths().socket, await signRequest(account("cli", "user"), d.acct, { type: "quarantine", seed, reason }));
 }
 
 /** Blast radius as a Mermaid graph (the static fallback for the web view, spec section 18 cut order). */
@@ -156,7 +176,7 @@ export async function revokeTxs(c: PublicClient, d: Deployment, role: string, ro
     return { oldKey, txs: [{ label: `Revoke the ${role} lane key ${oldKey}`, to: d.laneRegistry, data: encodeFunctionData({ abi: laneRegistryAbi, functionName: "revokeLaneKey", args: [oldKey, reason] }) }] };
   }
   const next = join(paths().keys, `${role}.next.json`);
-  if (!existsSync(next)) writeKeystore(next, encryptKeystore(newSecret(), passphrase(), { role, evm: true, ...(process.env.TYRELL_SCRYPT_N ? { n: Number(process.env.TYRELL_SCRYPT_N) } : {}) }));
+  if (!existsSync(next)) writeKeystore(next, encryptKeystore(newSecret(), passphrase(role), { role, evm: true, ...(process.env.TYRELL_SCRYPT_N ? { n: Number(process.env.TYRELL_SCRYPT_N) } : {}) }));
   const newKey = keystoreAddress(next);
   return {
     oldKey,

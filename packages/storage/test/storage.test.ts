@@ -17,6 +17,8 @@ import {
   KeystoreError,
   loadKey,
   MemoryBlobStore,
+  migrateKeystore,
+  readCapped,
   newSecret,
   openBlob,
   PinataBlobStore,
@@ -82,6 +84,34 @@ describe("keystore v3", () => {
     expect(() => keystoreAddress(dataPath)).toThrow(/not an EVM key/);
   });
 
+  it("binds the role tag with a second MAC: a relabelled file is refused, a legacy file needs migrating (I-12)", () => {
+    const dir = tmp();
+    const ks = encryptKeystore(newSecret(), PW, { role: "agent", evm: true, n: FAST });
+    expect(ks.tyrell?.mac).toMatch(/^[0-9a-f]{64}$/);
+    const relabelled = join(dir, "control.json");
+    writeKeystore(relabelled, { ...ks, tyrell: { role: "control", mac: ks.tyrell!.mac! } });
+    expect(() => loadKey(relabelled, PW, "control")).toThrow(/role tag of this keystore was changed/);
+    // the standard v3 MAC is untouched, so other tools still read the file
+    expect(decryptKeystore({ ...ks, tyrell: { role: "control" } }, PW)).toHaveLength(32);
+    const legacy = join(dir, "agent.json");
+    writeKeystore(legacy, { ...ks, tyrell: { role: "agent" } });
+    expect(() => loadKey(legacy, PW, "agent")).toThrow(/tyrell keys migrate/);
+    const migrated = migrateKeystore(readKeystore(legacy), PW, "agent");
+    expect(migrated.tyrell?.mac).toBe(ks.tyrell!.mac);
+    expect(() => migrateKeystore(readKeystore(legacy), "wrong passphrase", "agent")).toThrow(KeystoreError);
+    expect(() => migrateKeystore(readKeystore(legacy), PW, "user")).toThrow(/not user/);
+  });
+
+  it("refuses scrypt parameters a hostile file could use to exhaust memory", () => {
+    const ks = encryptKeystore(newSecret(), PW, { role: "user", evm: true, n: FAST });
+    const withN = (n: number, r = 8, p = 1) => ({ ...ks, crypto: { ...ks.crypto, kdfparams: { ...ks.crypto.kdfparams, n, r, p } } });
+    expect(() => decryptKeystore(withN(2 ** 30), PW)).toThrow(/too costly/);
+    expect(() => decryptKeystore(withN(2 ** 14, 64), PW)).toThrow(/too costly/);
+    expect(() => decryptKeystore(withN(2 ** 14, 8, 99), PW)).toThrow(/too costly/);
+    expect(() => decryptKeystore(withN(1000), PW)).toThrow(/invalid scrypt/);
+    expect(() => decryptKeystore(withN(-2), PW)).toThrow(/invalid scrypt/);
+  });
+
   it("Foundry's cast reads Tyrell keystores", () => {
     const cast = join(__dirname, "../../../contracts/node_modules/.bin/cast");
     if (!existsSync(cast)) return;
@@ -131,6 +161,21 @@ describe("AES-256-GCM sealing", () => {
 });
 
 describe("blob stores", () => {
+  it("reads gateway bodies with a hard size cap, without buffering past it", async () => {
+    expect(await readCapped(new Response(new Uint8Array(10)), 16)).toHaveLength(10);
+    expect(await readCapped(new Response(new Uint8Array(17)), 16)).toBeUndefined();
+    expect(await readCapped(new Response("x", { headers: { "content-length": "999999" } }), 16)).toBeUndefined();
+    let pulled = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulled++;
+        c.enqueue(new Uint8Array(1024));
+      },
+    });
+    expect(await readCapped(new Response(endless), 4096)).toBeUndefined();
+    expect(pulled).toBeLessThan(10);
+  });
+
   it("cidOf matches IPFS for the empty raw block", () => {
     expect(cidOf(new Uint8Array())).toBe("bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku");
   });

@@ -93,6 +93,42 @@ export interface PinataOptions {
   fetch?: typeof fetch;
 }
 
+/**
+ * Reads a response body, stopping as soon as it exceeds `max` bytes (a hostile gateway cannot make us
+ * buffer an unbounded body). Returns undefined when it is too large.
+ */
+export async function readCapped(res: Response, max: number): Promise<Uint8Array | undefined> {
+  const declared = Number(res.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) {
+    await res.body?.cancel().catch(() => undefined);
+    return undefined;
+  }
+  if (!res.body) {
+    const b = new Uint8Array(await res.arrayBuffer());
+    return b.length > max ? undefined : b;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.length;
+  }
+  return out;
+}
+
 /** Pinata pinning (v3 Files API) with gateway reads and fallbacks. */
 export class PinataBlobStore implements BlobStore {
   readonly name = "pinata";
@@ -130,8 +166,8 @@ export class PinataBlobStore implements BlobStore {
           errors.push(`${g}: HTTP ${res.status}`);
           continue;
         }
-        const buf = new Uint8Array(await res.arrayBuffer());
-        if (buf.length > (this.o.maxBytes ?? 65_536)) {
+        const buf = await readCapped(res, this.o.maxBytes ?? 65_536);
+        if (!buf) {
           errors.push(`${g}: too large`);
           continue;
         }

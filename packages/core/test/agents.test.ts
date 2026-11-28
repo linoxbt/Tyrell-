@@ -3,6 +3,9 @@ import { getAddress, keccak256, toBytes, toHex, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   AGENT_CODES,
+  agentRegistrationSigner,
+  agentRegistryDomain,
+  signAgentRegistration,
   PERM,
   agentMessageSigner,
   checkAgent,
@@ -62,5 +65,30 @@ describe("policy R4a: agent registry check", () => {
     expect(v).toMatchObject({ decision: "BLOCK", code: "AGENT_BLOCKED", payeeId: allow.payeeId });
     expect(v.reasons[0]).toBe("agent 2: HUMAN_UNBOUND");
     expect(checkAgent(allow, { agentId: 2n, verified: true, ok: true, code: "" })).toBe(allow);
+  });
+});
+
+describe("agent registration consent (S-1)", () => {
+  const key = privateKeyToAccount(keccak256(toBytes("tyrell agents.test registration key")));
+  const human = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as const;
+  const registry = "0x5FbDB2315678afecb367f032d93F642f64180aa3" as const;
+
+  it("the agent key's signature recovers to the agent key", async () => {
+    const sig = await signAgentRegistration(key, 1983, registry, human, 1_900_000_000n);
+    expect(await agentRegistrationSigner(1983, registry, human, key.address, 1_900_000_000n, sig)).toBe(key.address);
+  });
+
+  it("is bound to the human, the chain, the registry and the deadline", async () => {
+    const sig = await signAgentRegistration(key, 1983, registry, human, 1_900_000_000n);
+    const other = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" as const;
+    for (const [c, r, h, d] of [
+      [1990, registry, human, 1_900_000_000n],
+      [1983, other, human, 1_900_000_000n],
+      [1983, registry, other, 1_900_000_000n],
+      [1983, registry, human, 1_900_000_001n],
+    ] as const) {
+      expect(await agentRegistrationSigner(c, r, h, key.address, d, sig)).not.toBe(key.address);
+    }
+    expect(agentRegistryDomain(1983, registry)).toEqual({ name: "TyrellAgentRegistry", version: "1", chainId: 1983, verifyingContract: registry });
   });
 });

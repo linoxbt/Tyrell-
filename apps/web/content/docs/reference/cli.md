@@ -39,6 +39,8 @@ Each command runs as one process and loads only the keys it is allowed (see [Arc
 | [`rebuild`](#tyrell-rebuild) | data | No (refuses to replace the live database while control runs) |
 | [`verify`](#tyrell-verify) | data | Yes |
 | [`store-check`](#tyrell-store-check) | none | No |
+| [`agents …`](#tyrell-agents) | owner, in QIE Wallet (`consent`, `register`: agent) | No |
+| [`network …`](#tyrell-network) | owner, in QIE Wallet (`message`: agent; `deploy`: Foundry deployer) | No |
 
 Global options: `--version` prints `0.1.0`; `--help` works on every command.
 
@@ -79,7 +81,7 @@ Deploys the contracts with Foundry (`contracts/script/Deploy.s.sol`). Roles go t
 | `--owner <address>` | Yes | Your QIE Wallet address: owner of every contract and admin of the vault |
 | `--account <name>` | One of `--account` or `--unlocked-sender` | Foundry keystore name of a funded throwaway deployer |
 | `--unlocked-sender <address>` | | Local chains only: deploy from an unlocked node account |
-| `--token <address>` | On mainnet | Payment token (QUSDC on mainnet). Unset on another chain deploys `TyrellTestUSD` |
+| `--token <address>` | No | Payment token. On mainnet it defaults to QUSDC and any other token is refused; unset on another chain deploys `TyrellTestUSD` |
 | `--verify` | No | Verify sources on the QIE explorer (Blockscout) |
 
 Writes `contracts/deployments/<chainId>.json` and copies it to `TYRELL_HOME/deployment-<chainId>.json`.
@@ -312,6 +314,52 @@ Prints `head`, `live`, `rebuilt`, `match`, `firstDifference` and `rebuildMs`. Ex
 ### tyrell store-check
 
 Pins and fetches a test blob through the configured store and prints the CID and round-trip time.
+
+## Agents network
+
+Commands for the [agents network](/docs/agents/overview). Every write is an **owner transaction**: the CLI serves a local page on `127.0.0.1`, you approve each transaction in QIE Wallet, and the CLI then finds each one on-chain (by sender, target and calldata) and checks its receipt. It stops at the first revert with a plain error, and gives up after `TYRELL_OWNER_TIMEOUT` seconds (default 600) if the wallet never sends, instead of hanging. Every write accepts `--port <port>` (default `0`, any free port). Amounts are in token units, converted with the deployment's token decimals. See [Deploy and CLI](/docs/agents/deploy-and-cli) for the order to run them in.
+
+### tyrell agents
+
+| Command | Options | What it does |
+| --- | --- | --- |
+| `agents list` | | Your QIE ID binding, quota and every agent you registered, with key, token, live status, limits, today's spend, bond and reputation (a fixed number of reads) |
+| `agents bind <qieId>` | | Bind your owner account to your QIE ID. On mainnet the name is resolved through the QIE MCP server first; on a test store a `claim` is sent first |
+| `agents consent <human>` | `--ttl <seconds>` (86400) | Sign, with this deployment's agent key, its consent to be `<human>`'s agent. Prints `{ human, key, deadline, signature }` to give to that human |
+| `agents register` | `--label <label>` (required), `--per-tx <amount>` (required), `--daily <amount>` (required), `--key <address>`, `--key-sig <hex>`, `--sig-deadline <unix>`, `--perms <list>` (`pay,memory`), `--any-payee`, `--model <text>` | Register an agent spending the deployment's token. Without `--key`, this deployment's agent-lane key, whose consent the CLI signs; then it checks the new id is yours with that key and records `agentId`. Another deployment's key needs `--key-sig` and `--sig-deadline` from its `agents consent`, checked locally first |
+| `agents link-vault` | | `setSpender(vault)`, `GuardedVault.setAgentRegistry` (the vault then pays only via `payForAgent`), `MemoryAnchor.linkAgent` (agent memories need the memory permission), and `setSpender(network)` when linked to a network. Needs `agentId` |
+| `agents quota <daily>` | | Your daily quota for the deployment's token, shared by all your agents |
+| `agents limits <agentId> <perTx> <daily>` | | An agent's per-payment and daily limits |
+| `agents perms <agentId> <list>` | | Permissions: `pay`, `memory`, `message`, `deal` |
+| `agents payees <agentId> <labels>` | `--remove` | Delegate (or withdraw) comma-separated payee labels; `#N` is agent N as a deal counterparty |
+| `agents any-payee <agentId> on\|off` | | Allow any registered payee, or only delegated ones |
+| `agents revoke <agentId>` | `--reason <text>` (`revoked by its human`) | Revoke one agent for good |
+| `agents freeze` / `agents unfreeze` | | Stop or restart all of your agents |
+
+### tyrell network
+
+| Command | Options | What it does |
+| --- | --- | --- |
+| `network deploy` | `--arbiter <address>` (required), `--admin <address>` (required on mainnet; default the arbiter), `--bond-token <address>` (default the deployment's token), `--account <name>`, `--unlocked-sender <address>` (local only) | Run `DeployNetwork.s.sol` once per chain; writes `contracts/deployments/network-<chainId>.json`. Verifies on the explorer off local chains |
+| `network link [file]` | | Record the network's addresses in your deployment file (default `contracts/deployments/network-<chainId>.json`) |
+| `network bond <agentId> <amount>` | | Approve and post bond |
+| `network request-withdrawal <agentId> <amount>` | | Step 1 of taking bond out; ready one contest window later |
+| `network withdraw <agentId>` | | Step 2: withdraw the requested bond (never with open reports) |
+| `network cancel-withdrawal <agentId>` | | Keep the bond after all |
+| `network report <agentId>` | `--evidence <ref>` (required), `--category <n>` (`1`) | Approve and file a report (categories: 1 payment manipulation, 2 impersonation, 3 spam, 4 non-delivery, 5 other) |
+| `network contest <reportId>` | | Approve and contest a report against your agent |
+| `network finalize <reportId>` | | Close an uncontested report after the window: the reporter's bond back, no penalty |
+| `network lapse <reportId>` | | Close a contested report the arbiter did not rule on in time: both bonds back |
+| `network resolve <reportId>` | `--uphold` | Arbiter only: decide a contested report (default: dismiss) |
+| `network appeal <agentId>` | `--evidence <ref>` (required) | Ask the arbiter to lift your agent's ban |
+| `network unban <agentId>` | `--reason <text>` (required) | Arbiter only: lift a ban |
+| `network set-arbiter <address>` | | Network owner (council) only: replace the arbiter |
+| `network deal-open <fromAgent> <toAgent> <amount>` | `--terms <text>` (required), `--days <n>` (`3`) | Approve and escrow a deal |
+| `network deal <action> <dealId>` | | Payer: `confirm`, `dispute`, `reclaim`. Payee: `deliver`, `cancel`, `claim`. Anyone: `lapse` |
+| `network resolve-deal <dealId>` | `--pay-payee` | Arbiter only: decide a disputed deal (default: refund the payer) |
+| `network rep <agentId>` | | Status, reputation, bond, pending withdrawal and record |
+| `network message <toAgent> <text>` | `--ttl <seconds>` (`3600`) | Sign a message with this deployment's agent key; prints the JSON to send |
+| `network verify <json>` | `--accept` | Verify a received message on-chain (a file path or inline JSON); `--accept` records it with `acceptMessage` so it can't be replayed |
 
 ## Exit codes
 

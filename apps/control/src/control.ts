@@ -10,7 +10,7 @@ import {
   type PublicClient,
   type WalletClient,
 } from "viem";
-import { Blob, Lane, memoryTypedData, toMemoryStruct, type AnchorRecord, type Id16 } from "@tyrell/core";
+import { Blob, Kind, Lane, memoryTypedData, toMemoryStruct, type AnchorRecord, type Id16 } from "@tyrell/core";
 import { memoryAnchorAbi, laneRegistryAbi, qieMainnet, qieTestnet, readSnapshot, tyrellLedgerAbi, type Deployment } from "@tyrell/chain";
 import { sealBlob, type BlobStore, type DataKey, type ProjectionDb } from "@tyrell/storage";
 import { anchorDomain, buildProjection, recallRows, storeFetcher, type BuiltProjection } from "./projection.js";
@@ -55,6 +55,7 @@ export const REF_BLOCK_SKEW = 2n;
 export class Control {
   private readonly wallet: WalletClient;
   private queue: Promise<unknown> = Promise.resolve();
+  private refreshQueue: Promise<unknown> = Promise.resolve();
   private last?: BuiltProjection;
 
   constructor(private readonly o: ControlOptions) {
@@ -119,6 +120,7 @@ export class Control {
         args: [signer, header.lane],
       });
       if (!active) throw new SubmitRejected(`signer ${signer} is not the active ${Object.keys(Lane)[header.lane - 1]?.toLowerCase()} key`);
+      if (header.kind === Kind.Decision && header.lane !== Lane.Control) throw new SubmitRejected("only the control lane writes payment decisions");
       // 3. Encrypt and pin.
       const sealed = await sealBlob(this.o.dataKey, this.o.deployment.acct, header.id, parsed.data);
       const cid = await this.o.store.put(sealed);
@@ -183,25 +185,43 @@ export class Control {
   }
 
   /**
-   * Re-reads chain state at a head, re-verifies, recomputes classes and quarantine, and replaces the
-   * recall index. Blobs come from the local cache when present, else from the store.
+   * Re-reads chain state, re-verifies, recomputes classes and quarantine, and replaces the recall
+   * index. Refreshes run one at a time, and a result never replaces a newer one (B-9). With `head`,
+   * this is `projectionAt(head)`: computed and returned, but the live state is left alone.
    */
   async refresh(head?: bigint): Promise<BuiltProjection> {
+    if (head !== undefined) return this.projectionAt(head);
+    const run = this.refreshQueue.then(async () => {
+      const built = await this.build();
+      if (this.last && built.head < this.last.head) return this.last;
+      this.o.db.setVisible(recallRows(built.projection));
+      this.o.db.setMeta("head", built.head.toString());
+      this.o.db.setMeta("digest", built.digest);
+      this.last = built;
+      return built;
+    });
+    this.refreshQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  /** The projection as of `head`, without touching the live projection or the recall index (`tyrell verify`). */
+  projectionAt(head: bigint): Promise<BuiltProjection> {
+    return this.build(head);
+  }
+
+  private async build(head?: bigint): Promise<BuiltProjection> {
     const snap = await readSnapshot(this.o.clients, this.o.deployment, {
       ...(head !== undefined ? { head } : {}),
+      // Live refreshes are incremental from the last cross-checked snapshot (perf); historical ones are full.
+      ...(head === undefined && this.last ? { since: this.last.snapshot } : {}),
       confirmations: this.o.confirmations ?? 0n,
       ...(this.o.window !== undefined ? { window: this.o.window } : {}),
     });
     const fromStore = storeFetcher(this.o.store, this.o.dataKey, this.o.deployment.acct);
-    const built = await buildProjection(snap, this.o.deployment, async (a) => {
+    return buildProjection(snap, this.o.deployment, async (a) => {
       const cached = this.o.db.blob(a.id);
       return cached !== undefined ? { ok: true, blob: cached } : fromStore(a);
     });
-    this.o.db.setVisible(recallRows(built.projection));
-    this.o.db.setMeta("head", built.head.toString());
-    this.o.db.setMeta("digest", built.digest);
-    this.last = built;
-    return built;
   }
 
   get projection(): BuiltProjection | undefined {

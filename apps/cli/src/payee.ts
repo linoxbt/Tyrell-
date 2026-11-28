@@ -19,10 +19,24 @@ const normName = (n: string) => {
   return s.endsWith(".qie") ? s : `${s}.qie`;
 };
 
+/**
+ * The network QIE ID names are looked up on for a Tyrell network. QIE ID is registered on mainnet only
+ * (there is no testnet record store), and a name resolves to an address that is the same on every QIE
+ * chain, so testnet and local chains look names up on mainnet unless QIE_ID_NETWORK says otherwise.
+ */
+export function qieIdNetwork(network: "mainnet" | "testnet" | "local", env: NodeJS.ProcessEnv = process.env): "mainnet" | "testnet" {
+  if (env.QIE_ID_NETWORK === "mainnet" || env.QIE_ID_NETWORK === "testnet") return env.QIE_ID_NETWORK;
+  void network;
+  return "mainnet";
+}
+
 /** QIE ID resolution through the QIE MCP server (spec section 12): qie_resolve_name / qie_reverse_lookup. */
 export class McpQieIdResolver implements QieIdResolver {
   private client?: Client;
-  constructor(private readonly url = process.env.QIE_MCP_URL ?? "https://mcp.qie.digital/mcp") {}
+  constructor(
+    private readonly url = process.env.QIE_MCP_URL ?? "https://mcp.qie.digital/mcp",
+    private readonly network: "mainnet" | "testnet" = "mainnet",
+  ) {}
 
   private async c(): Promise<Client> {
     if (!this.client) {
@@ -33,7 +47,7 @@ export class McpQieIdResolver implements QieIdResolver {
   }
 
   private async tool(name: string, args: Record<string, string>): Promise<Record<string, unknown>> {
-    const r = await (await this.c()).callTool({ name, arguments: { ...args, network: "mainnet" } });
+    const r = await (await this.c()).callTool({ name, arguments: { ...args, network: this.network } });
     const text = (r.content as Array<{ type: string; text?: string }>).find((x) => x.type === "text")?.text ?? "{}";
     return JSON.parse(text) as Record<string, unknown>;
   }

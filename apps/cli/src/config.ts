@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, accessSync, constants } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, accessSync, constants, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { createPublicClient, http, type Hex, type PublicClient } from "viem";
+import { createPublicClient, fallback, http, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { networks, parseDeployment, type Deployment } from "@tyrell/chain";
 import { chainFor } from "@tyrell/control";
@@ -43,6 +43,7 @@ export const paths = () => {
     db: process.env.TYRELL_DB ?? join(h, "projection.sqlite"),
     socket: join(h, "control.sock"),
     signerSocket: join(h, "signer.sock"),
+    apiToken: join(h, "api-token"),
     blobs: join(h, "blobs"),
   };
 };
@@ -70,31 +71,82 @@ export function deployment(c: TyrellConfig): Deployment {
   return parseDeployment(readFileSync(file, "utf8"));
 }
 
-/** Passphrase for keystores: KEYSTORE_PASSPHRASE_FILE, else TYRELL_HOME/pass. Never logged. */
-export function passphrase(): string {
-  const file = process.env.KEYSTORE_PASSPHRASE_FILE ?? join(home(), "pass");
-  if (!existsSync(file)) throw new Error(`no passphrase file at ${file} (chmod 600)`);
+/**
+ * Keystore passphrases, one per role (I-12). For role R the first that exists wins:
+ *   KEYSTORE_PASSPHRASE_FILE_<R>   (e.g. KEYSTORE_PASSPHRASE_FILE_CONTROL)
+ *   TYRELL_HOME/pass.d/<r>
+ *   the shared file: KEYSTORE_PASSPHRASE_FILE, else TYRELL_HOME/pass
+ * The shared file is accepted on a local test chain only: on testnet and mainnet a process refuses it
+ * unless TYRELL_INSECURE_SHARED_KEYS=1, because with one passphrase any process that can read another
+ * role's key file can decrypt it. Every passphrase and key file must be private to its OS user (no
+ * group or other permission bits). Never logged.
+ */
+export function passphraseFile(role: string): { file: string; shared: boolean } {
+  const env = process.env[`KEYSTORE_PASSPHRASE_FILE_${role.toUpperCase()}`];
+  if (env) return { file: env, shared: false };
+  const own = join(home(), "pass.d", role);
+  if (existsSync(own)) return { file: own, shared: false };
+  return { file: process.env.KEYSTORE_PASSPHRASE_FILE ?? join(home(), "pass"), shared: true };
+}
+
+/** Throws if `path` can be read or written by anyone but its owner (POSIX only). */
+export function assertPrivate(path: string, what: string): void {
+  if (process.platform === "win32") return;
+  const mode = statSync(path).mode & 0o777;
+  if (mode & 0o077) throw new Error(`${what} ${path} is accessible to other users (mode ${mode.toString(8)}): chmod 600 it`);
+}
+
+const networkOf = (): TyrellConfig["network"] | undefined => {
+  try {
+    return readConfig().network;
+  } catch {
+    return undefined;
+  }
+};
+const insecureShared = () => process.env.TYRELL_INSECURE_SHARED_KEYS === "1";
+
+export function passphrase(role: string): string {
+  const { file, shared } = passphraseFile(role);
+  if (!existsSync(file)) throw new Error(`no passphrase file for the ${role} key at ${file} (chmod 600)`);
+  assertPrivate(file, "passphrase file");
+  if (shared && networkOf() !== "local" && networkOf() !== undefined && !insecureShared()) {
+    throw new Error(
+      `the ${role} key would be opened with the shared passphrase ${file}; on ${networkOf()} each role needs its own: write it to ${join(home(), "pass.d", role)} (chmod 600) or set KEYSTORE_PASSPHRASE_FILE_${role.toUpperCase()}`,
+    );
+  }
   return readFileSync(file, "utf8").replace(/\r?\n$/, "");
 }
 
+const readable = (p: string) => {
+  if (!existsSync(p)) return false;
+  try {
+    accessSync(p, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
- * I-12 startup check: a process may read only its own key files. In the deployed demo each process
- * runs as its own OS user, so other roles' files are unreadable; TYRELL_STRICT_KEYS=1 turns a
- * readable foreign key file into a hard failure. Returns the readable foreign files.
+ * I-12 startup check: a process must not be able to open another role's key, that is, read both that
+ * key file and its passphrase. Each process should run as its own OS user with its own passphrase.
+ * On testnet and mainnet a violation aborts; on a local test chain it is returned as a warning (a
+ * single-user demo), and TYRELL_STRICT_KEYS=1 makes it abort there too. TYRELL_INSECURE_SHARED_KEYS=1
+ * is the explicit, unsafe override for a single-user machine on a public network.
+ * Returns the foreign key files this process could open.
  */
 export function checkKeyIsolation(proc: ProcessName): string[] {
   const own = new Set<Role>(PROCESS_KEYS[proc]);
-  const foreign = ROLES.filter((r) => !own.has(r)).map((r) => paths().key(r)).filter((p) => {
-    if (!existsSync(p)) return false;
-    try {
-      accessSync(p, constants.R_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  if (foreign.length && process.env.TYRELL_STRICT_KEYS === "1") {
-    throw new Error(`${proc} can read keys that are not its own: ${foreign.join(", ")}`);
+  for (const r of own) if (existsSync(paths().key(r))) assertPrivate(paths().key(r), "key file");
+  const foreign = ROLES.filter((r) => !own.has(r))
+    .filter((r) => readable(paths().key(r)) && readable(passphraseFile(r).file))
+    .map((r) => paths().key(r));
+  const net = networkOf();
+  const strict = process.env.TYRELL_STRICT_KEYS === "1" || (net !== "local" && net !== undefined && !insecureShared());
+  if (foreign.length && strict) {
+    throw new Error(
+      `${proc} can open keys that are not its own: ${foreign.join(", ")}. Run each process as its own OS user with its own passphrase (TYRELL_HOME/pass.d/<role>)`,
+    );
   }
   return foreign;
 }
@@ -102,17 +154,34 @@ export function checkKeyIsolation(proc: ProcessName): string[] {
 /** Loads an EVM key for `role`, refusing it if this process is not allowed to hold it. */
 export function account(proc: ProcessName, role: Exclude<Role, "data">): PrivateKeyAccount {
   if (!(PROCESS_KEYS[proc] as readonly Role[]).includes(role)) throw new Error(`the ${proc} process may not hold the ${role} key (I-12)`);
-  return privateKeyToAccount(loadKey(paths().key(role), passphrase(), role));
+  assertPrivate(paths().key(role), "key file");
+  return privateKeyToAccount(loadKey(paths().key(role), passphrase(role), role));
 }
 
 export async function dataKey(proc: ProcessName): Promise<DataKey> {
   if (!(PROCESS_KEYS[proc] as readonly Role[]).includes("data")) throw new Error(`the ${proc} process may not hold the data key (I-12)`);
-  return importDataKey(hexSecret(loadKey(paths().key("data"), passphrase(), "data")));
+  assertPrivate(paths().key("data"), "key file");
+  return importDataKey(hexSecret(loadKey(paths().key("data"), passphrase("data"), "data")));
 }
 
+/**
+ * Clients for the cross-check (R0, NFR-05): the first two configured endpoints, each on its own (they
+ * must be different URLs on testnet and mainnet, or the check proves nothing), and, when more are
+ * configured, a third client that falls back across all the remaining ones (viem fallback()), which
+ * breaks a tie when the first two disagree and keeps the check available when one endpoint is down.
+ */
 export function clients(c: TyrellConfig): PublicClient[] {
   const chain = chainFor(c.chainId, c.rpcs[0]!);
-  return c.rpcs.map((url) => createPublicClient({ chain, transport: http(url, { retryCount: 2 }), pollingInterval: 1_000 }));
+  const urls = c.rpcs;
+  if (c.network !== "local") {
+    const distinct = new Set(urls.map((u) => u.replace(/\/+$/, "").toLowerCase()));
+    if (distinct.size < 2 || distinct.size !== urls.length) throw new Error("config.rpcs must list at least two different RPC endpoints, each once (spec section 11)");
+  }
+  const one = (url: string) => createPublicClient({ chain, transport: http(url, { retryCount: 2 }), pollingInterval: 1_000 }) as PublicClient;
+  const out: PublicClient[] = urls.slice(0, 2).map(one);
+  const rest = urls.slice(2);
+  if (rest.length) out.push(createPublicClient({ chain, transport: fallback(rest.map((u) => http(u, { retryCount: 1 }))), pollingInterval: 1_000 }) as unknown as PublicClient);
+  return out;
 }
 
 export function blobStore(c: TyrellConfig): BlobStore {

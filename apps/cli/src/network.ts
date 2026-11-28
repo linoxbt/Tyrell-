@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { encodeFunctionData, erc20Abi, getAddress, keccak256, maxUint256, parseUnits, toBytes, type Address, type Hex, type PublicClient } from "viem";
 import { AGENT_CODES, codeText, dealPayeeId, payeeIdOf, permMask, permNames, type PermName } from "@tyrell/core";
-import { agentNetworkAbi, agentRegistryAbi, guardedVaultAbi, laneRegistryAbi, networks, testQieIdAbi, type Deployment } from "@tyrell/chain";
+import { agentNetworkAbi, agentRegistryAbi, guardedVaultAbi, laneRegistryAbi, memoryAnchorAbi, networks, testQieIdAbi, type Deployment } from "@tyrell/chain";
 import type { OwnerTx } from "./setup.js";
 import { readConfig, type TyrellConfig } from "./config.js";
 
@@ -42,12 +42,17 @@ export function bindTxs(d: Deployment, qieId: string, claimTestName: boolean): O
 
 export interface RegisterInput {
   key: Address;
+  /** The one token the agent spends; its limits are in this token. */
+  token: Address;
   label: string;
   model?: string;
   perms: number;
   perTx: bigint;
   daily: bigint;
   anyPayee: boolean;
+  /** The agent key's consent: EIP-712 RegisterAgent(human = owner, key, deadline), see signAgentRegistration. */
+  deadline: bigint;
+  keySig: Hex;
 }
 
 export function registerTx(d: Deployment, i: RegisterInput): OwnerTx {
@@ -57,16 +62,39 @@ export function registerTx(d: Deployment, i: RegisterInput): OwnerTx {
     encodeFunctionData({
       abi: agentRegistryAbi,
       functionName: "registerAgent",
-      args: [i.key, i.label, i.model ? keccak256(toBytes(i.model)) : `0x${"0".repeat(64)}`, i.perms, i.perTx, i.daily, i.anyPayee],
+      args: [
+        {
+          key: i.key,
+          token: i.token,
+          label: i.label,
+          metaHash: i.model ? keccak256(toBytes(i.model)) : `0x${"0".repeat(64)}`,
+          permissions: i.perms,
+          perTxLimit: i.perTx,
+          dailyLimit: i.daily,
+          anyPayee: i.anyPayee,
+        },
+        i.deadline,
+        i.keySig,
+      ],
     }),
   );
 }
 
-/** Link this deployment's vault: the registry may be charged by it, and it pays through payForAgent. */
+/**
+ * Link this deployment to its registered agent: the registry may be charged by the vault, the vault pays
+ * through payForAgent only (its plain pay() closes), and agent-lane memories need the agent's MEMORY
+ * permission. Register this deployment's agent first: with the vault linked, payments need its agent id.
+ */
 export function spenderTxs(d: Deployment): OwnerTx[] {
+  if (d.agentId === undefined) throw new Error("register this deployment's agent first (`tyrell agents register`): once linked, the vault only pays through payForAgent");
   return [
     tx("Allow your vault to charge your agents", reg(d), encodeFunctionData({ abi: agentRegistryAbi, functionName: "setSpender", args: [d.guardedVault, true] })),
-    tx("Point your vault at the agent registry", d.guardedVault, encodeFunctionData({ abi: guardedVaultAbi, functionName: "setAgentRegistry", args: [reg(d)] })),
+    tx("Point your vault at the agent registry (payments then go through payForAgent only)", d.guardedVault, encodeFunctionData({ abi: guardedVaultAbi, functionName: "setAgentRegistry", args: [reg(d)] })),
+    tx(
+      `Gate agent-lane memories on agent #${d.agentId} (it needs the memory permission)`,
+      d.memoryAnchor,
+      encodeFunctionData({ abi: memoryAnchorAbi, functionName: "linkAgent", args: [reg(d), d.agentId] }),
+    ),
     ...(d.agentNetwork
       ? [tx("Allow the agents network to charge your agents for deals", reg(d), encodeFunctionData({ abi: agentRegistryAbi, functionName: "setSpender", args: [d.agentNetwork, true] }))]
       : []),
@@ -98,8 +126,13 @@ export const bondTxs = (d: Deployment, token: Address, id: bigint, amount: bigin
   approveTx(token, net(d)),
   tx(`Bond agent #${id}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "bond", args: [id, amount] })),
 ];
-export const withdrawBondTx = (d: Deployment, id: bigint, amount: bigint) =>
-  tx(`Withdraw bond of agent #${id}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "withdrawBond", args: [id, amount] }));
+/** Bond withdrawal is two steps: request (the bond can still be slashed), then withdraw one contest window later. */
+export const requestWithdrawalTx = (d: Deployment, id: bigint, amount: bigint) =>
+  tx(`Ask to withdraw bond of agent #${id} (available after the contest window)`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "requestWithdrawal", args: [id, amount] }));
+export const withdrawBondTx = (d: Deployment, id: bigint) =>
+  tx(`Withdraw the requested bond of agent #${id}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "withdrawBond", args: [id] }));
+export const cancelWithdrawalTx = (d: Deployment, id: bigint) =>
+  tx(`Cancel the bond withdrawal of agent #${id}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "cancelWithdrawal", args: [id] }));
 export const reportTxs = (d: Deployment, token: Address, id: bigint, category: number, evidence: string) => [
   approveTx(token, net(d)),
   tx(`Report agent #${id}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "fileReport", args: [id, category, keccak256(toBytes(evidence)), evidence] })),
@@ -108,57 +141,80 @@ export const contestTxs = (d: Deployment, token: Address, reportId: bigint) => [
   approveTx(token, net(d)),
   tx(`Contest report #${reportId}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "contest", args: [reportId] })),
 ];
-export const finalizeTx = (d: Deployment, reportId: bigint) => tx(`Finalize report #${reportId}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "finalize", args: [reportId] }));
+export const finalizeTx = (d: Deployment, reportId: bigint) =>
+  tx(`Close uncontested report #${reportId}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "finalize", args: [reportId] }));
+export const lapseTx = (d: Deployment, reportId: bigint) =>
+  tx(`Close report #${reportId}: the arbiter did not rule in time (both bonds refunded)`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "lapse", args: [reportId] }));
 export const resolveTx = (d: Deployment, reportId: bigint, upheld: boolean) =>
   tx(`${upheld ? "Uphold" : "Dismiss"} report #${reportId} (arbiter)`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "resolve", args: [reportId, upheld] }));
+export const appealTx = (d: Deployment, id: bigint, evidence: string) =>
+  tx(`Appeal the ban of agent #${id}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "appeal", args: [id, evidence] }));
+export const unbanTx = (d: Deployment, id: bigint, reason: string) =>
+  tx(`Lift the ban of agent #${id} (arbiter)`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "unban", args: [id, reason] }));
+export const setArbiterTx = (d: Deployment, arbiter: Address) =>
+  tx(`Make ${arbiter} the arbiter (network owner)`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "setArbiter", args: [arbiter] }));
+export const acceptMessageTx = (d: Deployment, m: { fromAgent: bigint; toAgent: bigint; bodyHash: Hex; nonce: bigint; deadline: bigint }, signature: Hex) =>
+  tx(
+    `Record message ${m.nonce} from agent #${m.fromAgent} as accepted (no replay)`,
+    net(d),
+    encodeFunctionData({ abi: agentNetworkAbi, functionName: "acceptMessage", args: [m.fromAgent, m.toAgent, m.bodyHash, m.nonce, m.deadline, signature] }),
+  );
 export function openDealTxs(d: Deployment, token: Address, from: bigint, to: bigint, amount: bigint, terms: string, deadline: bigint): OwnerTx[] {
   return [
     approveTx(token, net(d)),
     tx(`Open a deal: agent #${from} pays agent #${to}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "openDeal", args: [from, to, token, amount, keccak256(toBytes(terms)), deadline] })),
   ];
 }
-export const dealTx = (d: Deployment, action: "confirmDeal" | "cancelDeal" | "reclaim", dealId: bigint) =>
-  tx(`${action === "confirmDeal" ? "Confirm" : action === "cancelDeal" ? "Cancel" : "Reclaim"} deal #${dealId}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: action, args: [dealId] }));
+export type DealAction = "confirmDeal" | "cancelDeal" | "reclaim" | "deliver" | "claim" | "disputeDeal" | "lapseDeal";
+const DEAL_VERB: Record<DealAction, string> = {
+  confirmDeal: "Confirm",
+  cancelDeal: "Cancel",
+  reclaim: "Reclaim",
+  deliver: "Mark delivered",
+  claim: "Claim (the payer neither confirmed nor disputed)",
+  disputeDeal: "Dispute",
+  lapseDeal: "Refund (the arbiter did not decide in time)",
+};
+export const dealTx = (d: Deployment, action: DealAction, dealId: bigint) =>
+  tx(`${DEAL_VERB[action]} deal #${dealId}`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: action, args: [dealId] }));
+export const resolveDealTx = (d: Deployment, dealId: bigint, payPayee: boolean) =>
+  tx(`${payPayee ? "Pay the payee of" : "Refund the payer of"} disputed deal #${dealId} (arbiter)`, net(d), encodeFunctionData({ abi: agentNetworkAbi, functionName: "resolveDeal", args: [dealId, payPayee] }));
 
-/** The owner's agents, with live status, limits, today's spend, bond and reputation. */
+/**
+ * The owner's agents, with live status, limits, today's spend, bond and reputation. A fixed number of
+ * reads (registry.agentsView, network.stats) however many agents the owner ever registered.
+ */
 export async function agentsReport(pub: PublicClient, d: Deployment) {
   const registry = reg(d);
-  const human = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "human", args: [d.owner] });
-  const bound = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "isBound", args: [d.owner] });
-  const ids = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "agentsOf", args: [d.owner] });
-  const quota = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "quota", args: [d.owner, d.token] });
-  const spent = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "humanSpentToday", args: [d.owner, d.token] });
-  const laneAgentKey = await pub.readContract({ address: d.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] });
-  const agents = [];
-  for (const id of ids) {
-    const a = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "agent", args: [id] });
-    const [ok, code] = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "status", args: [id] });
-    const today = await pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "spentToday", args: [id, d.token] });
-    const extra = d.agentNetwork
-      ? {
-          bond: await pub.readContract({ address: d.agentNetwork, abi: agentNetworkAbi, functionName: "bondOf", args: [id] }),
-          reputation: await pub.readContract({ address: d.agentNetwork, abi: agentNetworkAbi, functionName: "reputation", args: [id] }),
-        }
-      : {};
-    agents.push({
-      id,
-      label: a.label,
-      key: a.key,
-      thisDeployment: a.key.toLowerCase() === laneAgentKey.toLowerCase(),
-      status: ok ? "active" : `${codeText(code)}: ${AGENT_CODES[codeText(code)] ?? ""}`,
-      permissions: permNames(a.permissions).map((p) => p.toLowerCase()),
-      perTxLimit: a.perTxLimit,
-      dailyLimit: a.dailyLimit,
-      spentToday: today,
-      anyPayee: a.anyPayee,
-      ...extra,
-    });
-  }
+  const [human, bound, rows, quota, spent, laneAgentKey] = await Promise.all([
+    pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "human", args: [d.owner] }),
+    pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "isBound", args: [d.owner] }),
+    pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "agentsView", args: [d.owner] }),
+    pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "quota", args: [d.owner, d.token] }),
+    pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "humanSpentToday", args: [d.owner, d.token] }),
+    pub.readContract({ address: d.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] }),
+  ]);
+  const ids = rows.map((r) => r.id);
+  const [bonds, reps] = d.agentNetwork && ids.length ? await pub.readContract({ address: d.agentNetwork, abi: agentNetworkAbi, functionName: "stats", args: [ids] }) : [[], []];
+  const agents = rows.map((r, i) => ({
+    id: r.id,
+    label: r.agent.label,
+    key: r.agent.key,
+    token: r.agent.token,
+    thisDeployment: r.agent.key.toLowerCase() === laneAgentKey.toLowerCase(),
+    status: r.ok ? "active" : `${codeText(r.code)}: ${AGENT_CODES[codeText(r.code)] ?? ""}`,
+    permissions: permNames(r.agent.permissions).map((p) => p.toLowerCase()),
+    perTxLimit: r.agent.perTxLimit,
+    dailyLimit: r.agent.dailyLimit,
+    spentToday: r.spentToday,
+    anyPayee: r.agent.anyPayee,
+    ...(d.agentNetwork ? { bond: bonds[i], reputation: reps[i] } : {}),
+  }));
   return { human: d.owner, qieId: human.qieId || null, bound, frozen: human.frozen, quotaToday: { quota, spent }, configuredAgentId: d.agentId ?? null, agents };
 }
 
 /** Deploy AgentRegistry + AgentNetwork once per chain with contracts/script/DeployNetwork.s.sol. */
-export function deployNetwork(o: { bondToken: Address; arbiter: Address; account?: string; unlockedSender?: Address; qieId?: Address; repoRoot?: string; env?: Record<string, string> }): string {
+export function deployNetwork(o: { bondToken: Address; arbiter: Address; admin?: Address; account?: string; unlockedSender?: Address; qieId?: Address; repoRoot?: string; env?: Record<string, string> }): string {
   const c = readConfig();
   const root = resolve(o.repoRoot ?? process.env.TYRELL_REPO ?? join(import.meta.dirname, "../../.."));
   const contracts = join(root, "contracts");
@@ -169,7 +225,14 @@ export function deployNetwork(o: { bondToken: Address; arbiter: Address; account
   } else if (o.account) args.push("--account", o.account);
   else throw new Error("pass --account <foundry keystore name>");
   if (c.network !== "local" && c.network !== undefined) args.push("--verify", "--verifier", "blockscout", "--verifier-url", `${networks[c.network as "mainnet" | "testnet"].explorer}/api/`);
-  const env = { ...process.env, BOND_TOKEN: getAddress(o.bondToken), ARBITER: getAddress(o.arbiter), ...(o.qieId ? { QIE_ID: getAddress(o.qieId) } : {}), ...(o.env ?? {}) };
+  const env = {
+    ...process.env,
+    BOND_TOKEN: getAddress(o.bondToken),
+    ARBITER: getAddress(o.arbiter),
+    ...(o.admin ? { ADMIN: getAddress(o.admin) } : {}),
+    ...(o.qieId ? { QIE_ID: getAddress(o.qieId) } : {}),
+    ...(o.env ?? {}),
+  };
   const r = spawnSync(join(contracts, "node_modules/.bin/forge"), args, { cwd: contracts, env, stdio: "inherit" });
   if (r.status !== 0) throw new Error(`forge script failed (exit ${r.status})`);
   const out = join(contracts, "deployments", `network-${c.chainId}.json`);
@@ -192,3 +255,55 @@ export function linkNetwork(c: TyrellConfig, file: string, agentId?: bigint) {
 }
 
 export const units = (s: string, decimals: number): bigint => parseUnits(s, decimals);
+
+export interface WaitOptions {
+  /** Give up after this long (default 10 minutes): a rejected or abandoned wallet prompt never lands. */
+  timeoutMs?: number;
+  pollMs?: number;
+  log?: (s: string) => void;
+}
+
+/**
+ * Wait for the owner's transactions, in order, from `fromBlock`: each is matched on-chain by sender, target
+ * and calldata, and its receipt must succeed. Returns their hashes. Throws on the first revert, or when
+ * the timeout passes (naming the transaction still missing), so a rejected wallet prompt never hangs.
+ */
+export async function waitForOwnerTxs(pub: PublicClient, owner: Address, txs: readonly OwnerTx[], fromBlock: bigint, o: WaitOptions = {}): Promise<Hex[]> {
+  const timeoutMs = o.timeoutMs ?? 10 * 60_000;
+  const pollMs = o.pollMs ?? 3_000;
+  const until = Date.now() + timeoutMs;
+  const hashes: Hex[] = [];
+  let next = fromBlock;
+  while (hashes.length < txs.length) {
+    const head = await pub.getBlockNumber({ cacheTime: 0 });
+    for (; next <= head && hashes.length < txs.length; next++) {
+      const block = await pub.getBlock({ blockNumber: next, includeTransactions: true });
+      for (const t of block.transactions) {
+        const want = txs[hashes.length];
+        if (!want) break;
+        if (t.from.toLowerCase() !== owner.toLowerCase() || t.to?.toLowerCase() !== want.to.toLowerCase() || t.input.toLowerCase() !== want.data.toLowerCase()) continue;
+        const r = await pub.getTransactionReceipt({ hash: t.hash });
+        if (r.status !== "success") throw new Error(`"${want.label}" reverted (${t.hash}); nothing after it was applied`);
+        hashes.push(t.hash);
+        o.log?.(`  mined: ${want.label} (${t.hash})`);
+      }
+    }
+    if (hashes.length === txs.length) break;
+    if (Date.now() > until) {
+      throw new Error(
+        `gave up after ${Math.round(timeoutMs / 1000)} s waiting for "${txs[hashes.length]!.label}" (${hashes.length} of ${txs.length} mined). If the wallet rejected it, run the command again.`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  return hashes;
+}
+
+/** After registering `key`, the id it got, checked to belong to `owner` (never someone else's agent). */
+export async function registeredAgentId(pub: PublicClient, d: Deployment, key: Address): Promise<bigint> {
+  const id = await pub.readContract({ address: reg(d), abi: agentRegistryAbi, functionName: "agentIdOf", args: [key] });
+  if (id === 0n) throw new Error(`${key} is not a registered agent key`);
+  const a = await pub.readContract({ address: reg(d), abi: agentRegistryAbi, functionName: "agent", args: [id] });
+  if (a.human.toLowerCase() !== d.owner.toLowerCase()) throw new Error(`agent #${id} (key ${key}) belongs to ${a.human}, not to you (${d.owner}): not linking it`);
+  return id;
+}

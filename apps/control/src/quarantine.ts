@@ -88,8 +88,15 @@ export class Quarantine {
     return { memories: radius.memories.length, decisions: radius.decisions.length, vaultTxs: radius.vaultTxs.length, radius, payeesSuspended };
   }
 
-  private signAndSend(functionName: "seedQuarantine" | "suspendPayee", message: Record<string, unknown>, args: (sig: Hex) => readonly unknown[]) {
-    return this.o.control.exclusive(() => this.signAndSendNow(functionName, message, args));
+  /**
+   * Reads the control key's next ledger nonce, signs and sends, all inside control's single
+   * transaction lane, so two quarantines at once can never sign the same nonce (B-4).
+   */
+  private signAndSend(functionName: "seedQuarantine" | "suspendPayee", build: (nonce: bigint) => { message: Record<string, unknown>; args: (sig: Hex) => readonly unknown[] }) {
+    return this.o.control.exclusive(async () => {
+      const { message, args } = build(await this.nextNonce());
+      return this.signAndSendNow(functionName, message, args);
+    });
   }
 
   private async signAndSendNow(functionName: "seedQuarantine" | "suspendPayee", message: Record<string, unknown>, args: (sig: Hex) => readonly unknown[]) {
@@ -126,19 +133,29 @@ export class Quarantine {
     const v = encodeSeed(spec);
     const block = await this.o.clients[0]!.getBlock({ blockTag: "latest" });
     const deadline = block.timestamp + 3_600n;
-    const nonce = await this.nextNonce();
-    const receipt = await this.signAndSend("seedQuarantine", { ...v, reasonCid, nonce, deadline }, (sig) => [v.seedType, v.seedValue, v.fromBlock, v.toBlock, reasonCid, nonce, deadline, sig]);
+    const receipt = await this.signAndSend("seedQuarantine", (nonce) => ({
+      message: { ...v, reasonCid, nonce, deadline },
+      args: (sig) => [v.seedType, v.seedValue, v.fromBlock, v.toBlock, reasonCid, nonce, deadline, sig],
+    }));
     const ev = parseEventLogs({ abi: tyrellLedgerAbi, eventName: "QuarantineSeeded", logs: receipt.logs })[0]!;
     const seedId = Number(ev.args.seedId);
 
     const suspended: Hex[] = [];
     for (const payeeId of preview.payeesSuspended) {
-      const n = await this.nextNonce();
-      await this.signAndSend("suspendPayee", { payeeId, seedId: BigInt(seedId), nonce: n, deadline }, (sig) => [payeeId, BigInt(seedId), n, deadline, sig]);
+      await this.signAndSend("suspendPayee", (n) => ({ message: { payeeId, seedId: BigInt(seedId), nonce: n, deadline }, args: (sig) => [payeeId, BigInt(seedId), n, deadline, sig] }));
       suspended.push(payeeId);
     }
     await this.o.control.refresh();
     return { seedId, txHash: receipt.transactionHash, reasonCid, preview, suspended };
+  }
+
+  /** The active (unreleased) seed that already covers `spec`, if any. */
+  async covering(spec: SeedSpec): Promise<number | undefined> {
+    const p = this.o.control.projection ?? (await this.o.control.refresh());
+    const v = encodeSeed(spec);
+    return p.snapshot.ledger.seeds.find(
+      (s) => !s.released && s.type === v.seedType && s.value.toLowerCase() === v.seedValue.toLowerCase() && s.fromBlock === v.fromBlock && s.toBlock === v.toBlock,
+    )?.seedId;
   }
 
   /** The blast radius of an existing seed. */

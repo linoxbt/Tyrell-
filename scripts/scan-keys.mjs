@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// NFR-01: refuse commits that contain anything shaped like a private key.
+// NFR-01: refuse commits that contain anything shaped like a private key or an API credential.
 //   --staged   scan lines added in the staged diff (pre-commit hook)
 //   --history  scan every line ever added on any branch (submission checklist)
 // A 32-byte hex value that is public (an event topic, a hash) can be kept by
@@ -11,6 +11,13 @@ const RULES = [
   { name: "32-byte hex (possible private key)", re: /(?<![0-9a-fA-Fx])(?:0x)?[0-9a-fA-F]{64}(?![0-9a-fA-F])/ },
   { name: "PEM private key", re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { name: "keystore ciphertext", re: /"ciphertext"\s*:\s*"[0-9a-fA-F]{32,}"/ },
+  // API credentials (S-14): provider keys, JWTs (Pinata), bearer tokens and key-looking assignments.
+  { name: "API key (sk-...)", re: /\bsk-(?:ant-|proj-|ft-|live-)?[A-Za-z0-9_-]{24,}/ },
+  { name: "JWT", re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
+  { name: "bearer token", re: /\bBearer\s+[A-Za-z0-9._~+/-]{32,}=*/ },
+  { name: "GitHub token", re: /\bgh[pousr]_[A-Za-z0-9]{36,}/ },
+  { name: "AWS access key", re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { name: "secret assignment", re: /(?:api[_-]?key|secret|token|passw(?:or)?d)["']?\s*[:=]\s*["'][A-Za-z0-9_+/=-]{24,}["']/i },
 ];
 const ALLOW = "key-scan: allow";
 

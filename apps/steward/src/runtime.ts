@@ -1,13 +1,14 @@
 import { parseUnits, type Address, type Hex } from "viem";
 import type { LocalAccount } from "viem/accounts";
 import { z } from "zod";
-import { Kind, Lane, signEnvelope, uuidv7, type AnchorDomain, type Blob, type Id16 } from "@tyrell/core";
+import { Kind, Lane, MAX_PARENTS, signEnvelope, uuidv7, type AnchorDomain, type Blob, type Id16 } from "@tyrell/core";
 import type { ChatModel, Message, ToolCall } from "./model.js";
-import { label, SYSTEM_PROMPT, TOOLS } from "./prompt.js";
+import { memoryLine, SYSTEM_PROMPT, TOOLS } from "./prompt.js";
 
 /** What Steward may ask of control. Over IPC in production, in-process in tests. */
 export interface ControlApi {
-  recall(query: string, limit?: number): Promise<Array<{ id: string; cls: string; body: string }>>;
+  /** `turn` lets control check that a proposal's readSet includes everything it served this turn. */
+  recall(query: string, limit?: number, turn?: Id16): Promise<Array<{ id: string; cls: string; body: string }>>;
   submit(blob: Blob): Promise<{ id: Id16; txHash: Hex }>;
   propose(proposal: ProposalMsg, readSet: Id16[], turn: Id16): Promise<DecisionMsg>;
   head(): Promise<bigint>;
@@ -25,6 +26,8 @@ export interface ProposalMsg {
 export interface DecisionMsg {
   decisionId: Id16;
   verdict: { decision: "ALLOW" | "BLOCK"; code: string; reasons: string[] };
+  /** For an ALLOW: paid, failed, or (rarely) unknown. */
+  outcome?: "paid" | "failed" | "unknown";
   txHash?: Hex;
   payError?: string;
 }
@@ -46,9 +49,19 @@ export interface StewardOptions {
   token: PaymentToken;
   maxSteps?: number;
   recallLimit?: number;
+  /** Tool calls honoured per model reply (default 6); extra calls get an error, not an effect. */
+  maxToolCallsPerReply?: number;
+  /** propose_payment calls honoured per turn (default 3). Each costs a chain refresh and an anchor. */
+  maxProposalsPerTurn?: number;
 }
 
-export { LABELS, label, SYSTEM_PROMPT, TOOLS } from "./prompt.js";
+/**
+ * The most memories one turn may read. A payment decision's parents are the turn's readSet and a
+ * record can have at most MAX_PARENTS parents, so a turn never reads more than it could cite (B-1).
+ */
+export const MAX_READ_SET = MAX_PARENTS;
+
+export { LABELS, label, memoryLine, SYSTEM_PROMPT, TOOLS } from "./prompt.js";
 
 const RecallArgs = z.object({ query: z.string().min(1).max(512), limit: z.number().int().min(1).max(16).optional() }).strict();
 const NoteArgs = z.object({ text: z.string().min(1).max(4000), kind: z.enum(["note", "summary"]).optional(), cites: z.array(z.string()).max(32).optional() }).strict();
@@ -89,9 +102,13 @@ export class Steward {
     const decisions: DecisionMsg[] = [];
 
     const recall = async (query: string, limit?: number) => {
-      const rows = await this.o.control.recall(query, limit ?? this.o.recallLimit ?? 8);
-      for (const r of rows) readSet.add(r.id as Id16);
-      return rows.map((r) => `${label(r.cls)} (${r.id}) ${r.body}`).join("\n") || "(no memories found)";
+      const room = MAX_READ_SET - readSet.size;
+      if (room <= 0) return `(this turn has already read ${MAX_READ_SET} memories, the most one turn may read; work with those)`;
+      const rows = await this.o.control.recall(query, limit ?? this.o.recallLimit ?? 8, turn);
+      // Only what fits is shown, so readSet is exactly what the model saw and never exceeds the cap.
+      const shown = rows.filter((r) => readSet.has(r.id as Id16) || readSet.size < MAX_READ_SET);
+      for (const r of shown) readSet.add(r.id as Id16);
+      return shown.map((r) => memoryLine(r.cls, r.id, r.body)).join("\n") || "(no memories found)";
     };
 
     const messages: Message[] = [
@@ -110,8 +127,9 @@ export class Steward {
         final = reply.content;
         break;
       }
-      for (const call of reply.toolCalls) {
-        const content = await this.tool(call, { turn, readSet, writes, decisions, recall });
+      const perReply = this.o.maxToolCallsPerReply ?? 6;
+      for (const [i, call] of reply.toolCalls.entries()) {
+        const content = i < perReply ? await this.tool(call, { turn, readSet, writes, decisions, recall }) : `error: at most ${perReply} tool calls per reply; this one was not run`;
         messages.push({ role: "tool", tool_call_id: call.id, content });
       }
     }
@@ -154,6 +172,7 @@ export class Steward {
         return `saved ${out.id}`;
       }
       case "propose_payment": {
+        if (t.decisions.length >= (this.o.maxProposalsPerTurn ?? 3)) return `error: at most ${this.o.maxProposalsPerTurn ?? 3} payment proposals per turn`;
         const a = ProposeArgs.safeParse(args);
         if (!a.success) return `error: ${a.error.issues[0]?.message}`;
         const tok = this.resolveToken(a.data.token);
@@ -174,7 +193,15 @@ export class Steward {
         };
         const d = await this.o.control.propose(proposal, [...t.readSet].sort(), t.turn);
         t.decisions.push(d);
-        return JSON.stringify({ decision: d.verdict.decision, code: d.verdict.code, reasons: d.verdict.reasons, ...(d.txHash ? { txHash: d.txHash } : {}), ...(d.payError ? { error: d.payError } : {}) });
+        return JSON.stringify({
+          decision: d.verdict.decision,
+          code: d.verdict.code,
+          reasons: d.verdict.reasons,
+          ...(d.outcome ? { payment: d.outcome } : {}),
+          ...(d.txHash ? { txHash: d.txHash } : {}),
+          ...(d.payError ? { error: d.payError } : {}),
+          ...(d.outcome === "unknown" ? { note: "the payment's outcome is not known yet; do not propose it again" } : {}),
+        });
       }
       default:
         return `error: unknown tool ${call.name}`;

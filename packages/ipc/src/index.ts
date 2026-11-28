@@ -37,22 +37,32 @@ export const SeedSpecMsg = z.discriminatedUnion("type", [
 ]);
 export type SeedSpecMsg = z.infer<typeof SeedSpecMsg>;
 
+/**
+ * A lane key's signature over a request (S-6; see @tyrell/core requestAuth). Required on the requests
+ * that make control act: propose (agent lane), incident (wallet lane), quarantine (user lane, or the
+ * wallet lane for an automatic source seed). Read-only requests carry none.
+ */
+export const RequestAuthMsg = z
+  .object({ by: addr, nonce: id16, expires: z.number().int().positive(), sig: z.string().regex(/^0x[0-9a-fA-F]{130}$/) })
+  .strict();
+
 export const LEDGER_ACTIONS = ["AddPayee", "RemovePayee", "ReinstatePayee", "ReleaseQuarantine"] as const;
 
 export const Request = z.discriminatedUnion("type", [
   z.object({ type: z.literal("submit"), blob }),
   z.object({ type: z.literal("submitBatch"), blobs: z.array(blob).min(1).max(20) }),
   z.object({ type: z.literal("status") }),
-  z.object({ type: z.literal("recall"), query: z.string().max(512), limit: z.number().int().min(1).max(32).optional() }),
+  /** `turn`: Steward's turn, so control can check its proposals cite everything it was served. */
+  z.object({ type: z.literal("recall"), query: z.string().max(512), limit: z.number().int().min(1).max(32).optional(), turn: id16.optional() }),
   z.object({ type: z.literal("show"), id: z.string().regex(/^0x[0-9a-f]{32}$/), forensic: z.boolean().optional() }),
   z.object({ type: z.literal("refresh") }),
   /** Steward: a payment proposal, with the turn's readSet set by the runtime (I-3). */
-  z.object({ type: z.literal("propose"), proposal: Proposal, readSet: z.array(id16).max(256), turn: id16 }),
+  z.object({ type: z.literal("propose"), proposal: Proposal, readSet: z.array(id16).max(256), turn: id16, auth: RequestAuthMsg }),
   /** Ingest: a sentinel incident (detection only proposes). */
-  z.object({ type: z.literal("incident"), incident: z.record(z.unknown()) }),
+  z.object({ type: z.literal("incident"), incident: z.record(z.unknown()), auth: RequestAuthMsg }),
   z.object({ type: z.literal("incidents") }),
   /** CLI or ingest auto-quarantine: preview, or seed with the control key. */
-  z.object({ type: z.literal("quarantine"), seed: SeedSpecMsg, reason: z.string().min(1).max(2000), evidence: z.unknown().optional(), preview: z.boolean().optional() }),
+  z.object({ type: z.literal("quarantine"), seed: SeedSpecMsg, reason: z.string().min(1).max(2000), evidence: z.unknown().optional(), preview: z.boolean().optional(), auth: RequestAuthMsg.optional() }),
   z.object({ type: z.literal("blast"), seedId: z.number().int().nonnegative() }),
   /** The web view's document (read-only). */
   z.object({ type: z.literal("view") }),
@@ -74,8 +84,12 @@ export const decode = (s: string): unknown =>
 
 export type Handler<R = Request> = (req: R) => Promise<unknown>;
 
-/** Serves requests on a Unix socket readable only by this OS user. Requests are parsed with `schema`. */
-export function serve<R = Request>(path: string, handler: Handler<R>, schema: ZodType<R> = Request as unknown as ZodType<R>): Promise<Server> {
+/**
+ * Serves requests on a Unix socket. Requests are parsed with `schema`. The socket is 0600 (this OS
+ * user only) unless `mode` says otherwise: with one OS user per process (NFR-02), give the socket
+ * 0660 and a group the lane users share; requests that act are signed by lane keys either way.
+ */
+export function serve<R = Request>(path: string, handler: Handler<R>, schema: ZodType<R> = Request as unknown as ZodType<R>, mode = 0o600): Promise<Server> {
   if (existsSync(path)) unlinkSync(path);
   const server = createServer((sock: Socket) => {
     let buf = "";
@@ -112,10 +126,25 @@ export function serve<R = Request>(path: string, handler: Handler<R>, schema: Zo
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(path, () => {
-      chmodSync(path, 0o600);
+      chmodSync(path, mode);
       resolve(server);
     });
   });
+}
+
+/** The other process answered with an error: the request was received and refused. */
+export class RemoteError extends Error {}
+/**
+ * No answer: the request may or may not have been acted on. `delivered` is false when the connection
+ * failed before the request was written, so the other process never saw it.
+ */
+export class CallFailed extends Error {
+  constructor(
+    message: string,
+    readonly delivered: boolean,
+  ) {
+    super(message);
+  }
 }
 
 /** Sends one request and waits for its response. */
@@ -123,25 +152,40 @@ export function call<R = Request>(path: string, req: R, timeoutMs = 120_000): Pr
   return new Promise((resolve, reject) => {
     const sock = createConnection(path);
     let buf = "";
+    let written = false;
+    let done = false;
+    const finish = (f: () => void) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      f();
+    };
     const timer = setTimeout(() => {
       sock.destroy();
-      reject(new Error("control did not answer in time"));
+      finish(() => reject(new CallFailed(`no answer from ${path} in time`, written)));
     }, timeoutMs);
     sock.setEncoding("utf8");
-    sock.on("connect", () => sock.write(encode(req) + "\n"));
+    sock.on("connect", () => {
+      written = true;
+      sock.write(encode(req) + "\n");
+    });
     sock.on("data", (chunk: string) => {
       buf += chunk;
       const nl = buf.indexOf("\n");
       if (nl < 0) return;
-      clearTimeout(timer);
       sock.end();
-      const r = decode(buf.slice(0, nl)) as Response;
-      if (r.ok) resolve(r.result);
-      else reject(new Error(r.error));
+      finish(() => {
+        let r: Response;
+        try {
+          r = decode(buf.slice(0, nl)) as Response;
+        } catch {
+          return reject(new CallFailed("unreadable answer", true));
+        }
+        if (r.ok) resolve(r.result);
+        else reject(new RemoteError(r.error));
+      });
     });
-    sock.on("error", (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
+    sock.on("error", (e) => finish(() => reject(new CallFailed(e.message, written))));
+    sock.on("close", () => finish(() => reject(new CallFailed("connection closed without an answer", written))));
   });
 }

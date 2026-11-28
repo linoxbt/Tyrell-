@@ -4,3 +4,4 @@ export * from "./rebuild.js";
 export * from "./payments.js";
 export * from "./quarantine.js";
 export * from "./view.js";
+export * from "./auth.js";

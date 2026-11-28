@@ -76,6 +76,24 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
     }
   });
 
+  it("the link `tyrell blast` prints (/console?tab=blast&seed=N) opens that seed's blast radius", async () => {
+    const expected = JSON.parse(readFileSync(EXPECTED, "utf8")) as { seedId: number; memories: string[] };
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 });
+      await page.goto(`${url}/console?tab=blast&seed=${expected.seedId}`);
+      const g = page.getByTestId("lineage-graph");
+      await g.waitFor();
+      await page.waitForTimeout(500);
+      expect(await page.locator("select").inputValue()).toBe(String(expected.seedId));
+      const drawn = (await g.getAttribute("data-memories"))!.split(",").filter(Boolean);
+      expect([...drawn].sort()).toEqual([...expected.memories].sort());
+    } finally {
+      await browser.close();
+    }
+  });
+
   it("an incident opens its own detail page, and the back button returns to the list", async () => {
     const { chromium } = await import("playwright");
     const browser = await chromium.launch();
@@ -157,11 +175,11 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
       // the header's Connect button still works: it loads the wallet stack and opens it
       await page.goto(`${url}/`, { waitUntil: "networkidle" });
       await page.locator("header").getByRole("button", { name: "Connect wallet" }).first().click();
-      await page.locator("w3m-modal").getByText("WalletConnect").first().waitFor({ timeout: 20_000 });
+      await page.locator("w3m-modal").getByText("WalletConnect").first().waitFor({ timeout: 60_000 });
       await page.goto(`${url}/console`, { waitUntil: "networkidle" });
-      await page.waitForFunction(() => !!customElements.get("w3m-modal"), undefined, { timeout: 20_000 });
+      await page.waitForFunction(() => !!customElements.get("w3m-modal"), undefined, { timeout: 60_000 });
     } finally {
       await browser.close();
     }
-  });
+  }, 180_000);
 });

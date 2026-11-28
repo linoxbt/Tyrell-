@@ -31,6 +31,15 @@ describe("model provider from the environment", () => {
     expect(llmFromEnv({ ...env, LLM_REASONING_EFFORT: "low" })?.reasoningEffort).toBe("low");
   });
 
+  it("the agent's API key is never sent to a different judge host (S-14)", () => {
+    const env = { LLM_BASE_URL: "https://agent.example/v1", LLM_API_KEY: "agent-key", LLM_MODEL: "big", SENTINEL_LLM_BASE_URL: "https://judge.example/v1", SENTINEL_LLM_MODEL: "small" };
+    expect(llmFromEnv(env, "judge")).toBeUndefined();
+    expect(llmFromEnv({ ...env, SENTINEL_LLM_API_KEY: "judge-key" }, "judge")).toMatchObject({ baseURL: "https://judge.example/v1", apiKey: "judge-key" });
+    expect(llmFromEnv({ ...env, SENTINEL_LLM_BASE_URL: "https://agent.example/other" }, "judge")).toMatchObject({ apiKey: "agent-key" });
+    // FORTYTWO_API_KEY goes to Fortytwo only
+    expect(llmFromEnv({ FORTYTWO_API_KEY: "ft", SENTINEL_LLM_BASE_URL: "https://judge.example/v1", SENTINEL_LLM_MODEL: "m" }, "judge")).toBeUndefined();
+  });
+
   it("the judge's SENTINEL_ settings fall back to the agent's", () => {
     const env = { LLM_BASE_URL: "http://agent/v1", LLM_API_KEY: "a", LLM_MODEL: "big", SENTINEL_LLM_MODEL: "small" };
     expect(llmFromEnv(env, "judge")).toEqual({ provider: "openai-compatible", baseURL: "http://agent/v1", apiKey: "a", model: "small" });

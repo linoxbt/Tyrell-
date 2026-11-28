@@ -67,7 +67,7 @@ Control also serves a read-only HTTP API for the web console: `GET /api/view` on
 | `LaneRegistry` | One active key per lane; history of every binding | Owner (`Ownable2Step`) |
 | `MemoryAnchor` | Anchors memory struct hashes and CIDs after checking the lane signature on-chain | Owner sets the submitter |
 | `TyrellLedger` | Payees and quarantine seeds; every write carries an EIP-712 signature from the right lane | None: no owner, no admin path |
-| `GuardedVault` | Holds the payment token and pays registered payees within caps | Owner (`DEFAULT_ADMIN_ROLE`); signer has `SIGNER_ROLE`; owner and control have `PAUSER_ROLE` |
+| `GuardedVault` | Holds the payment token and pays registered payees within caps | Owner (`DEFAULT_ADMIN_ROLE`, never fewer than one admin); signer has `SIGNER_ROLE`; the owner and whichever key is the active control-lane key may pause |
 | `TyrellTestUSD` | 6-decimal test token for testnet and local chains | Owner mints |
 
 Every privileged role goes to your QIE Wallet address at construction, so the deployer key holds nothing afterwards. See [Core contracts](/docs/reference/contracts-core).

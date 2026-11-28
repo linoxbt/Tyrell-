@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPublicClient, createWalletClient, getAddress, http, keccak256, parseEventLogs, toBytes, type Abi, type Address, type Hex, type PublicClient } from "viem";
-import { payeeIdOf, payRequestDigest, uuidv7, type Id16 } from "@tyrell/core";
+import { privateKeyToAccount } from "viem/accounts";
+import { payeeIdOf, payRequestDigest, signAgentRegistration, uuidv7, type Id16 } from "@tyrell/core";
 import { agentRegistryAbi, guardedVaultAbi, testQieIdAbi, tyrellTestUSDAbi, type Deployment } from "@tyrell/chain";
 import { serve, type Request } from "@tyrell/ipc";
 import { importDataKey, MemoryBlobStore, newSecret, ProjectionDb } from "@tyrell/storage";
@@ -57,9 +58,18 @@ beforeAll(async () => {
   registry = await deploy("AgentRegistry", [qie]);
   await lab.ownerWrite(qie, testQieIdAbi, "claim", ["alice.qie"]);
   await lab.ownerWrite(registry, agentRegistryAbi, "bindQieId", ["alice.qie"]);
-  // agent #1 = this deployment's agent-lane key; agent #2 = another agent of the same human
-  await lab.ownerWrite(registry, agentRegistryAbi, "registerAgent", [lab.lanes.agent.address, "rent agent", keccak256(toBytes("model")), 1, 4_000_000n, 10_000_000n, false]);
-  await lab.ownerWrite(registry, agentRegistryAbi, "registerAgent", [addr("agent-2-key"), "bills agent", keccak256(toBytes("model")), 1, 4_000_000n, 5_000_000n, true]);
+  // agent #1 = this deployment's agent-lane key; agent #2 = another agent of the same human.
+  // Each agent key consents to its registration (AgentRegistry refuses a key without its signature).
+  const agent2 = privateKeyToAccount(keccak256(toBytes("agent-2-key")));
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 3_600);
+  const register = async (key: typeof agent2, label: string, daily: bigint, anyPayee: boolean) =>
+    lab.ownerWrite(registry, agentRegistryAbi, "registerAgent", [
+      { key: key.address, token: lab.deployment.token, label, metaHash: keccak256(toBytes("model")), permissions: 1, perTxLimit: 4_000_000n, dailyLimit: daily, anyPayee },
+      deadline,
+      await signAgentRegistration(key, lab.chain.id, registry, lab.owner, deadline),
+    ]);
+  await register(lab.lanes.agent, "rent agent", 10_000_000n, false);
+  await register(agent2, "bills agent", 5_000_000n, true);
   await lab.ownerWrite(registry, agentRegistryAbi, "setPayees", [1n, [LANDLORD_ID], true]);
   await lab.ownerWrite(registry, agentRegistryAbi, "setQuota", [lab.deployment.token, 6_000_000n]);
   await lab.ownerWrite(registry, agentRegistryAbi, "setSpender", [lab.deployment.guardedVault, true]);
@@ -142,8 +152,9 @@ describe("agents network phase A, end to end", () => {
   });
 
   it("the signer refuses a control-signed request for a different agent", async () => {
-    const req = { chainId: deployment.chainId, vault: deployment.guardedVault, payeeId: LANDLORD_ID, token: deployment.token, amount: 1n, decisionId: uuidv7() as Id16, agentId: 2n };
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 60);
+    const req = { chainId: deployment.chainId, vault: deployment.guardedVault, payeeId: LANDLORD_ID, token: deployment.token, amount: 1n, decisionId: uuidv7() as Id16, agentId: 2n, deadline };
     const controlSig = await lab.lanes.control.signMessage({ message: { raw: payRequestDigest(req) } });
-    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1", decisionId: req.decisionId, controlSig, agentId: "2" })).rejects.toBeInstanceOf(SignerRefused);
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1", decisionId: req.decisionId, controlSig, agentId: "2", deadline: deadline.toString() })).rejects.toBeInstanceOf(SignerRefused);
   });
 });

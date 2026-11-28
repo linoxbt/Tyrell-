@@ -145,7 +145,7 @@ export const laneRegistryAbi = [
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -335,6 +335,11 @@ export const laneRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "NoRenounce",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -430,6 +435,19 @@ export const memoryAnchorAbi = [
   },
   {
     "type": "function",
+    "name": "PERM_MEMORY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "acceptOwnership",
     "inputs": [],
     "outputs": [],
@@ -444,6 +462,32 @@ export const memoryAnchorAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "agentId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "agentRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAgentRegistry"
       }
     ],
     "stateMutability": "view"
@@ -852,6 +896,24 @@ export const memoryAnchorAbi = [
   },
   {
     "type": "function",
+    "name": "linkAgent",
+    "inputs": [
+      {
+        "name": "registry_",
+        "type": "address",
+        "internalType": "contract IAgentRegistry"
+      },
+      {
+        "name": "agentId_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -894,7 +956,7 @@ export const memoryAnchorAbi = [
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -934,6 +996,25 @@ export const memoryAnchorAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AgentLinked",
+    "inputs": [
+      {
+        "name": "registry",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -1061,6 +1142,22 @@ export const memoryAnchorAbi = [
   },
   {
     "type": "error",
+    "name": "AgentBlocked",
+    "inputs": [
+      {
+        "name": "code",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AgentKeyMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "AlreadyAnchored",
     "inputs": []
   },
@@ -1092,6 +1189,16 @@ export const memoryAnchorAbi = [
   {
     "type": "error",
     "name": "LaneMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoMemoryPermission",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoRenounce",
     "inputs": []
   },
   {
@@ -2197,7 +2304,7 @@ export const guardedVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "controlPauser",
+        "name": "extraPauser",
         "type": "address",
         "internalType": "address"
       }
@@ -2239,6 +2346,19 @@ export const guardedVaultAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "adminCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -2342,6 +2462,25 @@ export const guardedVaultAbi = [
       },
       {
         "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isControlKey",
+    "inputs": [
+      {
+        "name": "key",
         "type": "address",
         "internalType": "address"
       }
@@ -2873,8 +3012,24 @@ export const guardedVaultAbi = [
   },
   {
     "type": "error",
+    "name": "LastAdmin",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NoAgentRegistry",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOurAgent",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -2902,6 +3057,11 @@ export const guardedVaultAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "UseAgentPath",
+    "inputs": []
   },
   {
     "type": "error",
@@ -3416,6 +3576,19 @@ export const agentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "REGISTER_AGENT_TYPEHASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "agent",
     "inputs": [
       {
@@ -3437,6 +3610,11 @@ export const agentRegistryAbi = [
           },
           {
             "name": "human",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token",
             "type": "address",
             "internalType": "address"
           },
@@ -3543,6 +3721,114 @@ export const agentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "agentsView",
+    "inputs": [
+      {
+        "name": "h",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "type": "tuple[]",
+        "internalType": "struct IAgentRegistry.AgentView[]",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "agent",
+            "type": "tuple",
+            "internalType": "struct IAgentRegistry.Agent",
+            "components": [
+              {
+                "name": "key",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "human",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "label",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "metaHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "permissions",
+                "type": "uint32",
+                "internalType": "uint32"
+              },
+              {
+                "name": "perTxLimit",
+                "type": "uint128",
+                "internalType": "uint128"
+              },
+              {
+                "name": "dailyLimit",
+                "type": "uint128",
+                "internalType": "uint128"
+              },
+              {
+                "name": "createdAt",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "revokedAt",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "revoked",
+                "type": "bool",
+                "internalType": "bool"
+              },
+              {
+                "name": "anyPayee",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          },
+          {
+            "name": "ok",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "code",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "spentToday",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "ban",
     "inputs": [
       {
@@ -3627,7 +3913,74 @@ export const agentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "checkDeal",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payeeId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ok",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "code",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "consume",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payeeId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "consumeDeal",
     "inputs": [
       {
         "name": "agentId",
@@ -3662,6 +4015,62 @@ export const agentRegistryAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "domainSeparator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "eip712Domain",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "fields",
+        "type": "bytes1",
+        "internalType": "bytes1"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "version",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "chainId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "verifyingContract",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "extensions",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
       }
     ],
     "stateMutability": "view"
@@ -3944,42 +4353,92 @@ export const agentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "registerAgent",
+    "name": "refund",
     "inputs": [
       {
-        "name": "key",
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "label",
-        "type": "string",
-        "internalType": "string"
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
-        "name": "metaHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "day",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "registerAgent",
+    "inputs": [
+      {
+        "name": "n",
+        "type": "tuple",
+        "internalType": "struct IAgentRegistry.NewAgent",
+        "components": [
+          {
+            "name": "key",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "label",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "metaHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "permissions",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "perTxLimit",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "dailyLimit",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "anyPayee",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
       },
       {
-        "name": "permissions",
-        "type": "uint32",
-        "internalType": "uint32"
+        "name": "deadline",
+        "type": "uint64",
+        "internalType": "uint64"
       },
       {
-        "name": "perTxLimit",
-        "type": "uint128",
-        "internalType": "uint128"
-      },
-      {
-        "name": "dailyLimit",
-        "type": "uint128",
-        "internalType": "uint128"
-      },
-      {
-        "name": "anyPayee",
-        "type": "bool",
-        "internalType": "bool"
+        "name": "keySig",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [
@@ -3990,6 +4449,35 @@ export const agentRegistryAbi = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "registrationDigest",
+    "inputs": [
+      {
+        "name": "human_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "key",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "deadline",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -4189,6 +4677,19 @@ export const agentRegistryAbi = [
     "stateMutability": "view"
   },
   {
+    "type": "function",
+    "name": "unban",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "event",
     "name": "AgentAnyPayeeSet",
     "inputs": [
@@ -4285,6 +4786,49 @@ export const agentRegistryAbi = [
         "type": "uint32",
         "indexed": false,
         "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentRefunded",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "human",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "day",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "spender",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -4392,6 +4936,44 @@ export const agentRegistryAbi = [
         "internalType": "address"
       }
     ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentTokenSet",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentUnbanned",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EIP712DomainChanged",
+    "inputs": [],
     "anonymous": false
   },
   {
@@ -4536,6 +5118,21 @@ export const agentRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "BadKeySignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadToken",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidShortString",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NetworkAlreadySet",
     "inputs": []
   },
@@ -4590,6 +5187,22 @@ export const agentRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "SignatureExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StringTooLong",
+    "inputs": [
+      {
+        "name": "str",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "TooManyAgents",
     "inputs": []
   },
@@ -4621,34 +5234,51 @@ export const agentNetworkAbi = [
         "internalType": "contract IERC20"
       },
       {
-        "name": "arbiter_",
+        "name": "owner_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "minBond_",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "reportBond_",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "contestWindow_",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "slashBps_",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "banAfter_",
-        "type": "uint8",
-        "internalType": "uint8"
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct AgentNetwork.Params",
+        "components": [
+          {
+            "name": "arbiter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "minBond",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "reportBond",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "contestWindow",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "ruleWindow",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "slashBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "banAfter",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
       }
     ],
     "stateMutability": "nonpayable"
@@ -4665,6 +5295,82 @@ export const agentNetworkAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_OPEN_PER_REPORTER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptMessage",
+    "inputs": [
+      {
+        "name": "fromAgent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "toAgent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "bodyHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "appeal",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "evidenceCid",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -4745,6 +5451,32 @@ export const agentNetworkAbi = [
   {
     "type": "function",
     "name": "cancelDeal",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelWithdrawal",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claim",
     "inputs": [
       {
         "name": "dealId",
@@ -4851,6 +5583,21 @@ export const agentNetworkAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "openedDay",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "deliveredAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "disputedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "status",
             "type": "uint8",
             "internalType": "enum AgentNetwork.DealStatus"
@@ -4875,6 +5622,32 @@ export const agentNetworkAbi = [
   },
   {
     "type": "function",
+    "name": "deliver",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "disputeDeal",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "domainSeparator",
     "inputs": [],
     "outputs": [
@@ -4882,6 +5655,25 @@ export const agentNetworkAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "effectiveBond",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -4997,6 +5789,30 @@ export const agentNetworkAbi = [
   },
   {
     "type": "function",
+    "name": "hasOpenReport",
+    "inputs": [
+      {
+        "name": "reporter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "isBonded",
     "inputs": [
       {
@@ -5010,6 +5826,56 @@ export const agentNetworkAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lapse",
+    "inputs": [
+      {
+        "name": "reportId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "lapseDeal",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "lastReportClosed",
+    "inputs": [
+      {
+        "name": "reporter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -5049,6 +5915,30 @@ export const agentNetworkAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "messageUsed",
+    "inputs": [
+      {
+        "name": "fromAgent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -5131,6 +6021,75 @@ export const agentNetworkAbi = [
   },
   {
     "type": "function",
+    "name": "openReportsBy",
+    "inputs": [
+      {
+        "name": "reporter",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingWithdrawal",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "reclaim",
     "inputs": [
       {
@@ -5174,6 +6133,11 @@ export const agentNetworkAbi = [
             "internalType": "uint32"
           },
           {
+            "name": "reportsUncontested",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
             "name": "volume",
             "type": "uint128",
             "internalType": "uint128"
@@ -5195,6 +6159,13 @@ export const agentNetworkAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -5244,6 +6215,11 @@ export const agentNetworkAbi = [
           },
           {
             "name": "filedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "contestedAt",
             "type": "uint64",
             "internalType": "uint64"
           },
@@ -5309,6 +6285,24 @@ export const agentNetworkAbi = [
   },
   {
     "type": "function",
+    "name": "requestWithdrawal",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "resolve",
     "inputs": [
       {
@@ -5327,6 +6321,50 @@ export const agentNetworkAbi = [
   },
   {
     "type": "function",
+    "name": "resolveDeal",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payPayee",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "ruleWindow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setArbiter",
+    "inputs": [
+      {
+        "name": "arbiter_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "slashBps",
     "inputs": [],
     "outputs": [
@@ -5337,6 +6375,61 @@ export const agentNetworkAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "stats",
+    "inputs": [
+      {
+        "name": "agentIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bonds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "reps",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "unban",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -5395,15 +6488,73 @@ export const agentNetworkAbi = [
         "name": "agentId",
         "type": "uint256",
         "internalType": "uint256"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "ArbiterChanged",
+    "inputs": [
+      {
+        "name": "previous",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "current",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BanAppealed",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "human",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "evidenceCid",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BanLifted",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -5495,6 +6646,32 @@ export const agentNetworkAbi = [
   },
   {
     "type": "event",
+    "name": "DealDelivered",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DealDisputed",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "DealOpened",
     "inputs": [
       {
@@ -5557,8 +6734,90 @@ export const agentNetworkAbi = [
   },
   {
     "type": "event",
+    "name": "DealRefunded",
+    "inputs": [
+      {
+        "name": "dealId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MessageAccepted",
+    "inputs": [
+      {
+        "name": "fromAgent",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "toAgent",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "bodyHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
     "anonymous": false
   },
   {
@@ -5644,6 +6903,44 @@ export const agentNetworkAbi = [
   },
   {
     "type": "event",
+    "name": "ReportLapsed",
+    "inputs": [
+      {
+        "name": "reportId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ReportUncontested",
+    "inputs": [
+      {
+        "name": "reportId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ReportUpheld",
     "inputs": [
       {
@@ -5674,6 +6971,44 @@ export const agentNetworkAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "WithdrawalCancelled",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WithdrawalRequested",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AgentNotActive",
     "inputs": [
@@ -5688,6 +7023,16 @@ export const agentNetworkAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "AlreadyReported",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ArbiterConflict",
+    "inputs": []
   },
   {
     "type": "error",
@@ -5727,6 +7072,32 @@ export const agentNetworkAbi = [
   },
   {
     "type": "error",
+    "name": "MessageRejected",
+    "inputs": [
+      {
+        "name": "code",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoRenounce",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoWithdrawal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotBanned",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotBonded",
     "inputs": [
       {
@@ -5760,17 +7131,6 @@ export const agentNetworkAbi = [
   },
   {
     "type": "error",
-    "name": "NotPermitted",
-    "inputs": [
-      {
-        "name": "agentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OnlyArbiter",
     "inputs": []
   },
@@ -5787,7 +7147,34 @@ export const agentNetworkAbi = [
   },
   {
     "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReportCooldown",
     "inputs": []
   },
   {
@@ -5824,6 +7211,11 @@ export const agentNetworkAbi = [
   },
   {
     "type": "error",
+    "name": "TooManyOpenReports",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "UnknownDeal",
     "inputs": [
       {
@@ -5852,6 +7244,11 @@ export const agentNetworkAbi = [
   {
     "type": "error",
     "name": "WindowOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WithdrawalNotReady",
     "inputs": []
   },
   {

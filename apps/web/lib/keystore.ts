@@ -4,8 +4,10 @@ import { privateKeyToAddress } from "viem/accounts";
 
 /*
  * Keys created in the browser, in exactly the format the Tyrell processes read: Web3 Secret Storage
- * (keystore v3: scrypt + aes-128-ctr + keccak MAC) with Tyrell's `tyrell.role` tag, so a process refuses a
- * file written for another role. The secret never leaves this page unencrypted; the password is not stored.
+ * (keystore v3: scrypt + aes-128-ctr + keccak MAC) with Tyrell's `tyrell.role` tag and `tyrell.mac` role MAC
+ * (keccak(dk[16:32] || "tyrell.role:" || role || 0x00 || ciphertext)), so a process refuses a file written for
+ * another role and the tag cannot be edited without the password. Must match packages/storage/src/keystore.ts.
+ * The secret never leaves this page unencrypted; the password is not stored.
  */
 
 export type Role = "user" | "agent" | "wallet" | "control" | "submitter" | "signer" | "data";
@@ -23,7 +25,7 @@ export interface KeystoreV3 {
     kdfparams: { dklen: 32; n: number; r: number; p: number; salt: string };
     mac: string;
   };
-  tyrell: { role: Role };
+  tyrell: { role: Role; mac: string };
 }
 
 const strip = (h: string) => (h.startsWith("0x") ? h.slice(2) : h);
@@ -45,6 +47,12 @@ export async function encryptKeystore(secret: Uint8Array, password: string, role
   macInput.set(dk.subarray(16, 32));
   macInput.set(ciphertext, 16);
   const mac = strip(keccak256(macInput));
+  const tag = new TextEncoder().encode(`tyrell.role:${role}`);
+  const roleInput = new Uint8Array(16 + tag.length + 1 + ciphertext.length);
+  roleInput.set(dk.subarray(16, 32));
+  roleInput.set(tag, 16);
+  roleInput.set(ciphertext, 16 + tag.length + 1);
+  const roleMac = strip(keccak256(roleInput));
   dk.fill(0);
   return {
     version: 3,
@@ -58,7 +66,7 @@ export async function encryptKeystore(secret: Uint8Array, password: string, role
       kdfparams: { dklen: 32, n, r: 8, p: 1, salt: strip(toHex(salt)) },
       mac,
     },
-    tyrell: { role },
+    tyrell: { role, mac: roleMac },
   };
 }
 

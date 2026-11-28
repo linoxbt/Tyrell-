@@ -1,5 +1,5 @@
 import type { Address, Hex } from "viem";
-import { Kind, TRUST_CLASSES, TRUST_RANK, type TrustClass } from "./constants.js";
+import { Kind, Lane, TRUST_CLASSES, TRUST_RANK, type TrustClass } from "./constants.js";
 import type { Header } from "./envelope.js";
 import type { Id16 } from "./ids.js";
 import { comparePos, type ChainPos } from "./keys.js";
@@ -168,10 +168,12 @@ export function blastRadius(seedId: number, p: Projection): BlastRadius {
       cls: m.cls,
       quarantined: m.quarantined,
     });
-    if (isDecision) {
-      decisions.push(m.id);
+    if (isDecision) decisions.push(m.id);
+    // The vault transaction is in the decision body (older records) or in control's outcome note,
+    // which is the decision's child and so always in the same set.
+    if (isDecision || (m.kind === Kind.Note && m.lane === Lane.Control)) {
       const tx = decisionTxHash(m.body);
-      if (tx) vaultTxs.push(tx);
+      if (tx && !vaultTxs.includes(tx)) vaultTxs.push(tx);
     }
     for (const parent of m.parents) if (inSet.has(parent)) edges.push({ from: parent, to: m.id });
     for (const ref of m.header?.src ?? []) {
@@ -186,7 +188,7 @@ export function blastRadius(seedId: number, p: Projection): BlastRadius {
   return { seedId, memories: hit.map((m) => m.id), decisions, vaultTxs, nodes: [...sources.values(), ...nodes], edges };
 }
 
-/** Decision bodies are JSON with an optional `txHash` (written by control, Phase 4). */
+/** Decision bodies and control's outcome notes are JSON with an optional `txHash`. */
 function decisionTxHash(body: string | undefined): Hex | undefined {
   if (!body) return undefined;
   try {

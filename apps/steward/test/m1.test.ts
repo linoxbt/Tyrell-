@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPublicClient, erc20Abi, getAddress, http, keccak256, parseEventLogs, toBytes, type Address, type PublicClient } from "viem";
 import { Kind, Lane, payRequestDigest, signEnvelope, type Id16 } from "@tyrell/core";
 import { guardedVaultAbi, tyrellLedgerAbi, tyrellTestUSDAbi } from "@tyrell/chain";
-import { serve, type Request } from "@tyrell/ipc";
+import { CallFailed, RemoteError, serve, type Request } from "@tyrell/ipc";
 import { importDataKey, MemoryBlobStore, newSecret, ProjectionDb } from "@tyrell/storage";
 import { anchorDomain, Control, Payments, rebuildFresh } from "@tyrell/control";
 import { VaultSigner } from "@tyrell/signer";
@@ -153,7 +153,15 @@ describe("M1 acceptance run (spec section 17), on anvil", () => {
     const p = await control.refresh();
     const dm = p.projection.get(d.decisionId)!;
     expect(dm).toMatchObject({ lane: Lane.Control, kind: Kind.Decision, parents: t.readSet, cls: "untrusted" });
-    expect(JSON.parse(dm.body!).txHash).toBe(d.txHash);
+    // B-1: the decision was written before the payment (it carries no outcome) and the outcome is a
+    // control note whose only parent is the decision, anchored after it.
+    expect(JSON.parse(dm.body!).txHash).toBeUndefined();
+    expect(d.outcome).toBe("paid");
+    const out = p.projection.get((d as { outcomeRecord?: { id: Id16 } }).outcomeRecord!.id)!;
+    expect(out).toMatchObject({ lane: Lane.Control, kind: Kind.Note, parents: [d.decisionId] });
+    expect(JSON.parse(out.body!)).toEqual({ outcomeOf: d.decisionId, status: "paid", txHash: d.txHash });
+    expect(out.anchorPos!.block > dm.anchorPos!.block || (out.anchorPos!.block === dm.anchorPos!.block && out.anchorPos!.logIndex > dm.anchorPos!.logIndex)).toBe(true);
+    expect(receipt.blockNumber > dm.anchorPos!.block).toBe(true);
   });
 
   it("baited model: rent to the attacker blocks with UNKNOWN_RECIPIENT; nothing is signed or sent", async () => {
@@ -214,23 +222,32 @@ describe("M1 acceptance run (spec section 17), on anvil", () => {
     // Rent used today's vault-wide cap of 5; the owner raises it so a 1-dollar school payment can clear.
     await lab.ownerWrite(lab.deployment.guardedVault, guardedVaultAbi, "setGlobalDailyCap", [lab.deployment.token, 8_000_000n]);
     const decisionId = "0x0193a1b2c3d47e8f9a0b1c2d3e4f5a6b" as Id16;
-    const req = { chainId: 31337, vault: lab.deployment.guardedVault, payeeId: keccak256(toBytes("payee:school")), token: lab.deployment.token, amount: 1_000_000n, decisionId };
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 60);
+    const req = { chainId: 31337, vault: lab.deployment.guardedVault, payeeId: keccak256(toBytes("payee:school")), token: lab.deployment.token, amount: 1_000_000n, decisionId, deadline };
+    const dl = deadline.toString();
     const forged = await lab.lanes.agent.signMessage({ message: { raw: payRequestDigest(req) } });
-    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: forged })).rejects.toThrow(/not signed by the active control key/);
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: forged, deadline: dl })).rejects.toThrow(/not signed by the active control key/);
     const good = await lab.lanes.control.signMessage({ message: { raw: payRequestDigest(req) } });
-    // A control signature over a different amount does not authorise this one.
-    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "2000000", decisionId, controlSig: good })).rejects.toThrow(/not signed by the active control key/);
+    // A control signature over a different amount, or a different deadline, does not authorise this one.
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "2000000", decisionId, controlSig: good, deadline: dl })).rejects.toThrow(/not signed by the active control key/);
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: good, deadline: (deadline + 1n).toString() })).rejects.toThrow(/not signed by the active control key/);
     await expect(signer.handle({ nope: 1 })).rejects.toThrow(/malformed/);
-    const { txHash } = await signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: good });
+    // B-3: an expired request is never broadcast
+    const past = { ...req, deadline: BigInt(Math.floor(Date.now() / 1000) - 1) };
+    const pastSig = await lab.lanes.control.signMessage({ message: { raw: payRequestDigest(past) } });
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: pastSig, deadline: past.deadline.toString() })).rejects.toThrow(/expired/);
+    const { txHash } = await signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: good, deadline: dl });
     expect(txHash).toMatch(/^0x/);
-    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: good })).rejects.toThrow(/already paid/);
+    await clients[0]!.waitForTransactionReceipt({ hash: txHash });
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1000000", decisionId, controlSig: good, deadline: dl })).rejects.toThrow(/already paid/);
   });
 
   it("the signer re-simulates: a control-signed request the vault would refuse is never broadcast", async () => {
     const decisionId = "0x0193a1b2c3d47e8f9a0b1c2d3e4f5a6c" as Id16;
-    const req = { chainId: 31337, vault: lab.deployment.guardedVault, payeeId: keccak256(toBytes("payee:attacker")), token: lab.deployment.token, amount: 1n, decisionId };
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 60);
+    const req = { chainId: 31337, vault: lab.deployment.guardedVault, payeeId: keccak256(toBytes("payee:attacker")), token: lab.deployment.token, amount: 1n, decisionId, deadline };
     const sig = await lab.lanes.control.signMessage({ message: { raw: payRequestDigest(req) } });
-    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1", decisionId, controlSig: sig })).rejects.toThrow(/simulation failed/);
+    await expect(signer.handle({ payeeId: req.payeeId, token: req.token, amount: "1", decisionId, controlSig: sig, deadline: deadline.toString() })).rejects.toThrow(/simulation failed/);
   });
 
   it("rebuild fresh: the digest matches, decisions included", async () => {
@@ -238,5 +255,81 @@ describe("M1 acceptance run (spec section 17), on anvil", () => {
     const r = await rebuildFresh({ deployment: lab.deployment, clients, dataKey, store, dbPath: join(dir, "fresh.sqlite"), head: live.head });
     expect(r.digest).toBe(live.digest);
     expect([...r.projection.values()].filter((m) => m.kind === Kind.Decision).length).toBe(6);
+  });
+});
+
+describe("payment safety around the signer (B-1, B-3)", () => {
+  const proposal = { recipient: SCHOOL, amount: "1000000", token: "", payeeLabel: "school", reason: "fees" };
+  const turn = () => `0x${Date.now().toString(16).padStart(32, "0")}` as Id16;
+  const prop = () => ({ ...proposal, token: lab.deployment.token });
+
+  it("B-1: a turn that read more than 64 memories cannot pay, and its decision is still recorded", async () => {
+    const many = Array.from({ length: 65 }, (_, i) => `0x${(i + 1).toString(16).padStart(32, "0")}` as Id16);
+    const before = await balance(SCHOOL);
+    const d = await payments.decide(prop(), many, turn());
+    expect(d.verdict).toMatchObject({ decision: "BLOCK", code: "LEDGER_UNVERIFIED" });
+    expect(d.verdict.reasons[0]).toMatch(/read 65 memories; a payment decision can cite at most 64/);
+    const p = await control.refresh();
+    const dm = p.projection.get(d.decisionId)!;
+    expect(dm.parents).toHaveLength(64);
+    expect(JSON.parse(dm.body!).readSetSize).toBe(65);
+    expect(await balance(SCHOOL)).toBe(before);
+  });
+
+  it("B-3: the signer paid but its answer was lost: control settles it from the chain, once", async () => {
+    const lost = new Payments({
+      control,
+      clients,
+      controlKey: lab.lanes.control,
+      signerAddress: signer.address,
+      signer: async (r) => {
+        await signer.handle(r);
+        throw new CallFailed("connection closed without an answer", true);
+      },
+      settlePollMs: 100,
+    });
+    const before = await balance(SCHOOL);
+    const d = await lost.decide(prop(), [], turn());
+    expect(d).toMatchObject({ outcome: "paid" });
+    expect(d.txHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(await balance(SCHOOL)).toBe(before + 1_000_000n);
+  });
+
+  it("B-3: a request that never reached the signer, or expired in its queue, is recorded as not paid", async () => {
+    const before = await balance(SCHOOL);
+    const unreachable = new Payments({ control, clients, controlKey: lab.lanes.control, signerAddress: signer.address, signer: async () => Promise.reject(new CallFailed("ENOENT", false)) });
+    expect(await unreachable.decide(prop(), [], turn())).toMatchObject({ outcome: "failed", payError: "ENOENT" });
+    const silent = new Payments({
+      control,
+      clients,
+      controlKey: lab.lanes.control,
+      signerAddress: signer.address,
+      signer: async () => Promise.reject(new CallFailed("no answer in time", true)),
+      payRequestTtl: 1n,
+      settleGraceMs: 200,
+      settlePollMs: 100,
+    });
+    const d = await silent.decide(prop(), [], turn());
+    expect(d.outcome).toBe("failed");
+    expect(d.payError).toMatch(/expired unpaid/);
+    const refused = new Payments({ control, clients, controlKey: lab.lanes.control, signerAddress: signer.address, signer: async () => Promise.reject(new RemoteError("simulation failed")) });
+    expect(await refused.decide(prop(), [], turn())).toMatchObject({ outcome: "failed", payError: "simulation failed" });
+    expect(await balance(SCHOOL)).toBe(before);
+  });
+
+  it("B-3: while a payment's outcome is unknown, no second payment to that payee is allowed", async () => {
+    const neverMined = new Payments({
+      control,
+      clients,
+      controlKey: lab.lanes.control,
+      signerAddress: signer.address,
+      signer: async () => ({ txHash: keccak256(toBytes("a transaction that never lands")) }),
+      receiptTimeoutMs: 300,
+    });
+    const first = await neverMined.decide(prop(), [], turn());
+    expect(first.outcome).toBe("unknown");
+    const second = await payments.decide(prop(), [], turn());
+    expect(second.verdict).toMatchObject({ decision: "BLOCK", code: "LEDGER_UNVERIFIED" });
+    expect(second.verdict.reasons[0]).toContain(`decision ${first.decisionId}) has no settled outcome yet`);
   });
 });

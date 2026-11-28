@@ -28,7 +28,10 @@ export interface ViewDecision {
   turn?: string;
   verdict?: { decision: string; code: string; reasons: string[] };
   proposal?: Record<string, unknown>;
+  /** The payment's outcome, from control's outcome record (older decisions carry txHash in the body). */
+  outcome?: "paid" | "failed" | "unknown";
   txHash?: string;
+  payError?: string;
   parents: string[];
 }
 
@@ -76,22 +79,38 @@ export function viewDocument(
       ...(m.header?.ts ? { ts: m.header.ts } : {}),
     };
   });
+  const parse = (body: string | undefined): Record<string, unknown> => {
+    try {
+      const v = JSON.parse(body ?? "{}") as unknown;
+      return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  };
+  // Outcome records: control-lane notes `{ outcomeOf, status, txHash?, payError? }` (written after the decision).
+  const outcomes = new Map<string, Record<string, unknown>>();
+  for (const m of memories) {
+    if (m.lane !== 4 || m.kind !== Kind.Note || m.verification !== "verified") continue;
+    const b = parse(m.body);
+    if (typeof b.outcomeOf === "string") outcomes.set(b.outcomeOf.toLowerCase(), b);
+  }
   const decisions: ViewDecision[] = memories
     .filter((m) => m.kind === Kind.Decision)
     .map((m) => {
-      let b: Record<string, unknown> = {};
-      try {
-        b = JSON.parse(m.body ?? "{}") as Record<string, unknown>;
-      } catch {
-        b = {};
-      }
+      const b = parse(m.body);
+      const o = outcomes.get(m.id.toLowerCase()) ?? {};
+      const txHash = typeof o.txHash === "string" ? o.txHash : typeof b.txHash === "string" ? b.txHash : undefined;
+      const status = typeof o.status === "string" ? o.status : txHash ? "paid" : undefined;
+      const payError = typeof o.payError === "string" ? o.payError : typeof b.payError === "string" ? b.payError : undefined;
       return {
         id: m.id,
         parents: m.parents,
         ...(typeof b.turn === "string" ? { turn: b.turn } : {}),
         ...(b.verdict ? { verdict: b.verdict as ViewDecision["verdict"] } : {}),
         ...(b.proposal ? { proposal: b.proposal as Record<string, unknown> } : {}),
-        ...(typeof b.txHash === "string" ? { txHash: b.txHash } : {}),
+        ...(status ? { outcome: status as ViewDecision["outcome"] } : {}),
+        ...(txHash ? { txHash } : {}),
+        ...(payError ? { payError } : {}),
       } as ViewDecision;
     });
   const str = (x: bigint) => x.toString();
@@ -110,5 +129,30 @@ export function viewDocument(
     seeds: p.snapshot.ledger.seeds.map((s) => ({ seedId: s.seedId, type: s.type, value: s.value, fromBlock: str(s.fromBlock), toBlock: str(s.toBlock), released: s.released })),
     payees: p.snapshot.ledger.payees.map((x) => ({ payeeId: x.payeeId, label: x.label, addr: x.addr, token: x.token, capPerTx: str(x.capPerTx), capPerDay: str(x.capPerDay), active: x.active, suspended: x.suspended })),
     incidents: o.incidents,
+  };
+}
+
+/**
+ * The view without memory contents, for anything that leaves the machine (`tyrell snapshot`, S-11):
+ * bodies, decision reasons and incident summaries are removed; ids, classes, lineage, verdicts and
+ * transaction hashes stay. Memory bodies never leave the machine unencrypted (NFR-06) unless the
+ * owner explicitly asks for them.
+ */
+export function redactView(doc: ViewDocument): ViewDocument & { redacted: true } {
+  return {
+    ...doc,
+    redacted: true,
+    memories: doc.memories.map(({ body: _b, ...m }) => m),
+    decisions: doc.decisions.map((d) => {
+      if (!d.proposal) return d;
+      const { reason: _r, ...proposal } = d.proposal as Record<string, unknown>;
+      return { ...d, proposal };
+    }),
+    incidents: doc.incidents.map((i) => {
+      if (!i || typeof i !== "object") return i;
+      const { summary: _s, ai, ...rest } = i as Record<string, unknown>;
+      const aiOut = ai && typeof ai === "object" ? (({ reason: _x, ...a }) => a)(ai as Record<string, unknown>) : undefined;
+      return { ...rest, ...(aiOut ? { ai: aiOut } : {}) };
+    }),
   };
 }

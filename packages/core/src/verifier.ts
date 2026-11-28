@@ -9,6 +9,7 @@ import {
   type AnchorDomain,
   type Header,
 } from "./envelope.js";
+import { Kind, Lane } from "./constants.js";
 import type { Id16 } from "./ids.js";
 import type { ChainPos, KeyHistory } from "./keys.js";
 import { memoryStructHash, memoryTypedData } from "./typedData.js";
@@ -53,6 +54,7 @@ export const UNVERIFIED_REASONS = [
   "UNBOUND_KEY",
   "LANE_MISMATCH",
   "REFBLOCK_AFTER_ANCHOR",
+  "DECISION_NOT_CONTROL",
 ] as const;
 export type UnverifiedReason = (typeof UNVERIFIED_REASONS)[number];
 
@@ -83,7 +85,8 @@ export type VerifyResult = Verified | Unverified;
  *  2. the CID resolved, the blob decrypted and the header parses, with matching id and account
  *  3. bodyHash, bodyLen, parentsHash, ns and the full struct hash match the anchored values
  *  4. the EIP-712 signature recovers to the anchored signer
- *  5. the signer's lane at the anchor position equals the header's lane (LaneRegistry history)
+ *  5. the signer's lane at the anchor position equals the header's lane (LaneRegistry history), and a
+ *     decision record (kind 5) comes from the control lane
  *  6. refBlock <= anchor block
  */
 export async function verifyMemory(id: Id16, anchor: AnchorRecord | undefined, fetched: BlobFetch, ctx: VerifyContext): Promise<VerifyResult> {
@@ -128,6 +131,8 @@ export async function verifyMemory(id: Id16, anchor: AnchorRecord | undefined, f
   const lane = ctx.keys.laneAt(recovered, anchor.pos);
   if (lane === undefined) return fail("UNBOUND_KEY", recovered, header);
   if (lane !== header.lane) return fail("LANE_MISMATCH", `key is lane ${lane}, envelope claims ${header.lane}`, header);
+  // Payment decisions are control's alone: a decision record from any other lane is a forgery (S-7).
+  if (header.kind === Kind.Decision && header.lane !== Lane.Control) return fail("DECISION_NOT_CONTROL", `kind decision on lane ${header.lane}`, header);
 
   // 6
   if (BigInt(header.refBlock) > anchor.pos.block) return fail("REFBLOCK_AFTER_ANCHOR", undefined, header);

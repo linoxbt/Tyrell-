@@ -70,7 +70,13 @@ export async function fetchMetadata(uri: string, o: FetchMetaOptions = {}): Prom
   if (uri.startsWith("data:")) {
     const m = /^data:([^,;]*)(;base64)?,(.*)$/s.exec(uri);
     if (!m) return { ok: false, error: "malformed data URI" };
-    const text = m[2] ? Buffer.from(m[3]!, "base64").toString("utf8") : decodeURIComponent(m[3]!);
+    let text: string;
+    try {
+      text = m[2] ? Buffer.from(m[3]!, "base64").toString("utf8") : decodeURIComponent(m[3]!);
+    } catch {
+      // A malformed percent-escape is attacker data, not a reason to stop the sentinel (B-2).
+      text = m[3]!;
+    }
     return text.length > max ? { ok: false, error: "too large" } : { ok: true, text };
   }
   let url: URL;

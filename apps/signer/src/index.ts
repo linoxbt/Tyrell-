@@ -15,6 +15,8 @@ export const PayRequestSchema = z
     decisionId: z.string().regex(/^0x[0-9a-f]{32}$/),
     controlSig: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
     agentId: z.string().regex(/^\d{1,78}$/).optional(),
+    /** Unix seconds; the request is refused after it (see PayRequest.deadline). */
+    deadline: z.string().regex(/^\d{1,20}$/),
   })
   .strict();
 export type PayRequestMsg = z.infer<typeof PayRequestSchema>;
@@ -27,12 +29,14 @@ export interface VaultSignerOptions {
   /** The vault signer key: the only key this process holds (I-12). */
   key: LocalAccount;
   rpc: string;
+  /** Clock for the request deadline (tests). */
+  now?: () => number;
 }
 
 /**
  * The signer process (spec section 4). Holds only the vault signer key and calls GuardedVault.pay for
  * one thing: a request signed by the active control lane key, for a call that simulates cleanly right
- * now, with a decision id never used before. It refuses everything else. Even if it is tricked, the
+ * now, with a decision id never used before, before the request's deadline. It refuses everything else. Even if it is tricked, the
  * vault still pays only registered payees within caps (I-5).
  */
 export class VaultSigner {
@@ -42,6 +46,10 @@ export class VaultSigner {
 
   constructor(private readonly o: VaultSignerOptions) {
     this.wallet = createWalletClient({ account: o.key, chain: chainFor(o.deployment.chainId, o.rpc), transport: http(o.rpc) });
+  }
+
+  private now(): number {
+    return (this.o.now ?? Date.now)();
   }
 
   get address(): Address {
@@ -68,7 +76,10 @@ export class VaultSigner {
       amount: BigInt(r.amount),
       decisionId: r.decisionId as Id16,
       ...(r.agentId !== undefined ? { agentId: BigInt(r.agentId) } : {}),
+      deadline: BigInt(r.deadline),
     };
+    const expired = () => BigInt(Math.floor(this.now() / 1000)) > req.deadline;
+    if (expired()) throw new SignerRefused("pay request expired");
     // a registered-agent deployment pays only for its own agent, and only through payForAgent
     if ((req.agentId ?? null) !== (d.agentRegistry ? (d.agentId ?? null) : null)) throw new SignerRefused("agent id does not match this deployment");
 
@@ -92,13 +103,16 @@ export class VaultSigner {
       throw new SignerRefused(`simulation failed: ${(e as Error).message.split("\n")[0]}`);
     }
 
+    // Re-check the deadline at the last moment: a request that waited in the queue past it is dropped,
+    // so control can settle a timed-out request from the chain alone (B-3).
+    if (expired()) throw new SignerRefused("pay request expired");
     this.seen.add(r.decisionId);
     const txHash =
       agentId !== undefined
         ? await this.wallet.writeContract({ ...base, functionName: "payForAgent", args: [agentId, req.payeeId, req.token, req.amount, req.decisionId], chain: this.wallet.chain })
         : await this.wallet.writeContract({ ...base, functionName: "pay", args: [req.payeeId, req.token, req.amount, req.decisionId], chain: this.wallet.chain });
-    const receipt = await c.waitForTransactionReceipt({ hash: txHash });
-    if (receipt.status !== "success") throw new SignerRefused(`pay transaction ${txHash} reverted`);
+    // Answer with the hash as soon as the transaction is broadcast; control waits for the receipt with
+    // its own endpoints, so a slow block never leaves control guessing whether a payment was sent.
     return { txHash };
   }
 

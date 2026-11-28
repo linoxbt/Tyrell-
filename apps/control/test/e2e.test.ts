@@ -163,6 +163,16 @@ describe("control on a real chain (anvil)", () => {
     expect((await again.refresh(live.head)).digest).toBe(live.digest);
   });
 
+  it("B-9: a digest at an old head leaves the live state alone, and concurrent refreshes keep the newest", async () => {
+    const live = await control.refresh();
+    const old = await control.projectionAt(live.head - 3n);
+    expect(old.head).toBe(live.head - 3n);
+    expect(control.projection!.head).toBe(live.head);
+    const [a, b] = await Promise.all([control.refresh(), control.refresh()]);
+    expect(b.head >= a.head).toBe(true);
+    expect(control.projection!.head).toBe(b.head);
+  });
+
   it("rebuild without the right data key, or with a body swapped on IPFS, is unverified and the digest says so", async () => {
     const live = await control.refresh();
     const wrongKey = await rebuildFresh({ deployment: lab.deployment, clients, dataKey: await importDataKey(newSecret()), store, dbPath: join(dir, "wrong.sqlite"), head: live.head });

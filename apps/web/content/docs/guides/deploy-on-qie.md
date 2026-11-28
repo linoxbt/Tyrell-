@@ -15,7 +15,7 @@ This guide takes you from an empty machine to a running Tyrell deployment on QIE
 | A model API key | For the Steward agent and the AI judge: `FORTYTWO_API_KEY` (Qwen on Fortytwo), or `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` for any OpenAI-compatible endpoint |
 | Mainnet only: QUSDC | The vault's payment token, `0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5` (6 decimals) |
 
-Gas costs are small. A full deploy of all five contracts is about 6.6M gas; anchoring one memory is about 93k gas (see `contracts/GAS.md`).
+Gas costs are small. A full deploy of all five contracts is about 6.5M gas; anchoring one memory is about 95k gas (see `contracts/GAS.md`).
 
 > [!WARNING]
 > On 2026-11-26 the testnet RPCs `rpc1testnet` to `rpc3testnet` did not answer (see `PROBE.md`). Tyrell's defaults put the working endpoints first. Re-run `pnpm probe` before a deployment to check the network.
@@ -44,7 +44,7 @@ export PINATA_JWT=...   # never commit it
 pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer --verify
 ```
 
-`tyrell deploy` runs `contracts/script/Deploy.s.sol` with Foundry. Every privileged role goes to `--owner` at construction; the submitter, vault signer and control addresses come from `keys/addresses.json`. On a non-mainnet chain without `--token`, it also deploys `TyrellTestUSD` as the payment token. On mainnet, `--token` is required:
+`tyrell deploy` runs `contracts/script/Deploy.s.sol` with Foundry. Every privileged role goes to `--owner` at construction; the submitter and vault signer addresses come from `keys/addresses.json` (the control key needs no vault role: whichever key is the active control-lane key may pause the vault). On a non-mainnet chain without `--token`, it also deploys `TyrellTestUSD` as the payment token. On mainnet the token defaults to QUSDC and any other token is refused:
 
 ```sh
 pnpm tyrell deploy --owner <your QIE Wallet address> --account tyrell-deployer \
@@ -130,6 +130,6 @@ Before a mainnet run:
 | Situation | Action |
 | --- | --- |
 | A lane key may have leaked | `pnpm tyrell revoke --lane <lane>` (owner approves in QIE Wallet), then `--rotate` to register a fresh key |
-| Payments look wrong | Call `GuardedVault.pause()` from QIE Wallet or with the control key; only the owner can `unpause()` |
+| Payments look wrong | Call `GuardedVault.pause()` from QIE Wallet or with the active control-lane key; only the owner can `unpause()` |
 | You want the money back | `GuardedVault.withdraw(token, to, amount)` from QIE Wallet (owner only) |
 | The local database is damaged | Stop control and run `tyrell rebuild --fresh` |

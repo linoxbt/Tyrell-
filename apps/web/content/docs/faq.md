@@ -45,7 +45,7 @@ No. A QIE ID is resolved once, when you add the payee, and must reverse-resolve 
 
 ### Can I pause everything?
 
-Yes. `GuardedVault.pause()` from QIE Wallet or with the control key stops all payments. Only the owner can unpause. The owner can also `withdraw` the funds at any time.
+Yes. `GuardedVault.pause()` from QIE Wallet or with the active control-lane key stops all payments. Only the owner can unpause. The owner can also `withdraw` the funds at any time.
 
 ## Memory and quarantine
 

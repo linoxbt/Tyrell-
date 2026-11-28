@@ -32,6 +32,8 @@ export const AGENT_CODES: Record<string, string> = {
   RECIPIENT_INACTIVE: "the receiving agent is not active",
   NOT_BONDED: "the sending agent has no bond (below the minimum)",
   BAD_SIGNATURE: "not signed by the sending agent's registered key",
+  WRONG_TOKEN: "the agent's limits are in another token",
+  NONCE_USED: "the recipient already accepted this message (a replay)",
 };
 
 /** Decode a bytes32 code returned by the registry or network. */
@@ -72,4 +74,28 @@ export function signAgentMessage(key: LocalAccount, chainId: number, network: Ad
 /** Who signed an agent message (compare with AgentRegistry.agent(fromAgent).key). */
 export function agentMessageSigner(chainId: number, network: Address, m: AgentMessage, signature: Hex): Promise<Address> {
   return recoverTypedDataAddress({ domain: agentNetworkDomain(chainId, network), types: AGENT_MESSAGE_TYPES, primaryType: "AgentMessage", message: m, signature });
+}
+
+/**
+ * AgentRegistry.registerAgent needs the agent key's consent: an EIP-712 RegisterAgent(human, key, deadline)
+ * signed by the agent key, so nobody can register another deployment's (public) agent key first.
+ */
+export const REGISTER_AGENT_TYPES = {
+  RegisterAgent: [
+    { name: "human", type: "address" },
+    { name: "key", type: "address" },
+    { name: "deadline", type: "uint64" },
+  ],
+} as const;
+
+export const agentRegistryDomain = (chainId: number, registry: Address) => ({ name: "TyrellAgentRegistry", version: "1", chainId, verifyingContract: registry }) as const;
+
+/** The agent key consents to being `human`'s agent until `deadline` (unix seconds). */
+export function signAgentRegistration(key: LocalAccount, chainId: number, registry: Address, human: Address, deadline: bigint): Promise<Hex> {
+  return key.signTypedData({ domain: agentRegistryDomain(chainId, registry), types: REGISTER_AGENT_TYPES, primaryType: "RegisterAgent", message: { human, key: key.address, deadline } });
+}
+
+/** Who consented in a registration signature (must equal the agent key being registered). */
+export function agentRegistrationSigner(chainId: number, registry: Address, human: Address, key: Address, deadline: bigint, signature: Hex): Promise<Address> {
+  return recoverTypedDataAddress({ domain: agentRegistryDomain(chainId, registry), types: REGISTER_AGENT_TYPES, primaryType: "RegisterAgent", message: { human, key, deadline }, signature });
 }

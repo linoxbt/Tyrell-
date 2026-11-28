@@ -202,13 +202,17 @@ describe("blast radius", () => {
     const tx = keccak256(toBytes("vault-tx"));
     const d = await mk({ lane: 4, ns: "tyrell.control", parents: [s.m.id, u.m.id], body: JSON.stringify({ verdict: "BLOCK", txHash: tx }) });
     const d2 = await mk({ lane: 4, ns: "tyrell.control", parents: [s.m.id], body: "not json" });
+    // control's outcome note (a child of the decision) carries the payment's transaction
+    const tx2 = keccak256(toBytes("vault-tx-2"));
+    const out = await mk({ lane: 4, kind: 3, ns: "tyrell.control", parents: [d2.m.id], body: JSON.stringify({ outcomeOf: d2.m.id, status: "paid", txHash: tx2 }) });
+    const dup = await mk({ lane: 4, kind: 3, ns: "tyrell.control", parents: [d.m.id], body: JSON.stringify({ outcomeOf: d.m.id, status: "paid", txHash: tx }) });
     const mcp = await mk({ lane: 3, src: [{ t: "mcp", tool: "qie_get_balances", args: {} }, { t: "user-msg", id: "m1" }] });
     const seeds = [seed(1, SeedType.Source, sourceSeedValue(POISON_TOKEN)), seed(2, SeedType.Memory, id16SeedValue(mcp.m.id))];
-    const p = computeProjection([u.r, w.r, s.r, d.r, d2.r, mcp.r], seeds);
+    const p = computeProjection([u.r, w.r, s.r, d.r, d2.r, out.r, dup.r, mcp.r], seeds);
     const b = blastRadius(1, p);
-    expect(b.memories).toEqual([w.m.id, s.m.id, d.m.id, d2.m.id]);
+    expect(b.memories).toEqual([w.m.id, s.m.id, d.m.id, d2.m.id, out.m.id, dup.m.id]);
     expect(b.decisions).toEqual([d.m.id, d2.m.id]);
-    expect(b.vaultTxs).toEqual([tx]);
+    expect(b.vaultTxs).toEqual([tx, tx2]);
     expect(b.nodes.find((n) => n.type === "source")?.label).toBe(`erc20 ${POISON_TOKEN}`);
     expect(b.edges).toContainEqual({ from: w.m.id, to: s.m.id });
     expect(b.edges).toContainEqual({ from: s.m.id, to: d.m.id });

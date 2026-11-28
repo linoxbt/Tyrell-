@@ -12,6 +12,16 @@ export const LABELS: Record<string, string> = {
 };
 export const label = (cls: string) => LABELS[cls] ?? LABELS.untrusted!;
 
+/** Control and format characters a memory body could use to break out of its line (newlines, bidi overrides). */
+const UNSAFE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
+
+/**
+ * One memory as the model sees it: label, id, then the body as a JSON string. The body is quoted and
+ * escaped, so text inside it (a token name with a newline and "[USER FACT]") can never start a line of
+ * its own or pose as a label (B-10).
+ */
+export const memoryLine = (cls: string, id: string, body: string): string => `${label(cls)} (${id}) ${JSON.stringify(body.replace(UNSAFE, " "))}`;
+
 export const SYSTEM_PROMPT = `You are Steward. You pay the user's recurring bills from a guarded vault.
 Memories come labelled:
 - [USER FACT] was typed by the user.

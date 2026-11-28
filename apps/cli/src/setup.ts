@@ -3,16 +3,20 @@ import { createServer, type Server } from "node:http";
 import { randomBytes } from "node:crypto";
 import { encodeFunctionData, erc20Abi, toHex, type Address, type Hex, type PublicClient } from "viem";
 import { guardedVaultAbi, laneRegistryAbi, QIE_WALLET_RDNS, tyrellTestUSDAbi, type Deployment } from "@tyrell/chain";
-import { encryptKeystore, keystoreAddress, newSecret, writeKeystore } from "@tyrell/storage";
-import { defaultRpcs, home, paths, readConfig, ROLES, writeConfig, type TyrellConfig } from "./config.js";
+import { encryptKeystore, keystoreAddress, MIN_SCRYPT_N, newSecret, writeKeystore } from "@tyrell/storage";
+import { defaultRpcs, home, passphraseFile, paths, readConfig, ROLES, writeConfig, type TyrellConfig } from "./config.js";
+import { join } from "node:path";
 
 export interface SetupKeysOptions {
   network: TyrellConfig["network"];
   chainId?: number;
   store?: TyrellConfig["store"];
-  /** Create TYRELL_HOME/pass with a random passphrase if no passphrase file exists. */
+  /**
+   * Create random passphrases where none exist: one per role in TYRELL_HOME/pass.d/ on testnet and
+   * mainnet (I-12), or the single shared TYRELL_HOME/pass on a local test chain.
+   */
   newPassphrase?: boolean;
-  /** scrypt cost override (tests only). */
+  /** scrypt cost override; below MIN_SCRYPT_N only on a local test chain. */
   scryptN?: number;
 }
 
@@ -29,14 +33,20 @@ const LANE_ROLES = { 1: "user", 2: "agent", 3: "wallet", 4: "control" } as const
  * `tyrell setup keys` (FR-02): one encrypted keystore per role, each written once, never printed.
  * Writes TYRELL_HOME/keys/addresses.json with public addresses only.
  */
-export function setupKeys(o: SetupKeysOptions, passphrase: () => string): SetupKeysResult {
-  mkdirSync(paths().keys, { recursive: true, mode: 0o700 });
-  const passFile = process.env.KEYSTORE_PASSPHRASE_FILE ?? `${home()}/pass`;
-  if (!existsSync(passFile)) {
-    if (!o.newPassphrase) throw new Error(`no passphrase file at ${passFile}: create one (chmod 600) or pass --new-passphrase`);
-    writeFileSync(passFile, randomBytes(24).toString("base64url") + "\n", { mode: 0o600, flag: "wx" });
+export function setupKeys(o: SetupKeysOptions, passphrase: (role: string) => string): SetupKeysResult {
+  if (o.scryptN !== undefined && o.scryptN < MIN_SCRYPT_N && o.network !== "local") {
+    throw new Error(`TYRELL_SCRYPT_N=${o.scryptN} is below the minimum ${MIN_SCRYPT_N}; lower costs are for local test chains only`);
   }
-  const pw = passphrase();
+  mkdirSync(paths().keys, { recursive: true, mode: 0o700 });
+  for (const role of ROLES) {
+    if (existsSync(paths().key(role))) continue;
+    const { file, shared } = passphraseFile(role);
+    if (existsSync(file)) continue;
+    if (!o.newPassphrase) throw new Error(`no passphrase file for the ${role} key at ${file}: create one (chmod 600) or pass --new-passphrase`);
+    const target = shared && o.network !== "local" ? join(home(), "pass.d", role) : file;
+    mkdirSync(join(target, ".."), { recursive: true, mode: 0o700 });
+    if (!existsSync(target)) writeFileSync(target, randomBytes(24).toString("base64url") + "\n", { mode: 0o600, flag: "wx" });
+  }
   const created: string[] = [];
   const existing: string[] = [];
   for (const role of ROLES) {
@@ -45,7 +55,10 @@ export function setupKeys(o: SetupKeysOptions, passphrase: () => string): SetupK
       existing.push(role);
       continue;
     }
-    writeKeystore(p, encryptKeystore(newSecret(), pw, { role, evm: role !== "data", ...(o.scryptN ? { n: o.scryptN } : {}) }));
+    if (o.network !== "local" && passphraseFile(role).shared && process.env.TYRELL_INSECURE_SHARED_KEYS !== "1") {
+      throw new Error(`on ${o.network} each role needs its own passphrase: write ${join(home(), "pass.d", role)} (chmod 600), or pass --new-passphrase`);
+    }
+    writeKeystore(p, encryptKeystore(newSecret(), passphrase(role), { role, evm: role !== "data", ...(o.scryptN ? { n: o.scryptN } : {}) }));
     created.push(role);
   }
   const addresses = Object.fromEntries(ROLES.filter((r) => r !== "data").map((r) => [r, keystoreAddress(paths().key(r))])) as Record<string, Address>;
