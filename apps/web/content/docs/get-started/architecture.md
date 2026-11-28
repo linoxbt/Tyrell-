@@ -112,7 +112,7 @@ Startup refuses to proceed unless each lane has exactly one active key.
 
 ## The web app
 
-The Next.js web app in `apps/web` has the landing page, the [console](/console), a [get-started](/start) flow, the [playground](/playground) and these docs. The console reads your account from QIE and, when you connect it, your control process's read-only view straight from your browser; it can create an account from your wallet (keys made and encrypted in the browser). The recorded sample run is shown only on the playground. See [Web console and wallet](/docs/guides/web-console-and-wallet).
+The Next.js web app in `apps/web` has the landing page, the [console](/console), a [get-started](/start) flow, the [playground](/playground) and these docs. The console reads your account from QIE, and the full view from control's read-only API when the web server proxies it (`TYRELL_API_URL`); it can create an account from your wallet (keys made and encrypted in the browser). The recorded sample run is shown only on the playground. See [Web console and wallet](/docs/guides/web-console-and-wallet).
 
 ## Beyond one agent
 

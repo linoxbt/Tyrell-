@@ -93,7 +93,7 @@ No. It sees only incoming on-chain text: token names and symbols, and NFT metada
 
 ### Does the hosted console connect to my agent?
 
-Only from your own browser. The console reads your account from QIE, and when you connect your control process (`http://127.0.0.1:7878`) your browser reads it directly; the web host never does. Control answers only pages from Tyrell's own site and local development.
+No. The hosted console reads your account from QIE (keys, payees, payments, activity). For the full view of your agent's memory, run the web app next to control with `TYRELL_API_URL=http://127.0.0.1:7878 pnpm web:dev`.
 
 ### Why connect a wallet to the console?
 

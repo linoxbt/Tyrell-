@@ -12,7 +12,7 @@ Live demo: **https://tyrell-mu.vercel.app**
 
 - [Playground](https://tyrell-mu.vercel.app/playground): the real contracts, compiled and running in an EVM in your browser. 34 live checks across memory, the vault, Phase A and Phase B, no login and no wallet. It also shows the recorded results of the full repository test suites.
 - [Docs](https://tyrell-mu.vercel.app/docs): guides, concepts, the agents network, contract and CLI reference, and the security model ([llms.txt](https://tyrell-mu.vercel.app/llms.txt) for language models).
-- [Console](https://tyrell-mu.vercel.app/console): your own Tyrell account. Create one from your wallet (contracts deployed, keys made and encrypted in the browser, then `pnpm tyrell import`), or open one you have; create, replace and revoke lane keys; connect your control process for the full view.
+- [Console](https://tyrell-mu.vercel.app/console): your own Tyrell account. Create one from your wallet (contracts deployed, keys made and encrypted in the browser, then `pnpm tyrell import`), or open one you have; create, replace and revoke lane keys; run the web app next to control for the full view.
 
 ## The problem
 
@@ -186,9 +186,9 @@ monitoring), rebuilt in Next.js with Tyrell's own content and data:
 - `/console`: the operator console. Overview (classes, decisions, payees, seeds), lineage graph,
   blast radius per seed, decisions with what the model had read, timeline and incidents.
 
-Control serves a read-only view document on `127.0.0.1:7878`; the console connects to it from your
-browser (only Tyrell's own site and local development may read it). Without it, the console reads your
-account straight from QIE. The recorded sample run (`apps/web/public/snapshot.json`, written with
+Control serves a read-only view document on `127.0.0.1:7878`; `TYRELL_API_URL=http://127.0.0.1:7878
+pnpm web:dev` gives the console the full view. Without it, the console reads your account straight
+from QIE. The recorded sample run (`apps/web/public/snapshot.json`, written with
 `pnpm tyrell snapshot`) is shown only on the playground.
 
 **Wallet connection** uses [Reown AppKit](https://reown.com/appkit): QIE Wallet and other browser wallets,

@@ -16,7 +16,7 @@ import { chainName, useWallet } from "@/lib/wallet";
 
 /*
  * The console is your Tyrell account, nothing else:
- *  - with your control process connected, the full view (memories, lineage, decisions, incidents);
+ *  - on a self-hosted web app that proxies your control process, the full view (memories, lineage, decisions, incidents);
  *  - otherwise your account read straight from QIE (keys, payees, payments, activity);
  *  - with no account yet, create one from your wallet or open one you have.
  * The recorded demo run lives on the playground.
@@ -40,29 +40,19 @@ const ACCOUNT: Array<[Tab, string, IconName]> = [
   ["keys", "Keys", "gear"],
 ];
 
-const CONTROL_URL = "tyrell.control.url";
-
-/** The full view from a control process: the site's own (TYRELL_API_URL) or one on this computer. */
+/** The full view, when this web server proxies a control process (TYRELL_API_URL, self-hosted). */
 function useProjection() {
   const [view, setView] = useState<ViewDocument>();
-  const [url, setUrl] = useState<string>();
-  const [error, setError] = useState<string>();
-  useEffect(() => setUrl(localStorage.getItem(CONTROL_URL) ?? undefined), []);
   useEffect(() => {
+    localStorage.removeItem("tyrell.control.url"); // a connection saved by an earlier version
     let alive = true;
     const load = async () => {
       try {
-        const r = url ? await fetch(`${url.replace(/\/$/, "")}/api/view`, { cache: "no-store" }) : await fetch("/api/view", { cache: "no-store" });
-        if (!r.ok) throw new Error(r.status === 404 ? "" : `HTTP ${r.status}`);
-        const v = (await r.json()) as ViewDocument;
-        if (alive) {
-          setView(v);
-          setError(undefined);
-        }
-      } catch (e) {
-        if (!alive) return;
-        setView(undefined);
-        if (url) setError(`Could not reach control at ${url}. Is it running? ${(e as Error).message}`);
+        const r = await fetch("/api/view", { cache: "no-store" });
+        const v = r.ok ? ((await r.json()) as ViewDocument) : undefined;
+        if (alive) setView(v);
+      } catch {
+        if (alive) setView(undefined);
       }
     };
     void load();
@@ -71,14 +61,8 @@ function useProjection() {
       alive = false;
       clearInterval(t);
     };
-  }, [url]);
-  const connect = (u?: string) => {
-    if (u) localStorage.setItem(CONTROL_URL, u);
-    else localStorage.removeItem(CONTROL_URL);
-    setError(undefined);
-    setUrl(u);
-  };
-  return { view, url, error, connect };
+  }, []);
+  return { view };
 }
 
 export default function Console() {
@@ -175,11 +159,6 @@ export default function Console() {
                 {chainName(account.chainId)} · {account.laneRegistry.slice(0, 6)}… ▾
               </button>
             )}
-            {mode === "full" && proj.url && (
-              <button onClick={() => proj.connect(undefined)} className="ml-2 hidden rounded-full border border-line px-2.5 py-0.5 text-[12px] text-body hover:bg-paper sm:block" title="Disconnect">
-                control · {proj.url.replace(/^https?:\/\//, "")} ✕
-              </button>
-            )}
             <ConnectButton className="ml-auto hidden sm:flex" />
             <ConnectButton variant="icon" className="-mr-2 ml-auto sm:hidden" />
           </div>
@@ -220,7 +199,6 @@ export default function Console() {
                 }}
                 onCreate={() => setScreen("create")}
                 onOpen={() => setScreen("open")}
-                control={proj}
               />
             ))}
         </div>
@@ -271,17 +249,14 @@ function Start({
   onForget,
   onCreate,
   onOpen,
-  control,
 }: {
   accounts: Deployment[];
   onPick: (d: Deployment) => void;
   onForget: (d: Deployment) => void;
   onCreate: () => void;
   onOpen: () => void;
-  control: ReturnType<typeof useProjection>;
 }) {
   const w = useWallet();
-  const [url, setUrl] = useState("http://127.0.0.1:7878");
   const mine = useMemo(() => accounts, [accounts]);
   return (
     <div className="mx-auto max-w-[720px] space-y-6">
@@ -335,17 +310,6 @@ function Start({
         </>
       )}
 
-      <div className="rounded-2xl border border-line bg-white p-5">
-        <div className="text-[13px] font-medium text-ink">Running Tyrell on this computer?</div>
-        <p className="mt-1 text-[13px] leading-relaxed text-body">Connect your control process for the full view: every memory, the lineage graph, decisions and incidents.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Control address" className="mono min-w-0 flex-1 rounded-lg border border-line px-3 py-2 text-[13px] text-ink outline-none focus:border-brand" />
-          <button onClick={() => control.connect(url)} className="rounded-lg bg-ink px-4 py-2 text-[14px] text-white">
-            Connect
-          </button>
-        </div>
-        {control.error && <p className="mt-2 text-[12px] text-rose">{control.error}</p>}
-      </div>
     </div>
   );
 }

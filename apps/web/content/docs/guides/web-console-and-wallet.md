@@ -1,6 +1,6 @@
 ---
 title: Web Console and Wallet
-description: Create and open your Tyrell account in the console, connect QIE Wallet with Reown AppKit, create and manage lane keys from the browser, and connect your control process for the full view.
+description: Create and open your Tyrell account in the console, connect QIE Wallet with Reown AppKit, create and manage lane keys from the browser, and see the full view on a self-hosted web app.
 ---
 
 The web app in `apps/web` is the human's window into Tyrell. The console is your own account: it creates one from your wallet, reads it from QIE, manages its lane keys, and, with your control process connected, shows what the agent remembers, where each memory came from and what was blocked. It never holds a key that can write memories or pay: keys it creates are encrypted in the browser and downloaded.
@@ -21,9 +21,9 @@ The console never shows sample data. It shows, in this order:
 
 | You have | The console shows | Read from |
 | --- | --- | --- |
-| Your control process connected | The full view: Overview, Lineage, Blast radius, Decisions, Timeline, Incidents, Keys | Control's read-only [view document](/docs/reference/view-document) |
+| A web app that proxies your control process (self-hosted) | The full view: Overview, Lineage, Blast radius, Decisions, Timeline, Incidents, Keys | Control's read-only [view document](/docs/reference/view-document) |
 | An account (created or opened in this browser) | Your account from QIE: Overview, Payees, Activity, Keys | The contracts, through your wallet or a public QIE RPC |
-| Neither | **Your Tyrell account**: create a new account, open one you have, or connect your control process | — |
+| Neither | **Your Tyrell account**: create a new account or open one you have | — |
 
 Accounts you create or open are remembered in this browser (their contract addresses only), and the one on your wallet's network opens automatically.
 
@@ -50,9 +50,13 @@ pnpm tyrell control start
 
 ### Connecting your control process
 
-Control serves a read-only view on `http://127.0.0.1:7878/api/view`. Enter that address under **Running Tyrell on this computer?** and the console reads it straight from your browser. Control answers only pages from Tyrell's own site and local development (`TYRELL_WEB_ORIGINS`, by default `https://tyrell-mu.vercel.app`, `http://localhost:3000` and `http://127.0.0.1:3000`), so another website you visit cannot read your memories.
+Control serves a read-only view on `http://127.0.0.1:7878/api/view`. Run the web app next to it with `TYRELL_API_URL` and its console shows the full view (the server proxies it as `/api/view`):
 
-A self-hosted web server can also proxy one control process for everyone who opens it, with `TYRELL_API_URL` (the server's `/api/view`). The hosted site does not set it.
+```sh
+TYRELL_API_URL=http://127.0.0.1:7878 pnpm web:dev   # then open http://localhost:3000/console
+```
+
+The hosted site does not set it. Control refuses browser requests from any page other than Tyrell's own origins (`TYRELL_WEB_ORIGINS`), so another website you visit cannot read your memories.
 
 ## Console tabs
 

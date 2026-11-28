@@ -211,7 +211,8 @@ export default function Start() {
                 <Code>{`pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5\nexport FORTYTWO_API_KEY=...   # Qwen on Fortytwo, or any OpenAI-compatible model\npnpm tyrell steward "pay this month's rent"`}</Code>
               </Step>
               <Step n={9} state="todo" title="Watch it in the console">
-                Open the console and connect your control process (it serves a read-only view on <span className="mono">http://127.0.0.1:7878</span>) to see every memory, decision, incident and blast radius live.
+                The console shows your account from QIE: keys, payees, payments and activity. For every memory, decision, incident and blast radius, run the web app next to control:
+                <Code>{`TYRELL_API_URL=http://127.0.0.1:7878 pnpm web:dev   # then open http://localhost:3000/console`}</Code>
               </Step>
             </ol>
 

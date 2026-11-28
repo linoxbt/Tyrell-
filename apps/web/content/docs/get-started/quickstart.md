@@ -47,7 +47,7 @@ The TypeScript suite starts its own anvil chains, deploys the contracts from the
 pnpm web:dev
 ```
 
-Open `http://localhost:3000`. The [console](/console) is your own account: connect a wallet, then create an account (on a local chain, QIE Testnet or QIE Mainnet) or open one you have, and connect your control process for the full view. The [playground](/playground) shows a recorded run with a poisoned token, a blocked payment and an active quarantine.
+Open `http://localhost:3000`. The [console](/console) is your own account: connect a wallet, then create an account (on a local chain, QIE Testnet or QIE Mainnet) or open one you have, and run it next to control with `TYRELL_API_URL=http://127.0.0.1:7878` for the full view. The [playground](/playground) shows a recorded run with a poisoned token, a blocked payment and an active quarantine.
 
 > [!NOTE]
 > The processes that hold keys never run on the web host. Keys the console creates are encrypted in your browser and downloaded for `pnpm tyrell import`.
