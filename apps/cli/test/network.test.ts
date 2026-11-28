@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createWalletClient, decodeFunctionData, encodeFunctionData, getAddress, hashTypedData, http, keccak256, toBytes, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { PERM, REGISTER_AGENT_TYPES, agentRegistrationSigner, agentRegistryDomain, dealPayeeId, payeeIdOf, signAgentRegistration } from "@tyrell/core";
+import { PERM, REGISTER_AGENT_TYPES, ROTATE_AGENT_KEY_TYPES, agentRegistrationSigner, agentRegistryDomain, dealPayeeId, payeeIdOf, signAgentKeyRotation, signAgentRegistration } from "@tyrell/core";
 import { agentNetworkAbi, agentRegistryAbi, laneRegistryAbi, memoryAnchorAbi, testQieIdAbi, type Deployment } from "@tyrell/chain";
-import { agentsReport, bindTxs, dealTx, parsePerms, payeesTx, registerTx, registeredAgentId, requestWithdrawalTx, spenderTxs, openDealTxs, waitForOwnerTxs, withdrawBondTx } from "../src/network.js";
+import { agentsReport, bindTxs, dealTx, parsePerms, payeesTx, registerTx, registeredAgentId, requestWithdrawalTx, rotateAgentKeyTx, spenderTxs, openDealTxs, waitAgentKey, waitForOwnerTxs, withdrawBondTx } from "../src/network.js";
 import { startAnvil, type BareAnvil } from "../../../test/support/anvil.js";
 
 const a = (l: string) => getAddress(keccak256(toBytes(l)).slice(0, 42)) as Address;
@@ -148,5 +148,19 @@ describe("DeployNetwork.s.sol", () => {
     expect(report.qieId).toBe("e2e.qie");
     expect(report.agents).toHaveLength(1);
     expect(report.agents[0]).toMatchObject({ id: 1n, key: key.address, thisDeployment: true, status: "active", permissions: ["pay"], bond: 0n, reputation: 500n });
+    expect(report.agents[0]).not.toHaveProperty("pendingWithdrawal");
+
+    // the agent's key is replaced in place with the new key's consent (as `tyrell agents rotate-key` does)
+    const next = privateKeyToAccount(keccak256(toBytes("e2e-agent-key-2")));
+    const onchainRot = await chain.pub.readContract({ address: registry, abi: agentRegistryAbi, functionName: "rotationDigest", args: [1n, owner, next.address, deadline] });
+    expect(onchainRot).toBe(hashTypedData({ domain: agentRegistryDomain(31337, registry), types: ROTATE_AGENT_KEY_TYPES, primaryType: "RotateAgentKey", message: { agentId: 1n, human: owner, key: next.address, deadline } }));
+    const rot = rotateAgentKeyTx(dep, 1n, next.address, deadline, await signAgentKeyRotation(next, 31337, registry, 1n, owner, deadline));
+    const from3 = await chain.pub.getBlockNumber();
+    await send(rot);
+    await waitForOwnerTxs(chain.pub, owner, [rot], from3, { pollMs: 50, timeoutMs: 20_000 });
+    await waitAgentKey(chain.pub, dep, 1n, next.address, 5_000);
+    expect(await registeredAgentId(chain.pub, dep, next.address)).toBe(1n);
+    await expect(registeredAgentId(chain.pub, dep, key.address)).rejects.toThrow(/not a registered agent key/);
+    await expect(waitAgentKey(chain.pub, dep, 1n, key.address, 100)).rejects.toThrow(/not confirmed in time/);
   }, 120_000);
 });

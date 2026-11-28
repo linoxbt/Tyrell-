@@ -40,7 +40,8 @@ Tyrell always queries the `"qie"` record. The mainnet store returns the zero add
 | `network` | `address` | The linked `AgentNetwork` (may `ban` and `unban`) |
 | `humanOfQieId(bytes32)` | `address` | Who holds a binding for `keccak256(qieId)` |
 | `quota(human, token)` | `uint256` | Daily quota shared by the human's agents |
-| `isSpender(human, spender)` | `bool` | Contracts allowed to charge (and refund) the human's agents |
+| `isSpender(human, spender)` | `bool` | Contracts allowed to charge the human's agents |
+| `chargedBy(agentId, day, spender)` | `uint256` | What `spender` charged the agent on UTC `day`, less what it refunded: the most it can still refund |
 | `keyUsed(address)` | `bool` | Keys ever registered (never reusable) |
 | `banned(agentId)` | `bool` | Banned by the network |
 | `payeeAllowed(agentId, payeeId)` | `bool` | Delegated payees |
@@ -67,6 +68,8 @@ struct NewAgent { address key; address token; string label; bytes32 metaHash; ui
 | --- | --- | --- |
 | `registerAgent(NewAgent n, uint64 deadline, bytes keySig) returns (agentId)` | bound human | `keySig` is `n.key`'s EIP-712 signature of `RegisterAgent(human = caller, key, deadline)`. `NotBound`, `BadKey` (zero, self, reused, a human's address), `BadToken` (zero token), `SignatureExpired`, `BadKeySignature`, `TooManyAgents`. Emits `AgentRegistered`, `AgentTokenSet`, `AgentPermissionsSet`, `AgentLimitsSet` (and `AgentAnyPayeeSet` if `anyPayee`). |
 | `registrationDigest(human, key, deadline) view` | | The digest the agent key signs |
+| `rotateAgentKey(agentId, newKey, uint64 deadline, bytes keySig)` | the agent's human | `keySig` is `newKey`'s EIP-712 signature of `RotateAgentKey(uint256 agentId, address human, address key, uint64 deadline)`. `BadKey` (zero, self, ever used, a human's address), `SignatureExpired`, `BadKeySignature`, plus the management reverts. The agent keeps its id and everything else; the old key is retired for good. Emits `AgentKeyRotated`. |
+| `rotationDigest(agentId, human, key, deadline) view` | | The digest the new key signs |
 | `domainSeparator() view` | | The EIP-712 domain separator |
 | `setPermissions(agentId, permissions)` | the agent's human | Emits `AgentPermissionsSet` |
 | `setLimits(agentId, perTx, daily)` | the agent's human | In the agent's token. Emits `AgentLimitsSet` |
@@ -90,9 +93,9 @@ Management calls revert with `UnknownAgent`, `NotYourAgent` or `AgentIsRevoked` 
 | `hasPermission(agentId, permission) view` | | `bool` |
 | `check(agentId, payeeId, token, amount) view` | | `(ok, code)` for a payment (`PAY`): `status` codes, then `NOT_PERMITTED`, `WRONG_TOKEN`, `PAYEE_NOT_DELEGATED`, `OVER_AGENT_TX_LIMIT`, `OVER_AGENT_DAILY_LIMIT`, `OVER_HUMAN_QUOTA` |
 | `checkDeal(agentId, payeeId, token, amount) view` | | The same for the paying side of a deal (`DEAL`) |
-| `consume(agentId, payeeId, token, amount)` | spenders of the agent's human | `NotSpender`; `AgentBlocked(code)` if `check` fails; records the spend for the agent and the human. Emits `AgentSpent`. |
+| `consume(agentId, payeeId, token, amount)` | spenders of the agent's human | `NotSpender`; `AgentBlocked(code)` if `check` fails; records the spend for the agent, the human and the spender (`chargedBy`). Emits `AgentSpent`. |
 | `consumeDeal(agentId, payeeId, token, amount)` | spenders of the agent's human | The same with `checkDeal` |
-| `refund(agentId, token, amount, day)` | spenders of the agent's human | Takes `amount` off the agent's and the human's spend for UTC `day` (never below zero). `NotSpender`. Emits `AgentRefunded`. |
+| `refund(agentId, token, amount, day)` | whoever charged it | Takes `amount` off the agent's and the human's spend for UTC `day`. At most what the caller charged that agent that day (`OverRefund(charged, amount)`); `BadToken` unless `token` is the agent's own. Needs no current spender status, so a deal opened before the human removed the network can still be refunded. Emits `AgentRefunded`. |
 | `spentToday(agentId, token) view` | | Agent spend this UTC day (0 for any token but the agent's own) |
 | `humanSpentToday(human, token) view` | | Human spend this UTC day (all agents) |
 
@@ -106,11 +109,11 @@ Management calls revert with `UnknownAgent`, `NotYourAgent` or `AgentIsRevoked` 
 
 ### Events
 
-`HumanBound(human, qieId, qieIdHash)` · `HumanFrozen(human, frozen)` · `QuotaSet(human, token, dailyQuota)` · `SpenderSet(human, spender, allowed)` · `AgentRegistered(agentId, human, key, label, metaHash)` · `AgentTokenSet(agentId, token)` · `AgentPermissionsSet(agentId, permissions)` · `AgentLimitsSet(agentId, perTxLimit, dailyLimit)` · `AgentPayeeSet(agentId, payeeId, allowed)` · `AgentAnyPayeeSet(agentId, anyPayee)` · `AgentRevoked(agentId, key, reason)` · `AgentBanned(agentId)` · `AgentUnbanned(agentId)` · `AgentSpent(agentId, human, payeeId, token, amount, spender)` · `AgentRefunded(agentId, human, token, amount, day, spender)` · `NetworkSet(network)`
+`HumanBound(human, qieId, qieIdHash)` · `HumanFrozen(human, frozen)` · `QuotaSet(human, token, dailyQuota)` · `SpenderSet(human, spender, allowed)` · `AgentRegistered(agentId, human, key, label, metaHash)` · `AgentTokenSet(agentId, token)` · `AgentPermissionsSet(agentId, permissions)` · `AgentLimitsSet(agentId, perTxLimit, dailyLimit)` · `AgentPayeeSet(agentId, payeeId, allowed)` · `AgentAnyPayeeSet(agentId, anyPayee)` · `AgentRevoked(agentId, key, reason)` · `AgentKeyRotated(agentId, oldKey, newKey)` · `AgentBanned(agentId)` · `AgentUnbanned(agentId)` · `AgentSpent(agentId, human, payeeId, token, amount, spender)` · `AgentRefunded(agentId, human, token, amount, day, spender)` · `NetworkSet(network)`
 
 ### Errors
 
-`QieIdNotOwned(string)` · `NotBound(address)` · `NotYourAgent(uint256)` · `UnknownAgent(uint256)` · `AgentIsRevoked(uint256)` · `BadKey(address)` · `BadKeySignature()` · `SignatureExpired()` · `BadToken()` · `TooManyAgents()` · `NotSpender(address)` · `AgentBlocked(bytes32 code)` · `OnlyNetwork()` · `NetworkAlreadySet()`
+`QieIdNotOwned(string)` · `NotBound(address)` · `NotYourAgent(uint256)` · `UnknownAgent(uint256)` · `AgentIsRevoked(uint256)` · `BadKey(address)` · `BadKeySignature()` · `SignatureExpired()` · `BadToken()` · `TooManyAgents()` · `NotSpender(address)` · `OverRefund(uint256 charged, uint256 amount)` · `AgentBlocked(bytes32 code)` · `OnlyNetwork()` · `NetworkAlreadySet()`
 
 ### Registry codes
 
@@ -211,7 +214,7 @@ Every refund also gives the charge back to the paying agent and its human throug
 | --- | --- |
 | `reputation(agentId) view` | 0..1000, see [Reputation](/docs/agents/reputation) |
 | `record(agentId) view` | `Record { dealsCompleted, reportsUpheld, reportsDismissed, reportsUncontested, volume }` |
-| `stats(uint256[] agentIds) view` | `(bonds, reputations)` for many agents in one call |
+| `stats(uint256[] agentIds) view` | `(bonds, pending, reputations)` for many agents in one call. `bonds` is `effectiveBond` (what `isBonded` and `reputation` use); `pending` is the withdrawal waiting to leave (still slashable); `bondOf = bonds + pending` |
 
 ### Events
 

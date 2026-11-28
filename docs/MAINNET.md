@@ -12,6 +12,9 @@ the vault holds the demo amount only, and `tyrell check caps` must pass before y
       the QIE MCP token list includes it, but the spec asks for a human confirmation).
 - [ ] A fresh home for mainnet, so testnet keys are never reused: `export TYRELL_HOME=~/.tyrell-mainnet`.
 - [ ] The attacker address for the demo is one you control, and it never receives real funds.
+- [ ] At least two *different* mainnet RPC URLs in `config.json` (the defaults are), plus a third for
+      tie-breaks; every process refuses to start with the same URL twice.
+- [ ] Keystores from an older Tyrell: run `pnpm tyrell keys migrate` first (they are refused otherwise).
 
 ## 1. Keys and gas
 
@@ -19,6 +22,24 @@ the vault holds the demo amount only, and `tyrell check caps` must pass before y
 export TYRELL_HOME=~/.tyrell-mainnet
 pnpm tyrell setup keys --network mainnet --store pinata --gateway https://<you>.mypinata.cloud --new-passphrase
 ```
+
+`--new-passphrase` writes one random passphrase per role to `TYRELL_HOME/pass.d/<role>` (mode 600). On
+mainnet a shared passphrase file is refused, and a process that can open another role's key (read both
+its key file and its passphrase) aborts at startup. For the real run, give each process its own OS user
+that owns only its keys and passphrases:
+
+| Process | Keys and passphrases it owns |
+| --- | --- |
+| `control start` | `control`, `submitter`, `data` |
+| `signer start` | `signer` |
+| `ingest start` | `wallet` |
+| `steward` | `agent` |
+| your own CLI (`say`, `payee`, `release`, `quarantine`) | `user` |
+
+Keep every file `chmod 600`; a key, passphrase or token file readable by its group or others is refused.
+Point a process at its passphrase with `KEYSTORE_PASSPHRASE_FILE_<ROLE>` if it lives outside `pass.d`.
+Give `control.sock` group access with `TYRELL_SOCKET_MODE=660` and a group shared by the process users;
+requests that make control act are signed by the caller's lane key either way.
 
 Send a little QIEV3 for gas (a few cents' worth each; contracts/GAS.md: a full deploy is about 6.5M gas,
 the agents network another 8.1M, an anchor about 95k) to:
@@ -78,7 +99,19 @@ pnpm tyrell signer start &
 pnpm tyrell ingest start &
 pnpm tyrell payee add --label landlord --qie-id <landlord>.qie --cap 5 --daily 5
 pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
+pnpm tyrell status                   # vault balance, incidents, and a warning if the submitter is low on gas
 ```
+
+Control's read-only view API (`127.0.0.1:7878`) needs its bearer token, `TYRELL_HOME/api-token`
+(created on first start). To watch the run in the console on the same machine:
+
+```sh
+TYRELL_API_URL=http://127.0.0.1:7878 TYRELL_API_TOKEN=$(cat $TYRELL_HOME/api-token) pnpm web:dev
+```
+
+To show it on the hosted console instead, expose the API through a tunnel that rewrites the `Host`
+header to `127.0.0.1` (control refuses any other host), and set `TYRELL_API_URL` and `TYRELL_API_TOKEN`
+in the Vercel project. The view contains decrypted memory bodies: only do this for demo data.
 
 ## 5. M1 and M2 on mainnet (record the video here)
 
@@ -87,7 +120,7 @@ pnpm tyrell say "pay rent to landlord, 5 QUSDC, on the 1st"
 pnpm tyrell incidents
 pnpm tyrell steward "pay this month's rent"                     # BLOCK with the lineage
 pnpm tyrell quarantine --source <poison token> --reason "..."    # preview, confirm
-pnpm tyrell blast <seedId> --mermaid
+pnpm tyrell blast <seedId> --mermaid                             # also prints the console link
 pnpm tyrell steward "pay this month's rent"                     # ALLOW, Paid on the explorer
 pnpm tyrell drill signer-leak                                    # vault reverts on-chain
 pnpm tyrell revoke --lane wallet --rotate                        # optional (cut order: keep revoke)
@@ -99,6 +132,8 @@ pnpm tyrell rebuild --fresh --out /tmp/rebuild.sqlite && pnpm tyrell verify --he
 ```sh
 pnpm tyrell attack run --markdown > ATTACKS.md                   # must say 10 of 10
 pnpm tyrell evidence                                             # links for the submission form
+pnpm tyrell snapshot --out apps/web/public/snapshot.json          # memory contents left out; add
+                                                                 # --include-bodies only for demo data
 pnpm scan-keys:history                                           # no key anywhere in git history
 ```
 

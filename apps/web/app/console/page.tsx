@@ -28,7 +28,7 @@ export default function Console() {
   const [tab, setTab] = useState<Tab>("overview");
   const [seedId, setSeedId] = useState<number>();
   const [selected, setSelected] = useState<string>();
-  const seeds = view?.seeds ?? [];
+  const seeds = useMemo(() => view?.seeds ?? [], [view]);
   useEffect(() => {
     if (seedId === undefined && seeds.length) setSeedId(seeds.filter((s) => !s.released).at(-1)?.seedId ?? seeds[0]!.seedId);
   }, [seeds, seedId]);

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 /// @notice Phase A of the agents network: one human (bound to a QIE ID), many agents, one shared quota.
@@ -58,6 +58,7 @@ interface IAgentRegistry {
     event AgentPayeeSet(uint256 indexed agentId, bytes32 indexed payeeId, bool allowed);
     event AgentAnyPayeeSet(uint256 indexed agentId, bool anyPayee);
     event AgentRevoked(uint256 indexed agentId, address indexed key, string reason);
+    event AgentKeyRotated(uint256 indexed agentId, address indexed oldKey, address indexed newKey);
     event AgentBanned(uint256 indexed agentId);
     event AgentUnbanned(uint256 indexed agentId);
     event AgentSpent(uint256 indexed agentId, address indexed human, bytes32 indexed payeeId, address token, uint256 amount, address spender);
@@ -75,6 +76,7 @@ interface IAgentRegistry {
     error BadToken();
     error TooManyAgents();
     error NotSpender(address spender);
+    error OverRefund(uint256 charged, uint256 amount);
     error AgentBlocked(bytes32 code);
     error OnlyNetwork();
     error NetworkAlreadySet();

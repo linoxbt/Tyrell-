@@ -71,17 +71,17 @@ The [console](/console)'s **Blast radius** tab draws the same graph for any seed
 
 ## Automatic quarantine
 
-The ingest worker seeds a `source` quarantine on its own in one case: a blocklisted address (score 100), when `AUTO_QUARANTINE_BLOCKLIST` is `true` (the default). Every other incident only *proposes* a seed (`proposedSeed`) for a human to confirm. See [AI sentinel](/docs/guides/ai-sentinel).
+The ingest worker seeds a `source` quarantine on its own in one case: a blocklisted address (score 100), when `AUTO_QUARANTINE_BLOCKLIST` is `true` (the default). It seeds the address that actually matched (the token, or the sender when the sender is the blocklisted one), once per scan, and control skips it if an active seed already covers that source. The request is signed with the wallet key, which may only seed sources. Every other incident only *proposes* a seed (`proposedSeed`) for a human to confirm. See [AI sentinel](/docs/guides/ai-sentinel).
 
 ## Release a seed
 
 Only the user key can release a seed:
 
 ```sh
-pnpm tyrell release <seedId> --reason <cid>
+pnpm tyrell release <seedId> --reason "false positive: the token is the landlord's own"
 ```
 
-`--reason` is the IPFS CID of a document explaining the release. The CLI signs `ReleaseQuarantine` with the user key and control relays it. After the next refresh, the seed's memories are visible again unless another active seed still covers them.
+The CLI first records the reason as your own statement (a trusted user-lane memory, `Released quarantine seed <id>: <why>`), then signs `ReleaseQuarantine` with the user key, with that memory's CID as the reason, and control relays it. `--reason-cid <cid>` uses an existing IPFS CID instead. After the next refresh, the seed's memories are visible again unless another active seed still covers them.
 
 > [!NOTE]
 > Releasing a seed does not reinstate a payee it suspended. Run `tyrell payee reinstate <label>` for that.
@@ -91,7 +91,7 @@ pnpm tyrell release <seedId> --reason <cid>
 ```sh
 pnpm tyrell incidents                                            # find the source
 pnpm tyrell quarantine --source <token> --reason "..."           # preview, confirm, seed
-pnpm tyrell blast <seedId> --mermaid                             # what it reached
+pnpm tyrell blast <seedId> --mermaid                             # what it reached, plus the console link
 pnpm tyrell steward "pay this month's rent"                      # now ALLOW, from clean memory
 pnpm tyrell verify --head <block>                                # prove the clean state rebuilds from chain
 ```

@@ -289,4 +289,4 @@ All five together: 6,526,463 gas, about 0.0073 QIEV3 at the probe's mainnet gas 
 
 ## Tests
 
-The contracts have 145 Foundry tests, core and agents network together: unit tests, fuzz tests at 1,000 runs, invariants (for example, outflows only ever go to registered payees) and vectors signed by the TypeScript code, so on-chain and off-chain encodings cannot drift apart. Run them with `pnpm contracts:test`.
+The contracts have 147 Foundry tests, core and agents network together: unit tests, fuzz tests at 1,000 runs, invariants (for example, outflows only ever go to registered payees) and vectors signed by the TypeScript code, so on-chain and off-chain encodings cannot drift apart. Run them with `pnpm contracts:test`.

@@ -120,10 +120,10 @@ Only contracts the human authorised can charge their agents:
 function setSpender(address spender, bool allowed) external;
 function consume(uint256 agentId, bytes32 payeeId, address token, uint256 amount) external;     // PAY, spenders only
 function consumeDeal(uint256 agentId, bytes32 payeeId, address token, uint256 amount) external; // DEAL, spenders only
-function refund(uint256 agentId, address token, uint256 amount, uint256 day) external;          // spenders only
+function refund(uint256 agentId, address token, uint256 amount, uint256 day) external;          // up to what the caller charged
 ```
 
-`refund` gives a charge back for the UTC day it was made: the network calls it when a deal is cancelled, reclaimed or refunded, so money that never left doesn't use up the agent's limit or the human's quota.
+`refund` gives a charge back for the UTC day it was made: the network calls it when a deal is cancelled, reclaimed or refunded, so money that never left doesn't use up the agent's limit or the human's quota. The registry records what each spender charged each agent each day (`chargedBy(agentId, day, spender)`), and a spender can refund only that much (`OverRefund` otherwise): a faulty spender can't wipe another spender's charges off your quota. Refunds don't need the spender to still be authorised, since they only ever lower spend, so an open deal can always be refunded even if you have since removed the network as a spender.
 
 Link the deployment to its agent with:
 
@@ -173,8 +173,17 @@ The signer adds one more rule: a registered-agent deployment pays only for its o
 
 Revoking an agent in the registry is independent of revoking its lane key in `LaneRegistry` (`tyrell revoke --lane agent`). Do both after a compromise: the registry stops its spending everywhere (and, on a linked deployment, its memories), the lane revocation stops it anchoring memories anywhere.
 
-> [!NOTE]
-> A registered agent's key can't be changed. If you rotate a linked deployment's agent-lane key, register the new key as a new agent, run `tyrell agents link-vault` again, and revoke the old agent: until then control blocks payments with `AGENT_KEY_MISMATCH` and `MemoryAnchor` refuses agent memories with `AgentKeyMismatch`.
+### Replacing an agent's key
+
+When an agent's key is rotated, its human replaces the key in place, so the agent keeps its id, limits, today's spend, permissions, delegated payees, bond and reputation (and a ban, if it has one):
+
+```solidity
+function rotateAgentKey(uint256 agentId, address newKey, uint64 deadline, bytes calldata keySig) external; // the agent's human
+```
+
+`keySig` is the **new** key's EIP-712 signature of `RotateAgentKey(uint256 agentId, address human, address key, uint64 deadline)` (domain `TyrellAgentRegistry`, version `1`). It is a different type from `RegisterAgent`, so a registration consent can't be replayed as a rotation. The new key follows the same rule as at registration: it must never have been used as an agent key and must not be a human (`BadKey`). The old key stops working at once and can never be used again. Emits `AgentKeyRotated(agentId, oldKey, newKey)`.
+
+On a linked deployment, `tyrell revoke --lane agent --rotate` does this for you: the owner page carries both the lane rotation and `rotateAgentKey`, signed with the new agent-lane key, and the CLI waits for both. If you only revoked the lane key, register a new one and then run `tyrell agents rotate-key`. To move an agent to another deployment's key, run `tyrell agents rotate-consent <agentId> <your owner address>` there and pass its output to `tyrell agents rotate-key <agentId> --key --key-sig --sig-deadline` here. Until the agent's key matches the agent-lane key, control blocks payments with `AGENT_KEY_MISMATCH` and `MemoryAnchor` refuses agent memories with `AgentKeyMismatch`.
 
 ## Seeing your agents
 

@@ -7,11 +7,19 @@ These are the known limits of the current design. Each is stated with what it me
 
 ## Key separation needs one OS user per process
 
-Invariant I-12 is fully enforced only when each process runs as its own OS user, so the file system stops one process from reading another role's key file. In a single-user demo, a process *could* read another role's file. Every process checks at startup and warns; set `TYRELL_STRICT_KEYS=1` in production to make a readable foreign key file a hard failure.
+Invariant I-12 is fully enforced only when each process runs as its own OS user, so the file system stops one process from reading another role's key and passphrase. Each role has its own passphrase, and on testnet and mainnet a process that could open another role's key refuses to start. On a local test chain it only warns (a single-user demo), and `TYRELL_INSECURE_SHARED_KEYS=1` deliberately turns the checks off on a public network; with either, one compromised process can read every key.
+
+## A compromised agent key can still start a turn
+
+Control acts on a payment proposal only if the agent key signed it, and adds everything it served to the turn to the decision. Someone holding the agent key can still start a fresh turn and propose a payment; the policy engine and the vault then decide it like any other, so they can pay only registered payees within caps.
+
+## Lane keys can be created in the browser
+
+This is a deliberate exception to NFR-01 ("no private key in the browser"). The console's Account tab can create a new lane key for the owner, because owners asked to set up keys without a terminal. The secret is generated and encrypted in the page (Web3 Secret Storage with Tyrell's role MAC, the format the processes read); only the encrypted file leaves it, as a download, and the password is never stored or sent. The page asks you to confirm the file is saved before it registers the key. The trade-off is that the key exists, briefly, in a browser tab's memory, where a malicious extension could read it. If that matters to you, use **Use a key I already have** with an address from `tyrell setup keys` instead.
 
 ## Both R0 endpoints come from QIE
 
-`rpc1` to `rpc5` are run by the same operator, so "two agreeing endpoints" guards against a flaky or lagging node, not a malicious operator. On 2026-11-26, testnet `rpc1` to `rpc3` were down. The explorer's `/api/eth-rpc` is excluded because it is a partial proxy. Adding an independent RPC provider to `config.json` strengthens R0.
+`rpc1` to `rpc5` are run by the same operator, so "two agreeing endpoints" guards against a flaky, lagging or tampered node, not a malicious operator. The endpoints are compared on every field of the whole history and the head block hash, so one lying endpoint cannot add, drop or alter an event; a third endpoint breaks ties. On 2026-11-26, testnet `rpc1` to `rpc3` were down. The explorer's `/api/eth-rpc` is excluded because it is a partial proxy. Adding an independent RPC provider to `config.json` strengthens R0.
 
 ## Metadata fetch and DNS rebinding
 
@@ -39,7 +47,7 @@ Incidents live in control's cache and are not rebuilt from the chain. They are h
 
 ## Refresh cost
 
-Control re-reads events from the deployment block on each refresh. That is fine for a hackathon-sized history, not for years of memories; an incremental reader is the next step.
+The first refresh reads the whole history from the deployment block on two endpoints; after that, refreshes read only the new blocks, once both endpoints confirm the last cross-checked block is still canonical (a reorg falls back to a full read). The ledger state and every memory's blob are still re-read on each refresh, which grows with the number of payees, seeds and memories.
 
 ## OpenZeppelin is pinned to 5.4.0
 
@@ -47,4 +55,4 @@ OpenZeppelin 5.5 and later use `mcopy` (a Cancun opcode), which QIE's EVM does n
 
 ## The hosted demo is a snapshot
 
-The public web app serves a recorded run. It never connects to a live control process, because control and the signer hold lane keys that must stay on the operator's machine. Run the console with `TYRELL_API_URL` locally for live data.
+The public web app serves a recorded run. Control and the signer hold lane keys that must stay on the operator's machine, so live data means running the console next to control with `TYRELL_API_URL` and `TYRELL_API_TOKEN`. Control's view API refuses any `Host` but loopback, so exposing it to a hosted console needs a tunnel that rewrites the `Host` header, and it then serves decrypted memory bodies to that console: do it only for demo data.

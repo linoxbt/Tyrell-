@@ -117,6 +117,20 @@ export const anyPayeeTx = (d: Deployment, id: bigint, on: boolean) =>
   tx(`Agent #${id} may pay ${on ? "any registered payee" : "only delegated payees"}`, reg(d), encodeFunctionData({ abi: agentRegistryAbi, functionName: "setAnyPayee", args: [id, on] }));
 export const revokeAgentTx = (d: Deployment, id: bigint, reason: string) =>
   tx(`Revoke agent #${id} for good`, reg(d), encodeFunctionData({ abi: agentRegistryAbi, functionName: "revokeAgent", args: [id, reason] }));
+export const rotateAgentKeyTx = (d: Deployment, id: bigint, newKey: Address, deadline: bigint, keySig: Hex) =>
+  tx(`Replace agent #${id}'s key with ${newKey} (same agent, limits and record)`, reg(d), encodeFunctionData({ abi: agentRegistryAbi, functionName: "rotateAgentKey", args: [id, newKey, deadline, keySig] }));
+
+/** Wait until agent `id`'s registered key is `key` (after a rotateAgentKey sent from the owner page). */
+export async function waitAgentKey(pub: PublicClient, d: Deployment, id: bigint, key: Address, timeoutMs = Number(process.env.TYRELL_OWNER_TIMEOUT ?? 600) * 1000): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const a = await pub.readContract({ address: reg(d), abi: agentRegistryAbi, functionName: "agent", args: [id] });
+    if (a.key.toLowerCase() === key.toLowerCase()) return;
+    if (Date.now() > until) throw new Error(`agent #${id}'s key is still ${a.key}, not ${key}: the rotation was not confirmed in time`);
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+}
+
 export const freezeTx = (d: Deployment, frozen: boolean) =>
   tx(frozen ? "Freeze all of your agents" : "Unfreeze your agents", reg(d), encodeFunctionData({ abi: agentRegistryAbi, functionName: "freeze", args: [frozen] }));
 
@@ -195,7 +209,8 @@ export async function agentsReport(pub: PublicClient, d: Deployment) {
     pub.readContract({ address: d.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] }),
   ]);
   const ids = rows.map((r) => r.id);
-  const [bonds, reps] = d.agentNetwork && ids.length ? await pub.readContract({ address: d.agentNetwork, abi: agentNetworkAbi, functionName: "stats", args: [ids] }) : [[], []];
+  // bond = what counts (effectiveBond); pendingWithdrawal = waiting to leave, still slashable
+  const [bonds, pending, reps] = d.agentNetwork && ids.length ? await pub.readContract({ address: d.agentNetwork, abi: agentNetworkAbi, functionName: "stats", args: [ids] }) : [[], [], []];
   const agents = rows.map((r, i) => ({
     id: r.id,
     label: r.agent.label,
@@ -208,7 +223,7 @@ export async function agentsReport(pub: PublicClient, d: Deployment) {
     dailyLimit: r.agent.dailyLimit,
     spentToday: r.spentToday,
     anyPayee: r.agent.anyPayee,
-    ...(d.agentNetwork ? { bond: bonds[i], reputation: reps[i] } : {}),
+    ...(d.agentNetwork ? { bond: bonds[i], ...(pending[i] ? { pendingWithdrawal: pending[i] } : {}), reputation: reps[i] } : {}),
   }));
   return { human: d.owner, qieId: human.qieId || null, bound, frozen: human.frozen, quotaToday: { quota, spent }, configuredAgentId: d.agentId ?? null, agents };
 }

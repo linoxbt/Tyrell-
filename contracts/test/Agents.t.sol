@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 import {AgentsBase} from "./AgentsBase.t.sol";
@@ -311,7 +311,7 @@ contract AgentsTest is AgentsBase {
         agents.consume(a1, LANDLORD, address(usd), 1e6);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotSpender.selector, address(this)));
         agents.consumeDeal(a1, LANDLORD, address(usd), 1e6);
-        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotSpender.selector, address(this)));
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.OverRefund.selector, 0, 1e6));
         agents.refund(a1, address(usd), 1e6, block.timestamp / 1 days);
         vm.prank(owner);
         agents.setSpender(address(vault), false);
@@ -319,13 +319,96 @@ contract AgentsTest is AgentsBase {
         _payFor(a1, 1e6, D1);
     }
 
-    function test_refundNeverGoesBelowZero() public {
+    /// A spender refunds only what it charged that agent that day: another spender (or a faulty one)
+    /// cannot wipe the vault's charges off the quota.
+    function test_refundIsBoundedByWhatTheSpenderCharged() public {
         _payFor(a1, 2e6, D1);
         uint256 day = block.timestamp / 1 days;
+        assertEq(agents.chargedBy(a1, day, address(vault)), 2e6);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.OverRefund.selector, 0, 2e6));
         vm.prank(address(net));
+        agents.refund(a1, address(usd), 2e6, day);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.OverRefund.selector, 2e6, 5e6));
+        vm.prank(address(vault));
         agents.refund(a1, address(usd), 5e6, day);
-        assertEq(agents.spentToday(a1, address(usd)), 0);
-        assertEq(agents.humanSpentToday(owner, address(usd)), 0);
+        vm.expectRevert(IAgentRegistry.BadToken.selector);
+        vm.prank(address(vault));
+        agents.refund(a1, address(0xdead), 1e6, day);
+        vm.prank(address(vault));
+        agents.refund(a1, address(usd), 1e6, day);
+        assertEq(agents.spentToday(a1, address(usd)), 1e6);
+        assertEq(agents.humanSpentToday(owner, address(usd)), 1e6);
+        assertEq(agents.chargedBy(a1, day, address(vault)), 1e6);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.UnknownAgent.selector, 999));
+        agents.refund(999, address(usd), 1, day);
+    }
+
+    function _rotSig(uint256 agentId, uint256 pk, address h, uint64 dl) internal view returns (bytes memory) {
+        return _sign(pk, agents.rotationDigest(agentId, h, vm.addr(pk), dl));
+    }
+
+    /// The human replaces an agent's key in place with the new key's consent; the old key stops at once,
+    /// and no key is ever reused.
+    function test_rotateAgentKey() public {
+        (address nk, uint256 npk) = makeAddrAndKey("agent-a1-v2");
+        uint64 dl = uint64(block.timestamp + 1 hours);
+        _payFor(a1, 1e6, D1);
+        // the consent must come from the new key, for this agent and this human, in time
+        bytes memory wrong = _rotSig(a1, a2Pk, owner, dl);
+        vm.expectRevert(IAgentRegistry.BadKeySignature.selector);
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk, dl, wrong);
+        bytes memory otherAgent = _rotSig(a2, npk, owner, dl);
+        vm.expectRevert(IAgentRegistry.BadKeySignature.selector);
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk, dl, otherAgent);
+        // a registration consent can't be replayed as a rotation consent
+        bytes memory reg = _regSig(npk, owner, dl);
+        vm.expectRevert(IAgentRegistry.BadKeySignature.selector);
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk, dl, reg);
+        bytes memory sig = _rotSig(a1, npk, owner, dl);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotYourAgent.selector, a1));
+        vm.prank(bob);
+        agents.rotateAgentKey(a1, nk, dl, sig);
+        vm.warp(dl + 1);
+        vm.expectRevert(IAgentRegistry.SignatureExpired.selector);
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk, dl, sig);
+        dl = uint64(block.timestamp + 1 hours);
+        sig = _rotSig(a1, npk, owner, dl);
+        // an old (used) key is refused
+        bytes memory reuse = _rotSig(a1, a2Pk, owner, dl);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, a2Key));
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, a2Key, dl, reuse);
+
+        vm.expectEmit(true, true, true, true, address(agents));
+        emit IAgentRegistry.AgentKeyRotated(a1, a1Key, nk);
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk, dl, sig);
+        assertEq(agents.agent(a1).key, nk);
+        assertEq(agents.agentIdOf(nk), a1);
+        assertEq(agents.agentIdOf(a1Key), 0);
+        assertTrue(agents.keyUsed(a1Key));
+        assertEq(agents.spentToday(a1, address(usd)), 1e6); // same agent: same spend, limits, permissions
+        // replaying the same consent fails: the new key is now used
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, nk));
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk, dl, sig);
+        // the old key can never come back, as a rotation or a registration
+        bytes memory back = _rotSig(a1, a1Pk, owner, dl);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, a1Key));
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, a1Key, dl, back);
+        // a revoked agent can't be rotated
+        vm.prank(owner);
+        agents.revokeAgent(a1, "done");
+        (address nk2, uint256 npk2) = makeAddrAndKey("agent-a1-v3");
+        bytes memory s3 = _rotSig(a1, npk2, owner, dl);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.AgentIsRevoked.selector, a1));
+        vm.prank(owner);
+        agents.rotateAgentKey(a1, nk2, dl, s3);
     }
 
     function test_networkLinkBanAndUnbanAreGuarded() public {

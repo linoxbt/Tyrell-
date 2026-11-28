@@ -10,17 +10,17 @@ Tyrell's claims are exactly these twelve invariants. Each one is enforced in cod
 | ID | Invariant | Enforced by | Tests |
 | --- | --- | --- | --- |
 | I-1 | A memory's lane is the lane of the key whose EIP-712 signature verifies | `MemoryAnchor._laneSigner`; `verifyMemory` step 5 | T-03 (Foundry, anvil end-to-end), `testFuzz_onlyActiveLaneKeysAnchor`, attack 9 |
-| I-2 | Default deny: anything unverifiable is `unverified` and authorises nothing | `verifyMemory` (16 reasons), `computeProjection` | `verifier.test.ts` (100% branches), T-05 |
+| I-2 | Default deny: anything unverifiable is `unverified` and authorises nothing | `verifyMemory` (17 reasons), `computeProjection` | `verifier.test.ts` (100% branches), T-05 |
 | I-3 | Taint is monotonic; the runtime sets parents = readSet | `Steward.tool` (`write_note`, `propose_payment`), `computeProjection` | T-06, T-07, attack 10 |
 | I-4 | The model cannot mint trust | Only the human CLI holds the user key; Steward holds the agent key | `say` CLI test, attack 9 |
-| I-5 | Payments are authorised by code, twice | `evaluatePayment` R0–R5; `GuardedVault.pay` | T-10 table, T-11, `invariant_outflowOnlyToRegisteredPayees`, attack set |
-| I-6 | Fail closed | R0: two endpoints must agree, spend figures must be for today, context must be verified | `policy.test.ts` R0 cases |
+| I-5 | Payments are authorised by code, twice | `evaluatePayment` R0–R5; `GuardedVault.pay` / `payForAgent`; the decision is recorded before anything is paid | T-10 table, T-11, `invariant_outflowOnlyToRegisteredPayees`, attack set |
+| I-6 | Fail closed | R0: two endpoints must agree on the full history (a third breaks ties), spend figures must be for today, context must be verified | `policy.test.ts` R0 cases |
 | I-7 | Exclusion, not deletion | No unpin or delete path; quarantined memories stay readable in forensic mode | `nfr07.test.ts`, loop test |
 | I-8 | Quarantine closure is live | Seeds applied at projection time, in anchor order | T-08, loop test |
 | I-9 | Revocation is independent of quarantine | Separate contracts and commands | T-04, T-17 |
 | I-10 | Restore is deterministic | `rebuildFresh` shares the projection code with the live process | T-14 (control, CLI, M1, loop), NFR-03 |
 | I-11 | The ledger is on-chain, with per-action signer lanes | `TyrellLedger._consume` | `TyrellLedger.t.sol`, T-16 |
-| I-12 | Keys are separated | One keystore per role, tagged; `account()` refuses foreign roles; `TYRELL_STRICT_KEYS=1` aborts if a process can read another role's file | Storage tests, CLI key-leak test |
+| I-12 | Keys are separated | One keystore and one passphrase per role, the role bound into the keystore MAC; `account()` refuses foreign roles; off a local chain a process that can open another role's key aborts; control acts only on requests signed by the right lane key | Storage tests, CLI key-leak test, IPC auth tests |
 
 ## Details
 
@@ -44,9 +44,11 @@ The runtime records every memory placed in front of the model and sets it as the
 
 Off-chain, the policy engine checks R0 to R5. On-chain, `GuardedVault.pay` re-checks payee status, token, per-payment cap, payee daily cap and vault daily cap, and refuses a reused decision id. A Foundry invariant test asserts that, across random sequences of calls, every token leaving the vault goes to a registered payee.
 
+Every payment has a record: control anchors the decision (parents = everything the turn read) before it asks the signer to pay, and refuses to pay if it cannot. A turn that read more memories than a record can cite (64) is blocked. The outcome is recorded afterwards as its own control-lane note, and a payment whose outcome is unknown blocks further payments to that payee until the chain settles it, so a lost answer never pays twice. Only the control lane can write a decision record (`DECISION_NOT_CONTROL` otherwise).
+
 ### I-6: fail closed
 
-When the system cannot be sure, it blocks: endpoints that disagree, ledger reads that are not verified, spend figures from another day, or any unverified or quarantined memory in the turn's context.
+When the system cannot be sure, it blocks: endpoints that disagree (compared on every field of the whole history, tied to the head block hash; a third endpoint breaks a tie, otherwise `CHAIN_INCONSISTENT`), ledger reads that are not verified, spend figures from another day, or any unverified or quarantined memory in the turn's context.
 
 ### I-7: exclusion, not deletion
 
@@ -70,13 +72,15 @@ Payees and seeds live only on `TyrellLedger`, and every write is signed by the l
 
 ### I-12: key separation
 
-Each role's key is its own encrypted keystore, tagged with its role. A process refuses to load a role it is not allowed (`account()` throws), and at startup warns, or with `TYRELL_STRICT_KEYS=1` aborts, if it can read another role's file.
+Each role's key is its own encrypted keystore, opened with its own passphrase (`pass.d/<role>`), and its role tag is bound into the keystore's MAC, so relabelling a file breaks it. Key, passphrase and token files must be mode 600. A process refuses to load a role it is not allowed (`account()` throws). At startup it checks whether it could open another role's key (read both the key file and its passphrase): on testnet and mainnet that aborts; on a local test chain it warns, and `TYRELL_STRICT_KEYS=1` aborts there too.
+
+Separation also holds over IPC: control acts on a payment proposal only if the agent key signed it, on an incident only if the wallet key did, and on a quarantine only if the user key did (or the wallet key, for a source seed), each with a nonce and a two-minute expiry.
 
 ## Test suites
 
 | Suite | Count | Run |
 | --- | --- | --- |
-| Foundry: unit, fuzz (1,000 runs), invariants, TypeScript-signed vectors | 84 tests | `pnpm contracts:test` |
+| Foundry: unit, fuzz (1,000 runs), invariants, TypeScript-signed vectors | 147 tests | `pnpm contracts:test` |
 | TypeScript: unit tests and end-to-end runs on anvil | All packages | `pnpm test` |
-| Coverage gate: verifier and policy engine at 100% statements and branches | Enforced | `pnpm coverage` |
+| Coverage gate: verifier, policy engine and agent checks at 100% statements and branches | Enforced | `pnpm coverage` |
 | Attack set | 10 of 10 | `pnpm tyrell attack run` |

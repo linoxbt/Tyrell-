@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createPublicClient, createWalletClient, getAddress, http, keccak256, toBytes, type Abi, type Address, type Hex, type PublicClient } from "viem";
+import { createPublicClient, createWalletClient, getAddress, http, keccak256, toBytes, type Abi, type Hex, type PublicClient } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { anchorDomain } from "@tyrell/control";
 import type { Id16 } from "@tyrell/core";

@@ -117,8 +117,14 @@ export function Search({ open, onClose }: { open: boolean; onClose: () => void }
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "ArrowDown") (e.preventDefault(), setSel((s) => Math.min(s + 1, hits.length - 1)));
-              if (e.key === "ArrowUp") (e.preventDefault(), setSel((s) => Math.max(s - 1, 0)));
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSel((s) => Math.min(s + 1, hits.length - 1));
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSel((s) => Math.max(s - 1, 0));
+              }
               if (e.key === "Enter" && hits[sel]) go(hits[sel]!);
             }}
             placeholder="Search: payForAgent, quarantine, QIE ID, R4…"

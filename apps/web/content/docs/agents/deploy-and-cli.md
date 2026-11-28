@@ -87,11 +87,13 @@ tyrell agents list
 
 | Command | What it does | Contract call |
 | --- | --- | --- |
-| `list` | Your binding, quota and agents with key, token, live status, limits, spend, bond and reputation | reads (`agentsView`, `stats`) |
+| `list` | Your binding, quota and agents with key, token, live status, limits, spend, bond (the bond that counts; `pendingWithdrawal` when one is waiting) and reputation | reads (`agentsView`, `stats`) |
 | `bind <qieId>` | Bind your owner account to a QIE ID you hold | `TestQieId.claim` (test chains), `bindQieId` |
 | `consent <human> [--ttl]` | Sign, with this deployment's agent key, its consent to be `<human>`'s agent; prints JSON | off-chain EIP-712 |
 | `register --label --per-tx --daily [--key --key-sig --sig-deadline] [--perms] [--any-payee] [--model]` | Register an agent (default permissions `pay,memory`) | `registerAgent` |
 | `link-vault` | Authorise your vault (and the network) as spenders; vault pays only via `payForAgent`; gate agent memories on this agent | `setSpender`, `setAgentRegistry`, `linkAgent` |
+| `rotate-consent <id> <human> [--ttl]` | Sign, with this deployment's agent-lane key, its consent to become agent `<id>`'s key for `<human>`; prints JSON | off-chain EIP-712 |
+| `rotate-key [id] [--key --key-sig --sig-deadline]` | Replace an agent's key in place (default: this deployment's agent and its current agent-lane key); waits until the registry shows the new key | `rotateAgentKey` |
 | `quota <daily>` | Your daily quota for the deployment's token | `setQuota` |
 | `limits <id> <perTx> <daily>` | Agent limits | `setLimits` |
 | `perms <id> <list>` | `pay`, `memory`, `message`, `deal` | `setPermissions` |

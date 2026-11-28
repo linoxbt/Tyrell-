@@ -16,8 +16,10 @@ import * as nw from "./network.js";
 import { McpQieIdResolver } from "./payee.js";
 import { account } from "./config.js";
 import { agentNetworkAbi, agentRegistryAbi, laneRegistryAbi } from "@tyrell/chain";
-import { agentRegistrationSigner, codeText, messageBodyHash, signAgentMessage, signAgentRegistration } from "@tyrell/core";
+import { agentKeyRotationSigner, agentRegistrationSigner, codeText, messageBodyHash, signAgentKeyRotation, signAgentMessage, signAgentRegistration } from "@tyrell/core";
 import { erc20Abi, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { loadKey } from "@tyrell/storage";
 import { join } from "node:path";
 import type { OwnerTx } from "./setup.js";
 
@@ -143,6 +145,16 @@ program
       const script = join(import.meta.dirname, "../../../scripts/probe.ts");
       const r = spawnSync(process.execPath, ["--import", "tsx", script], { stdio: "inherit", env: { ...process.env, NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY ?? "1" } });
       if (r.status) process.exitCode = r.status;
+    }),
+  );
+
+program
+  .command("mcp")
+  .description("Read-only MCP server for other agents, on stdio (reads control's local view API; holds no keys)")
+  .action(
+    run(async () => {
+      const { runStdio } = await import("@tyrell/mcp");
+      await runStdio();
     }),
   );
 
@@ -345,6 +357,14 @@ program
       const d = deployment(c);
       const pub = clients(c)[0]!;
       const r = await revokeTxs(pub, d, o.lane, !!o.rotate, o.reason);
+      // On a deployment linked to its agent, the agent's registered key must follow the agent lane key, or
+      // payments (AGENT_KEY_MISMATCH) and agent memories (AgentKeyMismatch) stop: replace it in the same page.
+      const linkedAgent = o.lane === "agent" && d.agentRegistry && d.agentId !== undefined ? BigInt(d.agentId) : undefined;
+      if (linkedAgent !== undefined && r.newKey) {
+        const next = privateKeyToAccount(loadKey(join(paths().keys, "agent.next.json"), passphrase("agent"), "agent"));
+        const deadline = (await pub.getBlock()).timestamp + 3_600n;
+        r.txs.push(nw.rotateAgentKeyTx(d, linkedAgent, next.address, deadline, await signAgentKeyRotation(next, d.chainId, d.agentRegistry!, linkedAgent, d.owner, deadline)));
+      }
       const html = ownerPageHtml({ chainId: c.chainId, chainName: c.network, rpcUrls: c.rpcs.slice(0, 2), owner: d.owner, txs: r.txs });
       const { url, server } = await serveOwnerPage(html, Number(o.port));
       console.log(`Open ${url} with QIE Wallet (owner ${d.owner}): ${r.txs[0]!.label}`);
@@ -353,12 +373,17 @@ program
         const active = await pub.readContract({ address: d.laneRegistry, abi: (await import("@tyrell/chain")).laneRegistryAbi, functionName: "isActiveFor", args: [r.oldKey, ({ user: 1, agent: 2, wallet: 3, control: 4 } as Record<string, number>)[o.lane]!] });
         if (!active) break;
       }
-      server.close();
+      if (!r.newKey) server.close();
       if (r.newKey) {
+        // the page stays open until the second transaction (the agent's key) is confirmed too
+        if (linkedAgent !== undefined) await nw.waitAgentKey(pub, d, linkedAgent, r.newKey);
+        server.close();
         await finishRotation(pub, d, o.lane, r.newKey);
         console.log(`Rotated: ${o.lane} is now ${r.newKey}; the old key file is in keys/retired. Restart the ${o.lane} process.`);
+        if (linkedAgent !== undefined) console.log(`Agent #${linkedAgent} now uses ${r.newKey} too (same limits, spend and record).`);
       } else {
         console.log(`Revoked ${r.oldKey}: MemoryAnchor refuses anything it signs from now on.`);
+        if (linkedAgent !== undefined) console.log(`This deployment is agent #${linkedAgent}: after registering a new agent lane key, run \`tyrell agents rotate-key\` so payments and agent memories keep working.`);
       }
     }),
   );
@@ -594,6 +619,59 @@ agentsCmd
         nw.linkNetwork(c, "", id);
         console.log(`This deployment is now agent #${id}. Next: \`tyrell agents link-vault\` (payments then go through GuardedVault.payForAgent).`);
       } else console.log(`Registered agent #${id}.`);
+    }),
+  );
+agentsCmd
+  .command("rotate-consent <agentId> <human>")
+  .description("Sign, with this deployment's (new) agent-lane key, its consent to become agent <agentId>'s key for <human> (give the JSON to that human)")
+  .option("--ttl <seconds>", "valid for", "86400")
+  .action(
+    run(async (id: string, human: string, o: { ttl: string }) => {
+      const { d, pub } = ctx();
+      if (!d.agentRegistry) throw new Error("this deployment is not linked to an agents network: run `tyrell network link`");
+      const deadline = (await pub.getBlock()).timestamp + BigInt(o.ttl);
+      const key = account("steward", "agent");
+      const signature = await signAgentKeyRotation(key, d.chainId, d.agentRegistry, BigInt(id), addressArg(human), deadline);
+      print({ agentId: BigInt(id), human: addressArg(human), key: key.address, deadline, signature });
+    }),
+  );
+agentsCmd
+  .command("rotate-key [agentId]")
+  .description("Replace an agent's key in place (default: this deployment's agent, with its current agent-lane key)")
+  .option("--key <address>", "the new key (another deployment's; needs --key-sig from `tyrell agents rotate-consent` there)", addressArg)
+  .option("--key-sig <hex>", "the new key's consent")
+  .option("--sig-deadline <unix>", "the consent's deadline (from the same JSON)")
+  .option("--port <port>", "local port", "0")
+  .action(
+    run(async (idArg: string | undefined, o: { key?: Address; keySig?: Hex; sigDeadline?: string; port: string }) => {
+      const { d, pub } = ctx();
+      if (!d.agentRegistry) throw new Error("this deployment is not linked to an agents network: run `tyrell network link`");
+      const id = idArg !== undefined ? BigInt(idArg) : d.agentId !== undefined ? BigInt(d.agentId) : undefined;
+      if (id === undefined) throw new Error("which agent? pass <agentId> (this deployment is not linked to one)");
+      const laneKey = await pub.readContract({ address: d.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] });
+      const key = getAddress(o.key ?? laneKey);
+      let deadline: bigint;
+      let keySig: Hex;
+      if (o.keySig) {
+        if (!o.sigDeadline || !/^\d+$/.test(o.sigDeadline)) throw new InvalidArgumentError("--key-sig needs --sig-deadline");
+        deadline = BigInt(o.sigDeadline);
+        keySig = hexArg(o.keySig);
+        const signer = await agentKeyRotationSigner(d.chainId, d.agentRegistry, id, d.owner, key, deadline, keySig);
+        if (signer.toLowerCase() !== key.toLowerCase()) throw new Error(`--key-sig was signed by ${signer}, not by ${key} for agent #${id} of ${d.owner}`);
+      } else if (key.toLowerCase() === laneKey.toLowerCase()) {
+        const own = account("steward", "agent");
+        if (own.address.toLowerCase() !== key.toLowerCase()) throw new Error(`this machine's agent key is ${own.address}, but the agent lane is on ${key}: finish the lane rotation first`);
+        deadline = (await pub.getBlock()).timestamp + 3_600n;
+        keySig = await signAgentKeyRotation(own, d.chainId, d.agentRegistry, id, d.owner, deadline);
+      } else {
+        throw new Error("another deployment's key needs its consent: run `tyrell agents rotate-consent <agentId> <your owner address>` there and pass --key-sig and --sig-deadline");
+      }
+      const a = await pub.readContract({ address: d.agentRegistry, abi: agentRegistryAbi, functionName: "agent", args: [id] });
+      if (a.human.toLowerCase() !== d.owner.toLowerCase()) throw new Error(`agent #${id} belongs to ${a.human}, not to you (${d.owner})`);
+      if (a.key.toLowerCase() === key.toLowerCase()) return void console.log(`Agent #${id} already uses ${key}.`);
+      await ownerSend([nw.rotateAgentKeyTx(d, id, key, deadline, keySig)], o.port);
+      await nw.waitAgentKey(pub, d, id, key);
+      console.log(`Agent #${id} now uses ${key} (same limits, spend and record; ${a.key} can never be used again).`);
     }),
   );
 agentsCmd

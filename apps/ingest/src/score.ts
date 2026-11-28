@@ -40,9 +40,10 @@ export const WEIGHTS = {
 const IMPERATIVE = /\b(remember|always|never|ignore (all |any |the )?(previous|prior|above)|disregard|system ?(note|prompt|message)|new instructions?|you must|from now on|important notice)\b|^\s*system\s*:/im;
 const EMBEDDED = /0x[0-9a-fA-F]{40}|\bhttps?:\/\/|\bipfs:\/\/|\bwww\.[a-z0-9-]+\.[a-z]{2,}/i;
 const PAYEE_WORDS = /\b(landlord|rent|school fees?|tuition|wallet (has )?changed|new (account|address|wallet|bank)|payee|pay(ment)? (to|address)|bills?)\b/i;
-const INVISIBLE = /[​-‏‪-‮⁠-⁤﻿]/;
+const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/;
 const SCRIPT_LATIN = /[A-Za-z]/;
-const SCRIPT_CONFUSABLE = /[Ͱ-ϿЀ-ӿԀ-ԯⷠ-ⷿꙀ-ꚟ]/; // Greek, Cyrillic
+// eslint-disable-next-line no-misleading-character-class -- whole Unicode blocks, including Cyrillic combining letters, on purpose
+const SCRIPT_CONFUSABLE = /[\u0370-\u03FF\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]/; // Greek, Cyrillic
 
 /** First 4 and last 4 hex characters match, but the addresses differ (address poisoning). */
 export function looksAlike(a: string, b: string): boolean {

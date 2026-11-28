@@ -99,3 +99,26 @@ export function signAgentRegistration(key: LocalAccount, chainId: number, regist
 export function agentRegistrationSigner(chainId: number, registry: Address, human: Address, key: Address, deadline: bigint, signature: Hex): Promise<Address> {
   return recoverTypedDataAddress({ domain: agentRegistryDomain(chainId, registry), types: REGISTER_AGENT_TYPES, primaryType: "RegisterAgent", message: { human, key, deadline }, signature });
 }
+
+/**
+ * AgentRegistry.rotateAgentKey needs the NEW key's consent: an EIP-712 RotateAgentKey(agentId, human, key,
+ * deadline) signed by the new key (a distinct type, so a registration consent can't be replayed as one).
+ */
+export const ROTATE_AGENT_KEY_TYPES = {
+  RotateAgentKey: [
+    { name: "agentId", type: "uint256" },
+    { name: "human", type: "address" },
+    { name: "key", type: "address" },
+    { name: "deadline", type: "uint64" },
+  ],
+} as const;
+
+/** The new key consents to becoming agent `agentId`'s key, for `human`, until `deadline` (unix seconds). */
+export function signAgentKeyRotation(newKey: LocalAccount, chainId: number, registry: Address, agentId: bigint, human: Address, deadline: bigint): Promise<Hex> {
+  return newKey.signTypedData({ domain: agentRegistryDomain(chainId, registry), types: ROTATE_AGENT_KEY_TYPES, primaryType: "RotateAgentKey", message: { agentId, human, key: newKey.address, deadline } });
+}
+
+/** Who consented in a rotation signature (must equal the new key). */
+export function agentKeyRotationSigner(chainId: number, registry: Address, agentId: bigint, human: Address, key: Address, deadline: bigint, signature: Hex): Promise<Address> {
+  return recoverTypedDataAddress({ domain: agentRegistryDomain(chainId, registry), types: ROTATE_AGENT_KEY_TYPES, primaryType: "RotateAgentKey", message: { agentId, human, key, deadline }, signature });
+}

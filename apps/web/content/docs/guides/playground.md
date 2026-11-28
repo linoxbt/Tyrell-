@@ -24,7 +24,24 @@ How powerful the hacker is:
 
 The results show both outcomes in plain words (who got the money, and why), with the AI conversations and the blockchain transactions one click away. Both outcomes run on Tyrell's contracts in your browser: the guarded vault pays only the registered landlord (and refuses the attacker even when asked directly), while the plain wallet sends whatever the model asked for. The model call runs on the site's server, because the model API takes no browser calls and the key must stay secret; nothing about the outcome depends on the model.
 
-Live runs are rate-limited and preset results are cached for 30 minutes. When live runs are off or busy, the demo replays real runs recorded with `pnpm record:ai`, and says so.
+A live run usually takes 30 to 60 seconds. It runs inside a 90-second budget shared by every model call of the run, and each agent call is capped at 2,048 output tokens. When live runs are off, busy or fail, the demo replays real runs recorded with `pnpm record:ai`, and says so in a plain note. It never shows a failed run as a result:
+
+| What happened | The server answers | The page |
+| --- | --- | --- |
+| A live run finished | 200 with the result | Shows it |
+| The model failed (out of credits, rate-limited, too slow, an error) | 502 `model_failed` | Replays the recording |
+| Too many runs | 429 `rate_limited` | Replays the recording |
+| Live runs are off (no key) | No run | Replays the recording |
+| Anything else (a timeout page, a security challenge, a response that is not the expected JSON) | Whatever it was | Replays the recording |
+
+### Limits
+
+The demo spends the site owner's model credits, so it guards them:
+
+- **Same site only.** A run must be a `POST` with `Content-Type: application/json` from the site itself: a cross-site `Sec-Fetch-Site` or a foreign `Origin` gets 403, so other sites cannot make their visitors' browsers spend runs.
+- **Rate limits.** 4 runs per visitor per 10 minutes and 3 runs per minute for the whole site. Preset results are cached for 30 minutes.
+- **Shared limits (optional).** The counters live in each server instance's memory unless `KV_REST_API_URL` and `KV_REST_API_TOKEN` are set (Vercel KV or Upstash Redis over REST; `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` also work), which shares them across instances. If the store fails, the in-memory limits apply.
+- **Spend limit.** The provider's spend limit on the key is the real ceiling: set one.
 
 To run it yourself, set `FORTYTWO_API_KEY` in the web app's environment (for example in Vercel's project settings) and redeploy.
 
@@ -35,7 +52,7 @@ To run it yourself, set `FORTYTWO_API_KEY` in the web app's environment (for exa
 | Lane keys and memory provenance | `LaneRegistry`, `MemoryAnchor` | Only the active key of a lane can anchor that lane's memories; forged lanes, strangers, replays and revoked keys are refused |
 | Payees and the guarded vault | `TyrellLedger`, `GuardedVault`, `TyrellTestUSD` | Only the user lane registers payees; the vault pays only registered payees within caps; a stolen signer key cannot pay anyone new; quarantine suspends a payee |
 | Agents network, phase A | `TestQieId`, `AgentRegistry`, `GuardedVault.payForAgent` | QIE ID binding, delegated payees, per-agent limits, one quota shared by a human's agents, freeze, revoke, and every agent stopping when the QIE ID moves or lapses |
-| Agents network, phase B | `AgentNetwork` | Bonds, signed agent messages, escrowed deals, accountable reports, slashing, arbitration and the three-strikes ban, with reputation at each step |
+| Agents network, phase B | `AgentNetwork` | Bonds, signed agent messages, escrowed deals, accountable reports, slashing and bans only by the arbiter, appeals, with reputation at each step |
 | Off-chain checks | policy engine, sentinel scorer | The same pure code the processes run: attack proposals blocked, poisoned names scored |
 
 Press **Run the checks**; each group is shown as the claim it proves, and opens to list its checks. The same suite runs in CI.

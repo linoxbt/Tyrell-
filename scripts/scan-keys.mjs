@@ -17,7 +17,8 @@ const RULES = [
   { name: "bearer token", re: /\bBearer\s+[A-Za-z0-9._~+/-]{32,}=*/ },
   { name: "GitHub token", re: /\bgh[pousr]_[A-Za-z0-9]{36,}/ },
   { name: "AWS access key", re: /\bAKIA[0-9A-Z]{16}\b/ },
-  { name: "secret assignment", re: /(?:api[_-]?key|secret|token|passw(?:or)?d)["']?\s*[:=]\s*["'][A-Za-z0-9_+/=-]{24,}["']/i },
+  // a 20-byte EVM address (a token contract, say) is public, so `TOKEN = "0x…40 hex"` is not a secret
+  { name: "secret assignment", re: /(?:api[_-]?key|secret|token|passw(?:or)?d)["']?\s*[:=]\s*["'](?!0x[0-9a-fA-F]{40}["'])[A-Za-z0-9_+/=-]{24,}["']/i },
 ];
 const ALLOW = "key-scan: allow";
 

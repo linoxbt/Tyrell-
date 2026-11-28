@@ -63,7 +63,7 @@ A 500-memory history rebuilds in about 1.5 seconds locally.
 pnpm tyrell verify --head <block>
 ```
 
-`verify` asks the live control process for its digest and digest document at `<block>`, runs a fresh rebuild at the same head into a temporary directory, and compares. It prints:
+`verify` asks the live control process for its digest and digest document at `<block>` (computed without touching control's live projection, so verifying never rewinds the console or recall), runs a fresh rebuild at the same head into a temporary directory, and compares. It prints:
 
 | Field | Meaning |
 | --- | --- |

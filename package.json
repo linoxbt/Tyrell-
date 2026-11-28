@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "Provenance and quarantine layer between an AI agent and its memory, with payments enforced by QIE smart contracts",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
   "engines": {
@@ -13,6 +13,7 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "probe": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=UNDICI-EHPA\" tsx scripts/probe.ts",
     "typecheck": "tsc -b && tsc -p packages/core/tsconfig.test.json",
+    "lint": "eslint .",
     "test": "vitest run",
     "scan-keys": "node scripts/scan-keys.mjs --staged",
     "scan-keys:history": "node scripts/scan-keys.mjs --history",
@@ -29,15 +30,20 @@
     "record:ai": "NODE_USE_ENV_PROXY=1 NODE_OPTIONS=\"$NODE_OPTIONS --disable-warning=UNDICI-EHPA\" tsx apps/web/scripts/record-ai-demo.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "^15.5.29",
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "@vitest/coverage-v8": "^3.2.0"
+    "typescript-eslint": "^8.74.0",
+    "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@tyrell/chain": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@tyrell/chain": "workspace:*",
     "viem": "^2.21.0"
   },
   "pnpm": {

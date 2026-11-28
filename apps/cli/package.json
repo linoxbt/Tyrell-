@@ -16,6 +16,7 @@
     "@tyrell/core": "workspace:*",
     "@tyrell/ingest": "workspace:*",
     "@tyrell/ipc": "workspace:*",
+    "@tyrell/mcp": "workspace:*",
     "@tyrell/signer": "workspace:*",
     "@tyrell/steward": "workspace:*",
     "@tyrell/storage": "workspace:*",

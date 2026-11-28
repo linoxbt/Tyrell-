@@ -36,7 +36,7 @@ describe("sentinel scoring (spec section 10)", () => {
 
   it("homoglyphs: mixed Latin and Cyrillic in one word, or invisible characters", () => {
     expect(hasHomoglyphs("lаndlord")).toBe(true); // Cyrillic а
-    expect(hasHomoglyphs("land​lord")).toBe(true);
+    expect(hasHomoglyphs("land\u200Blord")).toBe(true);
     expect(hasHomoglyphs("landIord")).toBe(false); // capital i: caught by the policy engine's exact label match instead
     expect(hasHomoglyphs("Привет world")).toBe(false); // separate words in separate scripts are fine
   });

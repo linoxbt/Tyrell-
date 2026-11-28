@@ -10,6 +10,7 @@
     { "path": "apps/ingest" },
     { "path": "apps/steward" },
     { "path": "apps/signer" },
+    { "path": "apps/mcp" },
     { "path": "scripts" }
   ]
 }

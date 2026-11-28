@@ -63,7 +63,7 @@ Control verifies every anchored memory before anything can read it. Verification
 5. The signer was bound to the header's lane at the anchor's position on chain (rebuilt from `LaneRegistry` events, so memories written before a key was revoked stay valid).
 6. `refBlock` is not after the anchor block.
 
-The sixteen possible reasons are listed in [Errors](/docs/reference/errors#verification-reasons).
+The seventeen possible reasons (including `DECISION_NOT_CONTROL`, for a payment decision from any lane but control) are listed in [Errors](/docs/reference/errors#verification-reasons).
 
 ## Lineage
 

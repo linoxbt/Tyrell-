@@ -3,7 +3,7 @@ title: View Document
 description: The JSON document control serves to the web console and writes as a snapshot, field by field.
 ---
 
-The view document is everything the web console needs, in one JSON document. Control builds it from the current projection and serves it read-only at `GET http://127.0.0.1:7878/api/view` (`TYRELL_API_PORT` changes the port). `tyrell snapshot --out <file>` writes the same document to a file, which is how the hosted demo runs. The web app serves it at `/api/view`, from control when `TYRELL_API_URL` is set and from `public/snapshot.json` otherwise.
+The view document is everything the web console needs, in one JSON document. Control builds it from the current projection and serves it read-only at `GET http://127.0.0.1:7878/api/view` (`TYRELL_API_PORT` changes the port), to requests carrying its bearer token. `tyrell snapshot --out <file>` writes the same document to a file, which is how the hosted demo runs; by default the snapshot leaves memory contents out (see [Snapshots](#snapshots)). The web app serves it at `/api/view`, from control when `TYRELL_API_URL` is set and from `public/snapshot.json` otherwise.
 
 The source of truth is `ViewDocument` in `apps/control/src/view.ts`.
 
@@ -25,6 +25,7 @@ The source of truth is `ViewDocument` in `apps/control/src/view.ts`.
 | `seeds` | object[] | Every quarantine seed |
 | `payees` | object[] | Every payee |
 | `incidents` | object[] | Sentinel incidents |
+| `redacted` | `true`, optional | Present on a snapshot written without `--include-bodies` |
 
 ## ViewMemory
 
@@ -58,8 +59,12 @@ Built from every memory of kind `decision`:
 | `turn` | hex, optional | The Steward turn that proposed it |
 | `verdict` | object, optional | `decision` (`ALLOW` or `BLOCK`), `code`, `reasons` |
 | `proposal` | object, optional | The proposal as received: `recipient`, `amount` (base units), `token`, `payeeLabel`, `reason`, `cites` |
+| `outcome` | string, optional | What happened to an allowed payment: `paid`, `failed` or `unknown` (the signer's answer was lost and the chain has not settled it yet), from control's outcome record |
 | `txHash` | hex, optional | The vault payment transaction |
+| `payError` | string, optional | Why an allowed payment was not paid, for example a signer refusal |
 | `parents` | hex[] | What the model had read in that turn |
+
+Control writes the decision record before it asks the signer to pay, then records the outcome as a separate control-lane note whose parent is the decision: `{ "outcomeOf": <decision id>, "status": "paid" | "failed" | "unknown", "txHash"?, "payError"? }`. `outcome`, `txHash` and `payError` come from that note. Those notes are ordinary memories, so they also appear in `memories`.
 
 ## Seeds
 
@@ -121,9 +126,13 @@ The incident records the ingest worker sent to control, unchanged. See [AI senti
 }
 ```
 
+## Snapshots
+
+`tyrell snapshot --out <file>` removes, by default, every memory's `body`, the `reason` in each decision's `proposal`, each incident's `summary` and the AI judge's `reason`, and sets `"redacted": true`. Everything else (ids, lanes, classes, lineage, verdicts, transactions) stays, so the console still draws the full picture. `--include-bodies` keeps the plain text, for demo data you mean to publish.
+
 ## Security
 
-The API is bound to `127.0.0.1` and accepts only `GET /api/view`; everything else is a 404. It returns 503 until control has built its first projection. The web server proxies it with a 10-second timeout; if control does not answer, the web app falls back to the snapshot. The browser never talks to control.
+The API is bound to `127.0.0.1` and accepts only `GET /api/view` with `Authorization: Bearer <token>` (the token is `TYRELL_API_TOKEN` or `TYRELL_HOME/api-token`); a missing or wrong token gets 401 and any other path 404. It also refuses any `Host` header but `127.0.0.1`, `localhost` or `[::1]` (421), so a web page that rebinds its own domain to your machine cannot read it. It returns 503 until control has built its first projection. The web server proxies it with a 10-second timeout, sending `TYRELL_API_TOKEN` as the bearer token; if control does not answer, the web app falls back to the snapshot. The browser never talks to control.
 
 > [!WARNING]
-> The document contains decrypted memory bodies. Serve it only to people who may read the agent's memory. The hosted demo's snapshot comes from a local demo run with no real data.
+> The document contains decrypted memory bodies. Serve it only to people who may read the agent's memory. The hosted demo's snapshot comes from a demo run with no real data, written with `--include-bodies` on purpose.

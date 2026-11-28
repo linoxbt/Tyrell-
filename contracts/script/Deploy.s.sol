@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
@@ -16,8 +16,8 @@ import {TyrellTestUSD} from "../src/TyrellTestUSD.sol";
 ///
 ///      Env: OWNER, SUBMITTER (control gas key), VAULT_SIGNER, TYRELL_ACCT (bytes32), TOKEN (optional:
 ///      on QIE mainnet it defaults to, and must equal, QUSDC; unset elsewhere deploys TyrellTestUSD).
-///      CONTROL (the control lane key) is accepted for compatibility but not given any role: the vault lets
-///      whichever key is the active control-lane key pause it, so rotating that key needs no vault change.
+///      The control lane key needs no role here: the vault lets whichever key is the active control-lane
+///      key pause it, so rotating that key needs no vault change.
 ///
 ///      forge script script/Deploy.s.sol --rpc-url qie_testnet --broadcast --account <deployer> \
 ///        --verify --verifier blockscout --verifier-url https://testnet.qie.digital/api/

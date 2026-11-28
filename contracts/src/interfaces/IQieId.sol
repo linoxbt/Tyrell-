@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 /// @notice The read side of a QIE ID record store. On QIE mainnet this is the ERC1967 proxy at

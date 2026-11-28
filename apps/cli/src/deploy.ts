@@ -46,7 +46,6 @@ export function deploy(o: DeployOptions): string {
     OWNER: getAddress(o.owner),
     SUBMITTER: addrs.submitter!,
     VAULT_SIGNER: addrs.signer!,
-    CONTROL: addrs.control!,
     TYRELL_ACCT: c.acct,
     ...(o.token ? { TOKEN: getAddress(o.token) } : {}),
   };

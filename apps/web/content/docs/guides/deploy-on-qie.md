@@ -18,7 +18,7 @@ This guide takes you from an empty machine to a running Tyrell deployment on QIE
 Gas costs are small. A full deploy of all five contracts is about 6.5M gas; anchoring one memory is about 95k gas (see `contracts/GAS.md`).
 
 > [!WARNING]
-> On 2026-11-26 the testnet RPCs `rpc1testnet` to `rpc3testnet` did not answer (see `PROBE.md`). Tyrell's defaults put the working endpoints first. Re-run `pnpm probe` before a deployment to check the network.
+> On 2026-11-26 the testnet RPCs `rpc1testnet` to `rpc3testnet` did not answer (see `PROBE.md`). Tyrell's defaults put the working endpoints first. Re-run `pnpm tyrell probe` before a deployment to check the network.
 
 ## 1. Generate keys
 
@@ -27,7 +27,11 @@ export TYRELL_HOME=~/.tyrell-testnet
 pnpm tyrell setup keys --network testnet --store pinata --gateway https://<you>.mypinata.cloud --new-passphrase
 ```
 
-This writes one encrypted keystore per role (`user`, `agent`, `wallet`, `control`, `submitter`, `signer`, `data`) to `TYRELL_HOME/keys/`, their public addresses to `keys/addresses.json`, and `config.json` with the network, RPC list, chain id, store and a new random 32-byte account id. `--new-passphrase` creates `TYRELL_HOME/pass` (mode 600) with a random passphrase if no passphrase file exists. Running the command again keeps existing keys.
+This writes one encrypted keystore per role (`user`, `agent`, `wallet`, `control`, `submitter`, `signer`, `data`) to `TYRELL_HOME/keys/`, their public addresses to `keys/addresses.json`, and `config.json` with the network, RPC list, chain id, store and a new random 32-byte account id. `--new-passphrase` creates one random passphrase per role in `TYRELL_HOME/pass.d/<role>` (mode 600) where none exists; on a local test chain it creates a single shared `TYRELL_HOME/pass` instead. Running the command again keeps existing keys.
+
+On testnet and mainnet each role's key is opened only with that role's own passphrase: a shared passphrase file is refused, and so is any key, passphrase or token file that other users can read (`chmod 600` it). If you bring your own passphrases, write them to `pass.d/<role>` or point `KEYSTORE_PASSPHRASE_FILE_<ROLE>` at them. Keystores written by an older Tyrell are refused until you run `pnpm tyrell keys migrate`. See [Configuration](/docs/reference/configuration#key-variables).
+
+`config.json` gets the network's RPC endpoints. The first two are read independently and must agree on everything (rule R0), so on testnet and mainnet they must be two different URLs; further endpoints break a tie when they disagree. Override the list with `QIE_RPC_URLS` before running the command.
 
 Fund these addresses with a little QIEV3:
 
@@ -61,6 +65,8 @@ The deployment is written to `contracts/deployments/<chainId>.json` and copied t
 pnpm tyrell setup register --mint 10000000     # testnet: also mints 10 tUSD into the vault
 ```
 
+(`pnpm tyrell setup` with the options of both steps does steps 1 and 3 in one go once the deployment exists.)
+
 The CLI serves a local page on `127.0.0.1`, prints its URL and lists the owner transactions still missing:
 
 - `LaneRegistry.addLaneKey` for each of the four lanes whose key is not yet active;
@@ -90,7 +96,13 @@ pnpm tyrell signer start &      # vault signer key only
 pnpm tyrell ingest start &      # wallet key only
 ```
 
-Control refuses to start unless each lane has exactly one active key. Run each process as its own OS user in production and set `TYRELL_STRICT_KEYS=1` (see [Architecture](/docs/get-started/architecture#processes-and-keys)).
+Control refuses to start unless each lane has exactly one active key. On testnet and mainnet every process also refuses to start if it can open another role's key, so run each one as its own OS user that owns only its own key and passphrase files (see [Architecture](/docs/get-started/architecture#processes-and-keys)); with one OS user per process, set `TYRELL_SOCKET_MODE=660` and give the process users a shared group so they can reach `control.sock`. On a single-user test machine, `TYRELL_INSECURE_SHARED_KEYS=1` turns both checks off, at the cost of key separation.
+
+Control prints where its view API token is (`TYRELL_HOME/api-token`). The console needs it for live data:
+
+```sh
+TYRELL_API_URL=http://127.0.0.1:7878 TYRELL_API_TOKEN=$(cat $TYRELL_HOME/api-token) pnpm web:dev
+```
 
 ## 6. Add payees and run the agent
 
@@ -107,7 +119,7 @@ See [Payees](/docs/guides/payees) and [Steward agent](/docs/guides/steward-agent
 ## 7. Verify the deployment
 
 ```sh
-pnpm tyrell status                                              # contracts, lane keys, head, digest, classes, seeds
+pnpm tyrell status                                              # head, digest, classes, vault balance, incidents, lane keys, seeds; warns on low gas
 pnpm tyrell rebuild --fresh --out /tmp/rebuild.sqlite
 pnpm tyrell verify --head <block>                               # live digest == fresh rebuild
 pnpm tyrell drill signer-leak                                   # the vault reverts an unauthorised pay on-chain
@@ -120,7 +132,8 @@ pnpm tyrell evidence                                            # explorer links
 Before a mainnet run:
 
 - [ ] The testnet run passed, and `tyrell verify --head <block>` matched there.
-- [ ] `pnpm probe` re-run today; mainnet RPCs answer and the EVM is still Shanghai.
+- [ ] `pnpm tyrell probe` re-run today; mainnet RPCs answer and the EVM is still Shanghai.
+- [ ] Each process runs as its own OS user with its own passphrase (`pass.d/<role>`), every key file is `chmod 600`, and no process warns about foreign keys.
 - [ ] A fresh home for mainnet: `export TYRELL_HOME=~/.tyrell-mainnet`.
 - [ ] The vault holds only the demo amount, and `tyrell check caps` passes.
 - [ ] `pnpm scan-keys:history` finds no key anywhere in Git history.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 import {AgentsBase} from "./AgentsBase.t.sol";
@@ -394,11 +394,19 @@ contract NetworkTest is AgentsBase {
         uint256[] memory ids = new uint256[](2);
         ids[0] = b1;
         ids[1] = a1;
-        (uint256[] memory bonds, uint256[] memory reps) = net.stats(ids);
+        (uint256[] memory bonds, uint256[] memory pending, uint256[] memory reps) = net.stats(ids);
         assertEq(bonds[0], 64e6);
+        assertEq(pending[0], 0);
         assertEq(reps[0], 450);
         assertEq(bonds[1], 0);
         assertEq(reps[1], 500);
+        // a withdrawal waiting to leave no longer counts as bond (as isBonded and reputation see it)
+        vm.prank(bob);
+        net.requestWithdrawal(b1, 54e6);
+        (bonds, pending,) = net.stats(ids);
+        assertEq(bonds[0], 10e6);
+        assertEq(pending[0], 54e6);
+        assertEq(bonds[0], net.effectiveBond(b1));
     }
 
     // =================================================================== agent-to-agent messages
@@ -532,6 +540,25 @@ contract NetworkTest is AgentsBase {
         assertEq(uint8(net.deal(d2).status), uint8(AgentNetwork.DealStatus.Reclaimed));
         vm.expectRevert(abi.encodeWithSelector(AgentNetwork.UnknownDeal.selector, 9));
         net.deal(9);
+    }
+
+    /// A refund never gets stuck: even if the payer stopped authorising the network as a spender while the
+    /// deal was open, cancelling or reclaiming still refunds the escrow and the quota.
+    function test_dealRefundsSurviveSpenderRemoval() public {
+        _bondBoth();
+        uint256 day0 = block.timestamp / 1 days;
+        uint256 ownerBefore = usd.balanceOf(owner);
+        uint256 d = _openDeal(2e6);
+        uint256 d2 = _openDeal(1e6);
+        vm.prank(owner);
+        agents.setSpender(address(net), false);
+        vm.prank(bob);
+        net.cancelDeal(d);
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(owner);
+        net.reclaim(d2);
+        assertEq(usd.balanceOf(owner), ownerBefore);
+        assertEq(agents.chargedBy(a1, day0, address(net)), 0);
     }
 
     /// M-8: deals need DEAL permission, not PAY.

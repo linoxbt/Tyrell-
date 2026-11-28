@@ -48,6 +48,7 @@ export const NAV: NavTab[] = [
           { slug: "guides/rebuild-and-verify", label: "Rebuild and verify" },
           { slug: "guides/web-console-and-wallet", label: "Web console and wallet" },
           { slug: "guides/attack-set", label: "Attack set" },
+          { slug: "guides/mcp-server", label: "MCP server for other agents" },
         ],
       },
     ],

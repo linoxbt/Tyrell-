@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -635,12 +635,20 @@ contract AgentNetwork is EIP712, ReentrancyGuard, Ownable2Step {
         if (score > 1000) score = 1000;
     }
 
-    /// @notice Bonds and reputations of many agents in one call.
-    function stats(uint256[] calldata agentIds) external view returns (uint256[] memory bonds, uint256[] memory reps) {
+    /// @notice Bonds and reputations of many agents in one call. `bonds` is the bond that counts
+    ///         (effectiveBond: what isBonded and reputation use); `pending` is what is waiting to be withdrawn
+    ///         (still slashable). bondOf = bonds + pending.
+    function stats(uint256[] calldata agentIds)
+        external
+        view
+        returns (uint256[] memory bonds, uint256[] memory pending, uint256[] memory reps)
+    {
         bonds = new uint256[](agentIds.length);
+        pending = new uint256[](agentIds.length);
         reps = new uint256[](agentIds.length);
         for (uint256 i; i < agentIds.length; ++i) {
-            bonds[i] = bondOf[agentIds[i]];
+            bonds[i] = effectiveBond(agentIds[i]);
+            pending[i] = bondOf[agentIds[i]] - bonds[i];
             reps[i] = reputation(agentIds[i]);
         }
     }

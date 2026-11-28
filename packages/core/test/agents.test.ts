@@ -3,8 +3,10 @@ import { getAddress, keccak256, toBytes, toHex, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   AGENT_CODES,
+  agentKeyRotationSigner,
   agentRegistrationSigner,
   agentRegistryDomain,
+  signAgentKeyRotation,
   signAgentRegistration,
   PERM,
   agentMessageSigner,
@@ -90,5 +92,20 @@ describe("agent registration consent (S-1)", () => {
       expect(await agentRegistrationSigner(c, r, h, key.address, d, sig)).not.toBe(key.address);
     }
     expect(agentRegistryDomain(1983, registry)).toEqual({ name: "TyrellAgentRegistry", version: "1", chainId: 1983, verifyingContract: registry });
+  });
+});
+
+describe("agent key rotation consent", () => {
+  const next = privateKeyToAccount(keccak256(toBytes("tyrell agents.test rotation key")));
+  const human = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as const;
+  const registry = "0x5FbDB2315678afecb367f032d93F642f64180aa3" as const;
+
+  it("recovers to the new key, and is bound to the agent id", async () => {
+    const sig = await signAgentKeyRotation(next, 1983, registry, 7n, human, 1_900_000_000n);
+    expect(await agentKeyRotationSigner(1983, registry, 7n, human, next.address, 1_900_000_000n, sig)).toBe(next.address);
+    expect(await agentKeyRotationSigner(1983, registry, 8n, human, next.address, 1_900_000_000n, sig)).not.toBe(next.address);
+    // a registration consent is a different type: it doesn't verify as a rotation
+    const reg = await signAgentRegistration(next, 1983, registry, human, 1_900_000_000n);
+    expect(await agentKeyRotationSigner(1983, registry, 7n, human, next.address, 1_900_000_000n, reg)).not.toBe(next.address);
   });
 });

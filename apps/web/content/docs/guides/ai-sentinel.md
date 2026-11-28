@@ -18,11 +18,11 @@ pnpm tyrell ingest scan --from 1234 # one pass from a given block
 pnpm tyrell incidents               # incidents recorded by control
 ```
 
-The worker holds only the wallet lane key. It remembers the last scanned block in `TYRELL_HOME/ingest-state.json`; the first scan starts at the deployment block.
+The worker holds only the wallet lane key. It remembers the last scanned block in `TYRELL_HOME/ingest-state.json`, saved after every window, so an interrupted scan resumes where it stopped; the first scan starts at the deployment block.
 
 ## What it observes
 
-For each watched address (the vault, plus any in `TYRELL_WATCH`), the worker reads logs in 5,000-block windows:
+For each watched address (the vault, plus any in `TYRELL_WATCH`), the worker reads logs in 5,000-block windows (`SENTINEL_WINDOW`):
 
 | Event | Observation | Attacker-controlled text scored |
 | --- | --- | --- |
@@ -34,9 +34,11 @@ For each watched address (the vault, plus any in `TYRELL_WATCH`), the worker rea
 
 Ordinary outgoing payments above the dust amount are not recorded.
 
+Each event is handled on its own, so one malicious event cannot stop the sentinel: an event that cannot be decoded (for example a `Transfer` with short data) becomes an "Undecodable event" observation, and a token URI with a broken percent-escape is kept as raw text. A scan reads at most 200 events (the rest are summarised in one observation), merges identical dust transfers into one observation, and fetches metadata four at a time. If the AI judge fails, the scan carries on with the rule score.
+
 ### Metadata fetching
 
-Metadata is attacker-controlled, so fetching is bounded: `data:`, `https:` and `ipfs:` URIs only (IPFS through `https://ipfs.io` by default), at most 64 KB, 5-second timeout, no redirects, and no private, loopback, link-local or CGNAT addresses (checked after DNS resolution). Token names are clipped to 512 characters and symbols to 64. Everything returned is stored verbatim as untrusted text and never interpreted.
+Metadata is attacker-controlled, so fetching is bounded: `data:`, `https:` and `ipfs:` URIs only (IPFS through `https://ipfs.io` by default), at most 64 KB, 5-second timeout, no redirects, and no private, loopback, link-local or CGNAT addresses (checked after DNS resolution). Token names are clipped to 512 characters and symbols to 64, and every body is cut to fit 8,192 bytes (by bytes, so multi-byte text cannot overflow it). Everything returned is stored verbatim as untrusted text and never interpreted.
 
 Every observation is signed as a wallet-lane `observation` memory with its `src` (ERC-20, NFT, transfer or MCP), submitted to control in batches of up to 20, and only then scored.
 
@@ -58,7 +60,7 @@ A score at or above the threshold (60 by default) raises an incident. For exampl
 
 ### Blocklist and auto-quarantine
 
-The blocklist is a JSON array of addresses in `TYRELL_HOME/blocklist.json` (`TYRELL_BLOCKLIST` overrides the path). A blocklist hit scores 100, and by default control immediately seeds a `source` quarantine for it (`AUTO_QUARANTINE_BLOCKLIST=true`). Exclusion is reversible with the user key, so this is the one case where detection acts on its own.
+The blocklist is a JSON array of addresses in `TYRELL_HOME/blocklist.json` (`TYRELL_BLOCKLIST` overrides the path). A blocklist hit scores 100, and by default control immediately seeds a `source` quarantine for the address that matched, token or sender (`AUTO_QUARANTINE_BLOCKLIST=true`), unless an active seed already covers it. Exclusion is reversible with the user key, so this is the one case where detection acts on its own.
 
 ## The AI judge
 
@@ -69,7 +71,7 @@ When a model is configured, an AI judge reads the same attacker-controlled text 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SENTINEL_LLM_BASE_URL` | `LLM_BASE_URL` | OpenAI-compatible endpoint for the judge |
-| `SENTINEL_LLM_API_KEY` | `LLM_API_KEY` | API key for the judge |
+| `SENTINEL_LLM_API_KEY` | `FORTYTWO_API_KEY`, then `LLM_API_KEY` | API key for the judge. A borrowed key is sent only to the host it belongs to: the agent's `LLM_API_KEY` only to the agent's endpoint, `FORTYTWO_API_KEY` only to Fortytwo. A judge on another host needs its own key, or it does not run |
 | `SENTINEL_LLM_MODEL` | `LLM_MODEL` | Model name for the judge |
 | `SENTINEL_LLM_REASONING_EFFORT` | `none` on Fortytwo | Sent as `reasoning_effort`, so the short JSON answer is not spent on reasoning |
 | `SENTINEL_AI` | `auto` | `off` disables the judge |

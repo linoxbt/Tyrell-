@@ -50,7 +50,7 @@ pnpm web:dev
 Open `http://localhost:3000`. Without a live control process the web app serves `apps/web/public/snapshot.json`, a recorded run with a poisoned token, a blocked payment and an active quarantine. The [console](/console) shows its memories, lineage graph, blast radius per seed, decisions and incidents.
 
 > [!NOTE]
-> The hosted demo at `tyrell-mu.vercel.app` runs in this read-only snapshot mode. The processes that hold keys never run on the web host.
+> The hosted demo at `tyrell-mu.vercel.app` runs in this read-only mode and says **Recorded demo · read-only** above the tabs. The processes that hold keys never run on the web host. For live data, run the console next to control with `TYRELL_API_URL` and `TYRELL_API_TOKEN` (see [Web console and wallet](/docs/guides/web-console-and-wallet#data-modes)).
 
 ## Try it on QIE Testnet
 

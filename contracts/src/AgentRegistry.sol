@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -32,6 +32,7 @@ contract AgentRegistry is IAgentRegistry, EIP712 {
     uint32 public constant MAX_AGENTS = 64;
     string public constant QIE_RECORD = "qie";
     bytes32 public constant REGISTER_AGENT_TYPEHASH = keccak256("RegisterAgent(address human,address key,uint64 deadline)");
+    bytes32 public constant ROTATE_AGENT_KEY_TYPEHASH = keccak256("RotateAgentKey(uint256 agentId,address human,address key,uint64 deadline)");
 
     IQieId public immutable qieIdStore;
     address public immutable deployer;
@@ -50,6 +51,8 @@ contract AgentRegistry is IAgentRegistry, EIP712 {
     mapping(uint256 agentId => bool) public banned;
     mapping(uint256 agentId => mapping(bytes32 payeeId => bool)) public payeeAllowed;
     mapping(uint256 agentId => mapping(uint256 day => uint256)) private _agentSpent;
+    /// @dev What each spender charged each agent on each day: the most it may later refund.
+    mapping(uint256 agentId => mapping(uint256 day => mapping(address spender => uint256))) public chargedBy;
 
     constructor(IQieId qieIdStore_) EIP712("TyrellAgentRegistry", "1") {
         qieIdStore = qieIdStore_;
@@ -107,11 +110,8 @@ contract AgentRegistry is IAgentRegistry, EIP712 {
     function registerAgent(NewAgent calldata n, uint64 deadline, bytes calldata keySig) external returns (uint256 agentId) {
         if (!isBound(msg.sender)) revert NotBound(msg.sender);
         address key = n.key;
-        if (key == address(0) || key == msg.sender || keyUsed[key] || bytes(_humans[key].qieId).length != 0) revert BadKey(key);
         if (n.token == address(0)) revert BadToken();
-        if (block.timestamp > deadline) revert SignatureExpired();
-        (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecover(registrationDigest(msg.sender, key, deadline), keySig);
-        if (err != ECDSA.RecoverError.NoError || signer != key) revert BadKeySignature();
+        _checkNewKey(key, deadline, registrationDigest(msg.sender, key, deadline), keySig);
         Human storage hu = _humans[msg.sender];
         if (hu.agentCount >= MAX_AGENTS) revert TooManyAgents();
         _agents.push(
@@ -140,6 +140,34 @@ contract AgentRegistry is IAgentRegistry, EIP712 {
         emit AgentPermissionsSet(agentId, n.permissions);
         emit AgentLimitsSet(agentId, n.perTxLimit, n.dailyLimit);
         if (n.anyPayee) emit AgentAnyPayeeSet(agentId, true);
+    }
+
+    /// @notice Replace an agent's key in place (the lane key was rotated). The NEW key consents with an EIP-712
+    ///         RotateAgentKey(agentId, human = caller, key, deadline) signature. The agent keeps its id,
+    ///         limits, spend, permissions, ban and reputation; the old key stops working at once and, like
+    ///         every key ever used, can never be registered again.
+    function rotateAgentKey(uint256 agentId, address newKey, uint64 deadline, bytes calldata keySig) external {
+        Agent storage a = _own(agentId);
+        _checkNewKey(newKey, deadline, rotationDigest(agentId, msg.sender, newKey, deadline), keySig);
+        address old = a.key;
+        delete _agentOfKey[old];
+        a.key = newKey;
+        keyUsed[newKey] = true;
+        _agentOfKey[newKey] = agentId;
+        emit AgentKeyRotated(agentId, old, newKey);
+    }
+
+    /// @notice The EIP-712 digest a new agent key signs to consent to replacing agent `agentId`'s key.
+    function rotationDigest(uint256 agentId, address human_, address key, uint64 deadline) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(ROTATE_AGENT_KEY_TYPEHASH, agentId, human_, key, deadline)));
+    }
+
+    /// @dev A key can be an agent key once ever, is never a human, and must sign its own consent in time.
+    function _checkNewKey(address key, uint64 deadline, bytes32 digest, bytes calldata keySig) private view {
+        if (key == address(0) || key == msg.sender || keyUsed[key] || bytes(_humans[key].qieId).length != 0) revert BadKey(key);
+        if (block.timestamp > deadline) revert SignatureExpired();
+        (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecover(digest, keySig);
+        if (err != ECDSA.RecoverError.NoError || signer != key) revert BadKeySignature();
     }
 
     /// @notice The EIP-712 digest an agent key signs to consent to being `human`'s agent.
@@ -226,15 +254,18 @@ contract AgentRegistry is IAgentRegistry, EIP712 {
         _consume(agentId, PERM_DEAL, payeeId, token, amount);
     }
 
-    /// @notice An authorised spender gives back a charge that never left (a cancelled or reclaimed deal):
-    ///         `amount` is taken off the agent's and the human's spend for `day` (never below zero).
+    /// @notice A spender gives back a charge that never left (a cancelled or reclaimed deal): `amount` is taken
+    ///         off the agent's and the human's spend for `day`. A spender can refund only what it charged that
+    ///         agent that day, so a faulty spender cannot reset anyone's quota; and it can do so even after the
+    ///         human stopped authorising it (refunds only ever lower spend), so an open deal never gets stuck.
     function refund(uint256 agentId, address token, uint256 amount, uint256 day) external {
         address h = humanOf(agentId);
-        if (!isSpender[h][msg.sender]) revert NotSpender(msg.sender);
-        uint256 a = _agentSpent[agentId][day];
-        _agentSpent[agentId][day] = a > amount ? a - amount : 0;
-        uint256 hs = _humanSpent[h][token][day];
-        _humanSpent[h][token][day] = hs > amount ? hs - amount : 0;
+        if (token != _agents[agentId - 1].token) revert BadToken();
+        uint256 c = chargedBy[agentId][day][msg.sender];
+        if (amount > c) revert OverRefund(c, amount);
+        chargedBy[agentId][day][msg.sender] = c - amount;
+        _agentSpent[agentId][day] -= amount;
+        _humanSpent[h][token][day] -= amount;
         emit AgentRefunded(agentId, h, token, amount, day, msg.sender);
     }
 
@@ -260,6 +291,7 @@ contract AgentRegistry is IAgentRegistry, EIP712 {
         uint256 day = block.timestamp / 1 days;
         _agentSpent[agentId][day] += amount;
         _humanSpent[h][token][day] += amount;
+        chargedBy[agentId][day][msg.sender] += amount;
         emit AgentSpent(agentId, h, payeeId, token, amount, msg.sender);
     }
 

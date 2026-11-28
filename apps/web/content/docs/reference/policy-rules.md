@@ -41,7 +41,7 @@ What Steward's `propose_payment` tool produces, after the runtime converts the a
 | `blockNumber`, `blockTimestamp` | The evaluated block; "today" is `blockTimestamp / 86400` |
 | `simulation` | Result of `eth_call` and gas estimation of `GuardedVault.pay` from the signer's address |
 
-Control reads all of this at the projection's head, on two endpoints, before every decision.
+Control reads all of this at the projection's head, on two endpoints, before every decision. The chain state behind the projection is compared on every field of the whole history; a third endpoint breaks a tie (see [Architecture](/docs/get-started/architecture#the-projection)).
 
 ## The rules
 
@@ -54,7 +54,10 @@ Control reads all of this at the projection's head, on two endpoints, before eve
 | A memory in the turn's context failed verification or is quarantined | `LEDGER_UNVERIFIED` | "a memory in the turn's context failed verification" |
 | Spend figures are not for the current UTC day | `LEDGER_UNVERIFIED` | "spend figures are not for the current UTC day" |
 
-If control cannot even read and cross-check chain state, the decision is `CHAIN_UNAVAILABLE` without running the engine.
+If control cannot even read and cross-check chain state, the decision is `CHAIN_UNAVAILABLE` without running the engine. Control also blocks in two cases of its own, both with `LEDGER_UNVERIFIED`:
+
+- the turn read more than 64 memories, more than a decision record can cite as parents;
+- an earlier allowed payment to the same payee has no settled outcome yet (the signer's answer was lost and the chain has not shown what happened), so a lost answer can never become a second payment.
 
 ### R1: canonical recipient
 

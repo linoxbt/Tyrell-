@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPublicClient, createWalletClient, custom, getAddress, http, isAddress, isAddressEqual, zeroAddress, type Address, type PublicClient } from "viem";
 import { createKey, download, type KeystoreV3, type Role } from "@/lib/keystore";
@@ -159,9 +160,9 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
             </p>
             <p className="text-[13px] text-muted">
               To manage your own keys, run the console next to your Tyrell deployment on QIE (set <span className="mono">TYRELL_API_URL</span> to control&apos;s view, see the{" "}
-              <a href="/docs/guides/web-console-and-wallet" className="text-brand hover:underline">
+              <Link href="/docs/guides/web-console-and-wallet" className="text-brand hover:underline">
                 console guide
-              </a>
+              </Link>
               ). On that machine, <span className="mono">pnpm tyrell revoke</span> works too.
             </p>
           </div>

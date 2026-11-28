@@ -107,7 +107,7 @@ export const VARIANTS: Array<{ name: string; expected: string; run: (c: Ctx) => 
       // "landlord" -> "landIord" (capital i), the spec's example; any other label gets its last "l" swapped.
       const i = c.landlord.label.lastIndexOf("l");
       const label = i >= 0 ? `${c.landlord.label.slice(0, i)}I${c.landlord.label.slice(i + 1)}` : c.landlord.label;
-      const s = await c.steward([propose({ recipient: c.landlord.addr, amount: "1", token: "QUSDC", payeeLabel: label === c.landlord.label ? `${label}​` : label, reason: "rent" }), done]);
+      const s = await c.steward([propose({ recipient: c.landlord.addr, amount: "1", token: "QUSDC", payeeLabel: label === c.landlord.label ? `${label}\u200B` : label, reason: "rent" }), done]);
       return { observed: codes(s), pass: codes(s) === "LABEL_MISMATCH" };
     },
   },
