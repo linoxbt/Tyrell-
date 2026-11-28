@@ -9,7 +9,11 @@ import {ILaneRegistry} from "./interfaces/ILaneRegistry.sol";
 ///         revoke or rotate keys, so every binding is owner-attested on-chain (spec section 8.1).
 /// @dev Rules: one active key per lane; a key belongs to at most one lane, ever; a revoked key can
 ///      never be re-added. `addedAt` / `revokedAt` are block numbers kept for historical bindings.
+///      Ownership can be handed over (two-step) but never renounced: a registry without an owner could
+///      never revoke a leaked key.
 contract LaneRegistry is ILaneRegistry, Ownable2Step {
+    error NoRenounce();
+
     mapping(address key => KeyInfo) private _keys;
     mapping(Lane lane => address key) private _active;
 
@@ -30,6 +34,11 @@ contract LaneRegistry is ILaneRegistry, Ownable2Step {
         Lane lane = _keys[oldKey].lane;
         _revoke(oldKey, reason);
         _add(lane, newKey);
+    }
+
+    /// @notice Disabled: hand ownership over with transferOwnership instead.
+    function renounceOwnership() public pure override {
+        revert NoRenounce();
     }
 
     /// @inheritdoc ILaneRegistry

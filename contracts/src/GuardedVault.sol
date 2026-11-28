@@ -8,6 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ITyrellLedger} from "./interfaces/ITyrellLedger.sol";
 import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
+import {ILaneRegistry} from "./interfaces/ILaneRegistry.sol";
 
 /// @title GuardedVault
 /// @notice Holds Steward's QUSDC. `pay` is the only way money leaves to anyone but the owner, and it
@@ -16,6 +17,14 @@ import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
 ///         the payee's spend today stays within capPerDay, and the vault-wide spend today stays within
 ///         the token's global daily cap. A leaked signer key can therefore lose at most one day's
 ///         capped spend, and only to payees the human registered.
+///
+///         Once an agent registry is linked (phase A), `pay` is closed and every payment goes through
+///         `payForAgent`, so freezes, bans, an expired QIE ID, agent limits and the shared quota can't be
+///         skipped. `payForAgent` only pays for agents whose human administers this vault.
+///
+///         Pausing: holders of PAUSER_ROLE, and whichever key is the active control-lane key in the
+///         LaneRegistry right now (so rotating or revoking the control key moves this right with it).
+///         The vault always keeps at least one admin: the last one cannot renounce or be revoked.
 /// @dev "Today" is block.timestamp / 1 days (UTC), the same boundary the policy engine uses for R4.
 ///      A token with no global daily cap set cannot be paid at all (fail closed).
 contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
@@ -32,6 +41,8 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
     mapping(address token => mapping(uint256 day => uint256)) private _spentGlobal;
     mapping(address token => uint256) public globalDailyCap;
     mapping(bytes16 decisionId => bool) public decisionUsed;
+    /// @notice How many accounts hold DEFAULT_ADMIN_ROLE (never allowed to reach zero).
+    uint256 public adminCount;
 
     event Paid(bytes32 indexed payeeId, address indexed to, address token, uint256 amount, bytes16 decisionId);
     event Withdrawn(address indexed to, address token, uint256 amount);
@@ -43,23 +54,29 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
     error BadDecision();
     error ZeroAddress();
     error NoAgentRegistry();
+    error UseAgentPath();
+    error NotOurAgent(uint256 agentId);
+    error LastAdmin();
 
-    constructor(address admin, ITyrellLedger ledger_, address signer, address controlPauser) {
+    /// @param extraPauser optional extra holder of PAUSER_ROLE (the active control-lane key can always pause).
+    constructor(address admin, ITyrellLedger ledger_, address signer, address extraPauser) {
         if (admin == address(0) || address(ledger_) == address(0)) revert ZeroAddress();
         ledger = ledger_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, admin);
         if (signer != address(0)) _grantRole(SIGNER_ROLE, signer);
-        if (controlPauser != address(0)) _grantRole(PAUSER_ROLE, controlPauser);
+        if (extraPauser != address(0)) _grantRole(PAUSER_ROLE, extraPauser);
     }
 
-    /// @notice Pays a registered payee for an ALLOW decision. Signer role only.
+    /// @notice Pays a registered payee for an ALLOW decision. Signer role only. Closed once an agent
+    ///         registry is linked: use payForAgent.
     function pay(bytes32 payeeId, address token, uint256 amount, bytes16 decisionId)
         external
         onlyRole(SIGNER_ROLE)
         whenNotPaused
         nonReentrant
     {
+        if (address(agentRegistry) != address(0)) revert UseAgentPath();
         _pay(payeeId, token, amount, decisionId);
     }
 
@@ -77,6 +94,7 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
     {
         IAgentRegistry r = agentRegistry;
         if (address(r) == address(0)) revert NoAgentRegistry();
+        if (!hasRole(DEFAULT_ADMIN_ROLE, r.humanOf(agentId))) revert NotOurAgent(agentId);
         r.consume(agentId, payeeId, token, amount);
         _pay(payeeId, token, amount, decisionId);
         emit PaidForAgent(agentId, payeeId, token, amount, decisionId);
@@ -120,14 +138,36 @@ contract GuardedVault is AccessControl, Pausable, ReentrancyGuard {
         emit AgentRegistrySet(address(registry));
     }
 
-    /// @notice Owner or control: stop all payments.
-    function pause() external onlyRole(PAUSER_ROLE) {
+    /// @notice Owner, a pauser, or the active control-lane key: stop all payments.
+    function pause() external {
+        if (!hasRole(PAUSER_ROLE, msg.sender) && !isControlKey(msg.sender)) {
+            revert AccessControlUnauthorizedAccount(msg.sender, PAUSER_ROLE);
+        }
         _pause();
+    }
+
+    /// @notice Is `key` the control lane's active key in this deployment's LaneRegistry, right now?
+    function isControlKey(address key) public view returns (bool) {
+        return ledger.registry().isActiveFor(key, ILaneRegistry.Lane.Control);
     }
 
     /// @notice Owner only.
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
+    }
+
+    function _grantRole(bytes32 role, address account) internal override returns (bool granted) {
+        granted = super._grantRole(role, account);
+        if (granted && role == DEFAULT_ADMIN_ROLE) adminCount++;
+    }
+
+    /// @dev Covers revokeRole and renounceRole: the last admin stays.
+    function _revokeRole(bytes32 role, address account) internal override returns (bool revoked) {
+        revoked = super._revokeRole(role, account);
+        if (revoked && role == DEFAULT_ADMIN_ROLE) {
+            if (adminCount == 1) revert LastAdmin();
+            adminCount--;
+        }
     }
 
     function spentToday(bytes32 payeeId) external view returns (uint256) {

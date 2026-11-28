@@ -1,108 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.28;
 
-import {Base} from "./Base.t.sol";
-import {AgentRegistry} from "../src/AgentRegistry.sol";
-import {AgentNetwork} from "../src/AgentNetwork.sol";
-import {TestQieId} from "../src/TestQieId.sol";
+import {AgentsBase} from "./AgentsBase.t.sol";
 import {GuardedVault} from "../src/GuardedVault.sol";
+import {MemoryAnchor} from "../src/MemoryAnchor.sol";
 import {IAgentRegistry} from "../src/interfaces/IAgentRegistry.sol";
 import {IQieId} from "../src/interfaces/IQieId.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @dev Phase A (AgentRegistry + GuardedVault.payForAgent) and phase B (AgentNetwork).
-///      Humans: `owner` (alice.qie, owns the vault), bob (bob.qie), carol (carol.qie, reports).
-contract AgentsTest is Base {
-    TestQieId internal qie;
-    AgentRegistry internal agents;
-    AgentNetwork internal net;
-    address internal bob = makeAddr("bob");
-    address internal carol = makeAddr("carol");
-    address internal arbiter = makeAddr("arbiter");
-    address internal a1Key;
-    uint256 internal a1Pk;
-    address internal a2Key;
-    uint256 internal a2Pk;
-    address internal b1Key;
-    uint256 internal b1Pk;
-    uint256 internal a1;
-    uint256 internal a2;
-    uint256 internal b1;
-
-    uint32 internal constant PAY = 1;
-    uint32 internal constant MSG = 4;
-    uint32 internal constant DEAL = 8;
-    uint32 internal constant ALL = 1 | 2 | 4 | 8;
-    uint256 internal constant MIN_BOND = 10e6;
-    uint256 internal constant REPORT_BOND = 2e6;
-    uint64 internal constant WINDOW = 3 days;
-    bytes16 internal constant D1 = bytes16(keccak256("decision-1"));
-    bytes16 internal constant D2 = bytes16(keccak256("decision-2"));
-
-    function setUp() public override {
-        super.setUp();
-        _addPayee(LANDLORD, landlord, 5e6, 5e6);
-        (a1Key, a1Pk) = makeAddrAndKey("agent-a1");
-        (a2Key, a2Pk) = makeAddrAndKey("agent-a2");
-        (b1Key, b1Pk) = makeAddrAndKey("agent-b1");
-
-        qie = new TestQieId();
-        agents = new AgentRegistry(qie);
-        net = new AgentNetwork(agents, IERC20(address(usd)), arbiter, MIN_BOND, REPORT_BOND, WINDOW, 2_000, 3);
-        agents.setNetwork(address(net));
-
-        _bind(owner, "alice.qie");
-        _bind(bob, "bob.qie");
-        _bind(carol, "carol.qie");
-
-        vm.startPrank(owner);
-        vault.setAgentRegistry(agents);
-        agents.setSpender(address(vault), true);
-        agents.setSpender(address(net), true);
-        agents.setQuota(address(usd), 6e6);
-        a1 = agents.registerAgent(a1Key, "rent agent", keccak256("model:x"), ALL, 4e6, 5e6, false);
-        a2 = agents.registerAgent(a2Key, "bills agent", keccak256("model:y"), ALL, 4e6, 5e6, false);
-        bytes32[] memory p = new bytes32[](1);
-        p[0] = LANDLORD;
-        agents.setPayees(a1, p, true);
-        agents.setPayees(a2, p, true);
-        usd.mint(owner, 100e6);
-        usd.mint(bob, 100e6);
-        usd.mint(carol, 100e6);
-        vm.stopPrank();
-
-        vm.prank(bob);
-        b1 = agents.registerAgent(b1Key, "bob's seller", bytes32(0), ALL, 50e6, 50e6, true);
-        vm.prank(bob);
-        agents.setQuota(address(usd), 50e6);
-        vm.prank(bob);
-        agents.setSpender(address(net), true);
-
-        vm.prank(owner);
-        usd.approve(address(net), type(uint256).max);
-        vm.prank(bob);
-        usd.approve(address(net), type(uint256).max);
-        vm.prank(carol);
-        usd.approve(address(net), type(uint256).max);
-    }
-
-    function _bind(address h, string memory name) internal {
-        vm.prank(h);
-        qie.claim(name);
-        vm.prank(h);
-        agents.bindQieId(name);
-    }
-
-    function _payFor(uint256 agentId, uint256 amount, bytes16 d) internal {
-        vm.prank(vaultSigner);
-        vault.payForAgent(agentId, LANDLORD, address(usd), amount, d);
-    }
-
-    function _code(uint256 agentId, uint256 amount) internal view returns (bytes32 code) {
-        (, code) = agents.check(agentId, LANDLORD, address(usd), amount);
-    }
-
-    // =================================================================== phase A: QIE ID binding
+/// @dev Phase A: AgentRegistry, GuardedVault.payForAgent, and the MemoryAnchor agent gate.
+contract AgentsTest is AgentsBase {
+    // =================================================================== QIE ID binding
 
     function test_bindRequiresHoldingTheQieId() public {
         address eve = makeAddr("eve");
@@ -141,9 +49,12 @@ contract AgentsTest is Base {
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.AgentBlocked.selector, bytes32("HUMAN_UNBOUND")));
         _payFor(a1, 1e6, D1);
         // and no new agent can be registered
+        (, uint256 pk) = makeAddrAndKey("k");
+        IAgentRegistry.NewAgent memory n = _spec(vm.addr(pk), PAY, 1, 1, true);
+        bytes memory sig = _regSig(pk, owner, uint64(block.timestamp));
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotBound.selector, owner));
         vm.prank(owner);
-        agents.registerAgent(makeAddr("k"), "x", 0, PAY, 1, 1, true);
+        agents.registerAgent(n, uint64(block.timestamp), sig);
     }
 
     function test_agentsStopWhenTheQieIdLapses() public {
@@ -177,27 +88,39 @@ contract AgentsTest is Base {
         assertEq(IQieId(address(qie)).resolveCurrency("alice.qie", "qie"), owner);
     }
 
-    // =================================================================== phase A: agents
+    // =================================================================== registration (S-1: no key squatting)
 
     function test_registerAgentRules() public {
-        address k = makeAddr("k");
+        (address k, uint256 kPk) = makeAddrAndKey("k");
+        uint64 dl = uint64(block.timestamp + 1 hours);
         address eve = makeAddr("eve");
+        bytes memory eveSig = _regSig(kPk, eve, dl);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotBound.selector, eve));
         vm.prank(eve);
-        agents.registerAgent(k, "x", 0, PAY, 1, 1, true);
+        agents.registerAgent(_spec(k, PAY, 1, 1, true), dl, eveSig);
 
+        bytes memory sig = _regSig(kPk, owner, dl);
         vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, address(0)));
-        agents.registerAgent(address(0), "x", 0, PAY, 1, 1, true);
+        agents.registerAgent(_spec(address(0), PAY, 1, 1, true), dl, sig);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, owner));
-        agents.registerAgent(owner, "x", 0, PAY, 1, 1, true);
+        agents.registerAgent(_spec(owner, PAY, 1, 1, true), dl, sig);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, a1Key));
-        agents.registerAgent(a1Key, "x", 0, PAY, 1, 1, true);
+        agents.registerAgent(_spec(a1Key, PAY, 1, 1, true), dl, sig);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, bob));
-        agents.registerAgent(bob, "x", 0, PAY, 1, 1, true); // another human's address
+        agents.registerAgent(_spec(bob, PAY, 1, 1, true), dl, sig); // another human's address
+        IAgentRegistry.NewAgent memory noToken = _spec(k, PAY, 1, 1, true);
+        noToken.token = address(0);
+        vm.expectRevert(IAgentRegistry.BadToken.selector);
+        agents.registerAgent(noToken, dl, sig);
+
+        IAgentRegistry.NewAgent memory n = _spec(k, PAY, 1, 1, true);
+        n.metaHash = bytes32("m");
         vm.expectEmit(true, true, true, true, address(agents));
         emit IAgentRegistry.AgentRegistered(4, owner, k, "x", bytes32("m"));
-        uint256 id = agents.registerAgent(k, "x", bytes32("m"), PAY, 1, 1, true);
+        vm.expectEmit(true, false, false, true, address(agents));
+        emit IAgentRegistry.AgentTokenSet(4, address(usd));
+        uint256 id = agents.registerAgent(n, dl, sig);
         vm.stopPrank();
 
         assertEq(id, 4);
@@ -210,18 +133,58 @@ contract AgentsTest is Base {
         assertEq(mine[2], 4);
         IAgentRegistry.Agent memory a = agents.agent(id);
         assertEq(a.key, k);
+        assertEq(a.token, address(usd));
         assertEq(a.label, "x");
         assertTrue(a.anyPayee);
     }
 
+    /// Agent keys are public. Without the key's own consent nobody can register it first.
+    function test_agentKeysCannotBeSquatted() public {
+        (address k, uint256 kPk) = makeAddrAndKey("victim-agent-key");
+        uint64 dl = uint64(block.timestamp + 1 hours);
+        IAgentRegistry.NewAgent memory n = _spec(k, ALL, 1e6, 1e6, true);
+
+        // bob has no signature from the key at all
+        vm.expectRevert(IAgentRegistry.BadKeySignature.selector);
+        vm.prank(bob);
+        agents.registerAgent(n, dl, hex"1234");
+        // bob replays the signature the key gave to its real human (owner): it names owner, not bob
+        bytes memory ownersSig = _regSig(kPk, owner, dl);
+        vm.expectRevert(IAgentRegistry.BadKeySignature.selector);
+        vm.prank(bob);
+        agents.registerAgent(n, dl, ownersSig);
+        // bob signs with some other key
+        bytes memory forged = _sign(b1Pk, agents.registrationDigest(bob, k, dl));
+        vm.expectRevert(IAgentRegistry.BadKeySignature.selector);
+        vm.prank(bob);
+        agents.registerAgent(n, dl, forged);
+        // an expired consent is refused
+        vm.warp(dl + 1);
+        vm.expectRevert(IAgentRegistry.SignatureExpired.selector);
+        vm.prank(owner);
+        agents.registerAgent(n, dl, ownersSig);
+        // the real human, in time
+        vm.warp(dl - 10);
+        vm.prank(owner);
+        uint256 id = agents.registerAgent(n, dl, ownersSig);
+        assertEq(agents.humanOf(id), owner);
+        // and the same consent cannot be used twice (a key registers once, ever)
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, k));
+        vm.prank(owner);
+        agents.registerAgent(n, dl, ownersSig);
+        assertTrue(agents.domainSeparator() != bytes32(0));
+    }
+
     function test_maxAgentsPerHuman() public {
-        vm.startPrank(owner);
         for (uint256 i = 2; i < agents.MAX_AGENTS(); ++i) {
-            agents.registerAgent(address(uint160(0x1000 + i)), "n", 0, PAY, 1, 1, true);
+            _register(owner, 0x1000 + i, "n", 0, PAY, 1, 1, true);
         }
+        uint256 pk = 0x9999;
+        IAgentRegistry.NewAgent memory n = _spec(vm.addr(pk), PAY, 1, 1, true);
+        bytes memory sig = _regSig(pk, owner, uint64(block.timestamp));
         vm.expectRevert(IAgentRegistry.TooManyAgents.selector);
-        agents.registerAgent(address(0x9999), "n", 0, PAY, 1, 1, true);
-        vm.stopPrank();
+        vm.prank(owner);
+        agents.registerAgent(n, uint64(block.timestamp), sig);
     }
 
     function test_onlyTheHumanManagesTheirAgents() public {
@@ -273,6 +236,20 @@ contract AgentsTest is Base {
         assertEq(_code(a1, 1e6 + 1), bytes32(0));
     }
 
+    /// B-11: an agent spends one token and has one daily limit; it can't spend its limit again in another token.
+    function test_agentLimitsAreNotPerToken() public {
+        address other = makeAddr("other-token");
+        vm.prank(owner);
+        agents.setQuota(other, 100e6);
+        (bool ok, bytes32 code) = agents.check(a1, LANDLORD, other, 1e6);
+        assertFalse(ok);
+        assertEq(code, "WRONG_TOKEN");
+        (ok, code) = agents.checkDeal(a1, LANDLORD, other, 1e6);
+        assertEq(code, "WRONG_TOKEN");
+        assertEq(agents.spentToday(a1, other), 0);
+        assertEq(agents.spentToday(99, address(usd)), 0);
+    }
+
     /// N agents, 1 human, 1 shared quota.
     function test_sharedHumanQuotaAcrossAgents() public {
         vm.prank(owner);
@@ -316,27 +293,42 @@ contract AgentsTest is Base {
         assertEq(_code(a2, 1e6), bytes32(0)); // the other agent keeps working
         assertEq(agents.agentIdOf(a1Key), 0);
         assertEq(agents.human(owner).agentCount, 1);
-        vm.startPrank(owner);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.AgentIsRevoked.selector, a1));
+        vm.prank(owner);
         agents.setLimits(a1, 1, 1);
+        IAgentRegistry.NewAgent memory n = _spec(a1Key, PAY, 1, 1, true);
+        bytes memory sig = _regSig(a1Pk, owner, uint64(block.timestamp));
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.BadKey.selector, a1Key));
-        agents.registerAgent(a1Key, "again", 0, PAY, 1, 1, true);
-        vm.stopPrank();
+        vm.prank(owner);
+        agents.registerAgent(n, uint64(block.timestamp), sig);
         (bool ok, bytes32 code) = agents.status(999);
         assertFalse(ok);
         assertEq(code, "UNKNOWN_AGENT");
     }
 
-    function test_onlyAuthorisedSpendersCanCharge() public {
+    function test_onlyAuthorisedSpendersCanChargeOrRefund() public {
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotSpender.selector, address(this)));
         agents.consume(a1, LANDLORD, address(usd), 1e6);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotSpender.selector, address(this)));
+        agents.consumeDeal(a1, LANDLORD, address(usd), 1e6);
+        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotSpender.selector, address(this)));
+        agents.refund(a1, address(usd), 1e6, block.timestamp / 1 days);
         vm.prank(owner);
         agents.setSpender(address(vault), false);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.NotSpender.selector, address(vault)));
         _payFor(a1, 1e6, D1);
     }
 
-    function test_networkLinkAndBanAreGuarded() public {
+    function test_refundNeverGoesBelowZero() public {
+        _payFor(a1, 2e6, D1);
+        uint256 day = block.timestamp / 1 days;
+        vm.prank(address(net));
+        agents.refund(a1, address(usd), 5e6, day);
+        assertEq(agents.spentToday(a1, address(usd)), 0);
+        assertEq(agents.humanSpentToday(owner, address(usd)), 0);
+    }
+
+    function test_networkLinkBanAndUnbanAreGuarded() public {
         vm.expectRevert(IAgentRegistry.NetworkAlreadySet.selector);
         agents.setNetwork(address(1));
         vm.expectRevert(IAgentRegistry.OnlyNetwork.selector);
@@ -344,12 +336,39 @@ contract AgentsTest is Base {
         agents.setNetwork(address(1));
         vm.expectRevert(IAgentRegistry.OnlyNetwork.selector);
         agents.ban(a1);
+        vm.expectRevert(IAgentRegistry.OnlyNetwork.selector);
+        agents.unban(a1);
         vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.UnknownAgent.selector, 42));
         vm.prank(address(net));
         agents.ban(42);
+        vm.prank(address(net));
+        agents.ban(a1);
+        assertEq(_code(a1, 1e6), "AGENT_BANNED");
+        vm.expectEmit(true, false, false, false, address(agents));
+        emit IAgentRegistry.AgentUnbanned(a1);
+        vm.prank(address(net));
+        agents.unban(a1);
+        assertEq(_code(a1, 1e6), bytes32(0));
     }
 
-    // =================================================================== phase A: the vault
+    /// Perf: one call returns every agent with status and today's spend.
+    function test_agentsView() public {
+        _payFor(a1, 1e6, D1);
+        vm.prank(owner);
+        agents.revokeAgent(a2, "gone");
+        IAgentRegistry.AgentView[] memory v = agents.agentsView(owner);
+        assertEq(v.length, 2);
+        assertEq(v[0].id, a1);
+        assertTrue(v[0].ok);
+        assertEq(v[0].spentToday, 1e6);
+        assertEq(v[0].agent.key, a1Key);
+        assertEq(v[1].id, a2);
+        assertFalse(v[1].ok);
+        assertEq(v[1].code, "AGENT_REVOKED");
+        assertEq(agents.agentsView(makeAddr("nobody")).length, 0);
+    }
+
+    // =================================================================== the vault
 
     function test_payForAgentHappyPath() public {
         vm.expectEmit(true, true, false, true, address(vault));
@@ -358,6 +377,33 @@ contract AgentsTest is Base {
         assertEq(usd.balanceOf(landlord), 3e6);
         assertEq(agents.spentToday(a1, address(usd)), 3e6);
         assertEq(vault.spentToday(LANDLORD), 3e6);
+    }
+
+    /// S-1: the vault pays only for agents of its own human, even if another human made it their spender.
+    function test_payForAgentOnlyForTheVaultsHuman() public {
+        vm.prank(bob);
+        agents.setSpender(address(vault), true); // bob tries to charge his agent through owner's vault
+        vm.expectRevert(abi.encodeWithSelector(GuardedVault.NotOurAgent.selector, b1));
+        _payFor(b1, 1e6, D1);
+        assertEq(usd.balanceOf(landlord), 0);
+    }
+
+    /// S-8: once a registry is linked, the plain path is closed, so agent rules can't be skipped.
+    function test_plainPayClosedOnceARegistryIsLinked() public {
+        vm.expectRevert(GuardedVault.UseAgentPath.selector);
+        vm.prank(vaultSigner);
+        vault.pay(LANDLORD, address(usd), 1e6, D1);
+        vm.prank(owner);
+        agents.freeze(true);
+        vm.expectRevert(GuardedVault.UseAgentPath.selector);
+        vm.prank(vaultSigner);
+        vault.pay(LANDLORD, address(usd), 1e6, D1);
+        // unlinking reopens it (owner decision)
+        vm.prank(owner);
+        vault.setAgentRegistry(IAgentRegistry(address(0)));
+        vm.prank(vaultSigner);
+        vault.pay(LANDLORD, address(usd), 1e6, D1);
+        assertEq(usd.balanceOf(landlord), 1e6);
     }
 
     function test_payForAgentStillAppliesEveryVaultRule() public {
@@ -413,301 +459,68 @@ contract AgentsTest is Base {
         assertEq(block.timestamp / 1 days, day);
     }
 
-    // =================================================================== phase B: bonds
+    // =================================================================== M-8: the MEMORY permission
 
-    function test_constructorRejectsBadParams() public {
-        vm.expectRevert(AgentNetwork.BadParams.selector);
-        new AgentNetwork(agents, IERC20(address(usd)), arbiter, 0, 1, 1, 1, 1);
-        vm.expectRevert(AgentNetwork.BadParams.selector);
-        new AgentNetwork(agents, IERC20(address(usd)), arbiter, 1, 1, 1, 10_001, 1);
-        vm.expectRevert(AgentNetwork.BadParams.selector);
-        new AgentNetwork(agents, IERC20(address(usd)), address(0), 1, 1, 1, 1, 1);
-    }
-
-    function test_bondAndWithdraw() public {
-        vm.expectRevert(AgentNetwork.BadAmount.selector);
+    /// This deployment's agent-lane key registered as agent `me`, and the anchor linked to it.
+    function _linkMemoryGate(uint32 perms) internal returns (uint256 me) {
+        me = _register(owner, agentPk, "this deployment", 0, perms, 1e6, 1e6, false);
         vm.prank(owner);
-        net.bond(a1, 0);
-        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.UnknownAgent.selector, 77));
+        anchorC.linkAgent(agents, me);
+    }
+
+    function _anchorAgentMemory(bytes16 id) internal {
+        MemoryAnchor.Memory memory m = _mem(id, 2);
+        bytes memory sig = _signMem(agentPk, m);
+        vm.prank(submitter);
+        anchorC.anchor(m, sig, "bafycid");
+    }
+
+    function test_memoryGateNeedsTheMemoryPermission() public {
+        _anchorAgentMemory(bytes16(uint128(1))); // not linked: lane rules only
+        uint256 me = _linkMemoryGate(PAY | MEM);
+        assertEq(address(anchorC.agentRegistry()), address(agents));
+        assertEq(anchorC.agentId(), me);
+        _anchorAgentMemory(bytes16(uint128(2)));
+
         vm.prank(owner);
-        net.bond(77, 1e6);
+        agents.setPermissions(me, PAY);
+        MemoryAnchor.Memory memory m = _mem(bytes16(uint128(3)), 2);
+        bytes memory sig = _signMem(agentPk, m);
+        vm.expectRevert(MemoryAnchor.NoMemoryPermission.selector);
+        vm.prank(submitter);
+        anchorC.anchor(m, sig, "bafycid");
 
-        vm.prank(owner);
-        net.bond(a1, 15e6);
-        assertTrue(net.isBonded(a1));
-        assertEq(net.bondOf(a1), 15e6);
-
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotHumanOf.selector, a1));
-        vm.prank(bob);
-        net.withdrawBond(a1, 1e6);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.BelowMinBond.selector, a1));
-        vm.prank(owner);
-        net.withdrawBond(a1, 6e6); // would leave 9 < 10
-        vm.expectRevert(AgentNetwork.BadAmount.selector);
-        vm.prank(owner);
-        net.withdrawBond(a1, 16e6);
-        uint256 before = usd.balanceOf(owner);
-        vm.prank(owner);
-        net.withdrawBond(a1, 5e6);
-        vm.prank(owner);
-        net.withdrawBond(a1, 10e6); // leave the network entirely
-        assertEq(usd.balanceOf(owner), before + 15e6);
-        assertFalse(net.isBonded(a1));
+        // other lanes are never gated
+        MemoryAnchor.Memory memory u = _mem(bytes16(uint128(4)), 1);
+        bytes memory usig = _signMem(userPk, u);
+        vm.prank(submitter);
+        anchorC.anchor(u, usig, "bafycid");
     }
 
-    // =================================================================== phase B: reports and disputes
-
-    function _report(address reporter, uint256 agentId) internal returns (uint256) {
-        vm.prank(reporter);
-        return net.fileReport(agentId, 1, keccak256(abi.encode(agentId, reporter, block.timestamp)), "ipfs://evidence");
-    }
-
-    function test_reportRules() public {
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotBound.selector, attacker));
-        vm.prank(attacker);
-        net.fileReport(b1, 1, bytes32("e"), "");
-        vm.expectRevert(AgentNetwork.SelfReport.selector);
-        vm.prank(bob);
-        net.fileReport(b1, 1, bytes32("e"), "");
-        vm.expectRevert(AgentNetwork.BadParams.selector);
-        vm.prank(carol);
-        net.fileReport(b1, 1, bytes32(0), "");
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.UnknownReport.selector, 5));
-        net.report(5);
-    }
-
-    function test_uncontestedReportIsUpheldAndSlashes() public {
-        vm.prank(bob);
-        net.bond(b1, 20e6);
-        uint256 carolBefore = usd.balanceOf(carol);
-        uint256 r = _report(carol, b1);
-        assertEq(net.openReports(b1), 1);
-        // the accused cannot pull the bond while the report is open
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.OpenReports.selector, b1));
-        vm.prank(bob);
-        net.withdrawBond(b1, 20e6);
-        vm.expectRevert(AgentNetwork.WindowOpen.selector);
-        net.finalize(r);
-        vm.warp(block.timestamp + WINDOW + 1);
-        vm.expectEmit(true, true, false, true, address(net));
-        emit AgentNetwork.ReportUpheld(r, b1, 4e6, false); // 20% of 20
-        net.finalize(r);
-        assertEq(net.bondOf(b1), 16e6);
-        assertEq(usd.balanceOf(carol), carolBefore + 4e6); // report bond back + slash
-        assertEq(net.record(b1).reportsUpheld, 1);
-        assertEq(net.openReports(b1), 0);
-        assertEq(uint8(net.report(r).status), uint8(AgentNetwork.ReportStatus.Upheld));
-        vm.expectRevert(AgentNetwork.WrongStatus.selector);
-        net.finalize(r);
-    }
-
-    function test_contestedReportArbiterUpholds() public {
-        vm.prank(bob);
-        net.bond(b1, 20e6);
-        uint256 r = _report(carol, b1);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotHumanOf.selector, b1));
-        vm.prank(carol);
-        net.contest(r);
-        vm.prank(bob);
-        net.contest(r);
-        vm.expectRevert(AgentNetwork.WrongStatus.selector);
-        net.finalize(r);
-        vm.expectRevert(AgentNetwork.OnlyArbiter.selector);
-        vm.prank(carol);
-        net.resolve(r, true);
-        uint256 carolBefore = usd.balanceOf(carol);
-        vm.prank(arbiter);
-        net.resolve(r, true);
-        // carol: her bond + bob's contest bond + the 20% slash
-        assertEq(usd.balanceOf(carol), carolBefore + REPORT_BOND * 2 + 4e6);
-    }
-
-    function test_contestedReportArbiterDismisses() public {
-        vm.prank(bob);
-        net.bond(b1, 20e6);
-        uint256 r = _report(carol, b1);
-        vm.prank(bob);
-        net.contest(r);
-        uint256 bobBefore = usd.balanceOf(bob);
-        vm.expectEmit(true, true, false, false, address(net));
-        emit AgentNetwork.ReportDismissed(r, b1);
-        vm.prank(arbiter);
-        net.resolve(r, false);
-        assertEq(usd.balanceOf(bob), bobBefore + REPORT_BOND * 2);
-        assertEq(net.bondOf(b1), 20e6);
-        assertEq(net.falseReports(carol), 1);
-        assertEq(net.record(b1).reportsDismissed, 1);
-        vm.expectRevert(AgentNetwork.WrongStatus.selector);
-        vm.prank(arbiter);
-        net.resolve(r, true);
-    }
-
-    function test_contestWindowCloses() public {
-        uint256 r = _report(carol, b1);
-        vm.warp(block.timestamp + WINDOW + 1);
-        vm.expectRevert(AgentNetwork.WindowClosed.selector);
-        vm.prank(bob);
-        net.contest(r);
-    }
-
-    function test_threeUpheldReportsBanTheAgent() public {
-        vm.prank(bob);
-        net.bond(b1, 20e6);
-        for (uint256 i; i < 3; ++i) {
-            uint256 r = _report(carol, b1);
-            vm.warp(block.timestamp + WINDOW + 1);
-            net.finalize(r);
-        }
-        assertTrue(agents.banned(b1));
-        (bool ok, bytes32 code) = agents.status(b1);
-        assertFalse(ok);
-        assertEq(code, "AGENT_BANNED");
-        assertEq(net.reputation(b1), 0);
-    }
-
-    // =================================================================== phase B: reputation
-
-    function test_reputationReflectsHistory() public {
-        assertEq(net.reputation(b1), 500);
-        vm.prank(bob);
-        net.bond(b1, 30e6); // 3 x minBond -> +60
-        assertEq(net.reputation(b1), 560);
-        vm.prank(bob);
-        net.bond(b1, 50e6); // 8 x minBond: capped at +100
-        assertEq(net.reputation(b1), 600);
-        uint256 r = _report(carol, b1);
-        vm.warp(block.timestamp + WINDOW + 1);
-        net.finalize(r); // -150; the bond shrinks by 20% (64 = 6 x minBond, still capped at +100)
-        assertEq(net.reputation(b1), 450);
-        assertEq(net.reputation(999), 0);
-    }
-
-    // =================================================================== phase B: agent-to-agent messages
-
-    function _msgSig(uint256 pk, uint256 from, uint256 to, bytes32 body, uint256 nonce, uint64 dl) internal view returns (bytes memory) {
-        return _sign(pk, net.messageDigest(from, to, body, nonce, dl));
-    }
-
-    function _verify(uint256 from, uint256 to, bytes memory sig, uint64 dl) internal view returns (bytes32 code) {
-        (, code) = net.verifyMessage(from, to, bytes32("hello"), 1, dl, sig);
-    }
-
-    function test_agentMessages() public {
-        uint64 dl = uint64(block.timestamp + 1 hours);
-        vm.prank(owner);
-        net.bond(a1, MIN_BOND);
-        bytes memory good = _msgSig(a1Pk, a1, b1, bytes32("hello"), 1, dl);
-        (bool ok,) = net.verifyMessage(a1, b1, bytes32("hello"), 1, dl, good);
-        assertTrue(ok);
-        assertEq(_verify(a1, b1, _msgSig(b1Pk, a1, b1, bytes32("hello"), 1, dl), dl), "BAD_SIGNATURE"); // wrong key
-        assertEq(_verify(a1, b1, hex"1234", dl), "BAD_SIGNATURE");
-        assertEq(_verify(a2, b1, _msgSig(a2Pk, a2, b1, bytes32("hello"), 1, dl), dl), "NOT_BONDED");
-        vm.warp(dl + 1);
-        assertEq(_verify(a1, b1, good, dl), "EXPIRED");
-        vm.warp(dl - 1);
-        vm.prank(owner);
-        agents.setPermissions(a1, PAY);
-        assertEq(_verify(a1, b1, good, dl), "NOT_PERMITTED");
-        vm.prank(bob);
-        agents.revokeAgent(b1, "retired");
-        assertEq(_verify(a1, b1, good, dl), "RECIPIENT_INACTIVE");
+    function test_memoryGateStopsAFrozenOrMismatchedAgent() public {
+        _linkMemoryGate(ALL);
         vm.prank(owner);
         agents.freeze(true);
-        assertEq(_verify(a1, b1, good, dl), "HUMAN_FROZEN");
-        assertTrue(net.domainSeparator() != bytes32(0));
-    }
+        MemoryAnchor.Memory memory m = _mem(bytes16(uint128(5)), 2);
+        bytes memory sig = _signMem(agentPk, m);
+        vm.expectRevert(abi.encodeWithSelector(MemoryAnchor.AgentBlocked.selector, bytes32("HUMAN_FROZEN")));
+        vm.prank(submitter);
+        anchorC.anchor(m, sig, "bafycid");
+        vm.prank(owner);
+        agents.freeze(false);
 
-    // =================================================================== phase B: agent-to-agent deals
+        vm.prank(owner);
+        anchorC.linkAgent(agents, a1); // a1's key is not this deployment's agent-lane key
+        vm.expectRevert(MemoryAnchor.AgentKeyMismatch.selector);
+        vm.prank(submitter);
+        anchorC.anchor(m, sig, "bafycid");
 
-    function _openDeal(uint256 amount) internal returns (uint256) {
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        vm.prank(attacker);
+        anchorC.linkAgent(IAgentRegistry(address(0)), 0);
         vm.prank(owner);
-        return net.openDeal(a1, b1, address(usd), amount, keccak256("terms"), uint64(block.timestamp + 1 days));
-    }
-
-    function _bondBoth() internal {
-        vm.prank(owner);
-        net.bond(a1, MIN_BOND);
-        vm.prank(bob);
-        net.bond(b1, MIN_BOND);
-        bytes32[] memory p = new bytes32[](1);
-        p[0] = bytes32(b1);
-        vm.prank(owner);
-        agents.setPayees(a1, p, true);
-    }
-
-    function test_dealConfirmedPaysAndBuildsReputation() public {
-        _bondBoth();
-        uint256 bobBefore = usd.balanceOf(bob);
-        uint256 d = _openDeal(3e6);
-        assertEq(usd.balanceOf(address(net)), 2 * MIN_BOND + 3e6);
-        assertEq(agents.spentToday(a1, address(usd)), 3e6); // counts against a1's limit and the quota
-        assertEq(agents.humanSpentToday(owner, address(usd)), 3e6);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotHumanOf.selector, a1));
-        vm.prank(bob);
-        net.confirmDeal(d);
-        vm.prank(owner);
-        net.confirmDeal(d);
-        assertEq(usd.balanceOf(bob), bobBefore + 3e6);
-        assertEq(net.record(a1).dealsCompleted, 1);
-        assertEq(net.record(b1).dealsCompleted, 1);
-        assertEq(net.record(b1).volume, 3e6);
-        assertEq(net.reputation(b1), 530); // 500 + 10 deal + 20 bond
-        assertEq(uint8(net.deal(d).status), uint8(AgentNetwork.DealStatus.Completed));
-        assertEq(net.dealCount(), 1);
-        vm.expectRevert(AgentNetwork.WrongStatus.selector);
-        vm.prank(owner);
-        net.confirmDeal(d);
-    }
-
-    function test_dealCancelAndReclaim() public {
-        _bondBoth();
-        uint256 ownerBefore = usd.balanceOf(owner);
-        uint256 d = _openDeal(2e6);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotHumanOf.selector, b1));
-        vm.prank(owner);
-        net.cancelDeal(d);
-        vm.prank(bob);
-        net.cancelDeal(d);
-        assertEq(usd.balanceOf(owner), ownerBefore);
-
-        uint256 d2 = _openDeal(1e6);
-        vm.expectRevert(AgentNetwork.DeadlineNotPassed.selector);
-        vm.prank(owner);
-        net.reclaim(d2);
-        vm.warp(block.timestamp + 1 days + 1);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotHumanOf.selector, a1));
-        vm.prank(bob);
-        net.reclaim(d2);
-        vm.prank(owner);
-        net.reclaim(d2);
-        assertEq(usd.balanceOf(owner), ownerBefore);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.UnknownDeal.selector, 9));
-        net.deal(9);
-    }
-
-    function test_dealRules() public {
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotBonded.selector, a1));
-        _openDeal(1e6);
-        _bondBoth();
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotHumanOf.selector, a1));
-        vm.prank(bob);
-        net.openDeal(a1, b1, address(usd), 1e6, 0, uint64(block.timestamp + 1));
-        vm.expectRevert(AgentNetwork.SameHuman.selector);
-        vm.prank(owner);
-        net.openDeal(a1, a2, address(usd), 1e6, 0, uint64(block.timestamp + 1));
-        vm.expectRevert(AgentNetwork.DeadlinePassed.selector);
-        vm.prank(owner);
-        net.openDeal(a1, b1, address(usd), 1e6, 0, uint64(block.timestamp));
-        // the paying agent's limits apply to deals too
-        vm.expectRevert(abi.encodeWithSelector(IAgentRegistry.AgentBlocked.selector, bytes32("OVER_AGENT_TX_LIMIT")));
-        _openDeal(4e6 + 1);
-        vm.prank(owner);
-        agents.setPermissions(a1, PAY);
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.NotPermitted.selector, a1));
-        _openDeal(1e6);
-        vm.prank(bob);
-        agents.revokeAgent(b1, "gone");
-        vm.expectRevert(abi.encodeWithSelector(AgentNetwork.AgentNotActive.selector, b1, bytes32("AGENT_REVOKED")));
-        _openDeal(1e6);
+        anchorC.linkAgent(IAgentRegistry(address(0)), a1); // unlink
+        assertEq(anchorC.agentId(), 0);
+        _anchorAgentMemory(bytes16(uint128(5)));
     }
 }

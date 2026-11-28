@@ -290,4 +290,11 @@ contract MemoryAnchorTest is Base {
         (bool ok,) = address(anchorC).call(abi.encodeCall(MemoryAnchor.anchor, (m, sig, "bafycid")));
         assertEq(ok, shouldPass);
     }
+
+    function test_ownershipCannotBeRenounced() public {
+        vm.expectRevert(MemoryAnchor.NoRenounce.selector);
+        vm.prank(owner);
+        anchorC.renounceOwnership();
+        assertEq(anchorC.owner(), owner);
+    }
 }

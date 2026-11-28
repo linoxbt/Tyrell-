@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.28;
 
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
 import {IQieId} from "./interfaces/IQieId.sol";
 
@@ -11,19 +13,25 @@ import {IQieId} from "./interfaces/IQieId.sol";
 ///         verified against the QIE ID record store when it is made AND every time an agent is used:
 ///         if the name expires, lapses or moves to another address, all of that human's agents stop.
 ///
-///         Per agent: a key, a label, a metadata hash (model, operator), permissions, a per-payment
-///         limit, a daily limit and an optional payee allowlist. Per human: a daily quota per token
-///         shared by all their agents, a freeze switch, and the spenders (vaults, escrow) allowed to
-///         charge their agents. Revocation is per agent and permanent; a key is never reused.
+///         Per agent: a key, the one token it spends, a label, a metadata hash (model, operator),
+///         permissions, a per-payment limit and a daily limit (both in its token), and an optional payee
+///         allowlist. Per human: a daily quota per token shared by all their agents, a freeze switch,
+///         and the spenders (vaults, escrow) allowed to charge their agents. Revocation is per agent and
+///         permanent; a key is never reused.
+///
+///         The agent key co-signs its own registration (EIP-712 RegisterAgent), so nobody can claim
+///         another deployment's agent key, which is public, before its real human does.
 /// @dev "Today" is block.timestamp / 1 days (UTC), the same boundary GuardedVault and the policy
-///      engine use. A token with no quota set cannot be spent by any agent (fail closed).
-contract AgentRegistry is IAgentRegistry {
+///      engine use. A token with no quota set cannot be spent by any agent (fail closed). An agent's
+///      daily limit is one number for the agent (it spends one token), not one per token.
+contract AgentRegistry is IAgentRegistry, EIP712 {
     uint32 public constant PERM_PAY = 1; // propose payments to the human's payees
     uint32 public constant PERM_MEMORY = 2; // write memories on the human's behalf
     uint32 public constant PERM_MESSAGE = 4; // send signed agent-to-agent messages
     uint32 public constant PERM_DEAL = 8; // be the paying side of an agent-to-agent deal
     uint32 public constant MAX_AGENTS = 64;
     string public constant QIE_RECORD = "qie";
+    bytes32 public constant REGISTER_AGENT_TYPEHASH = keccak256("RegisterAgent(address human,address key,uint64 deadline)");
 
     IQieId public immutable qieIdStore;
     address public immutable deployer;
@@ -41,9 +49,9 @@ contract AgentRegistry is IAgentRegistry {
     mapping(address key => bool) public keyUsed;
     mapping(uint256 agentId => bool) public banned;
     mapping(uint256 agentId => mapping(bytes32 payeeId => bool)) public payeeAllowed;
-    mapping(uint256 agentId => mapping(address token => mapping(uint256 day => uint256))) private _agentSpent;
+    mapping(uint256 agentId => mapping(uint256 day => uint256)) private _agentSpent;
 
-    constructor(IQieId qieIdStore_) {
+    constructor(IQieId qieIdStore_) EIP712("TyrellAgentRegistry", "1") {
         qieIdStore = qieIdStore_;
         deployer = msg.sender;
     }
@@ -94,32 +102,32 @@ contract AgentRegistry is IAgentRegistry {
     // ------------------------------------------------------------------ agents
 
     /// @notice Register an agent under the caller, who must be bound to a QIE ID. Returns the agent id.
-    function registerAgent(
-        address key,
-        string calldata label,
-        bytes32 metaHash,
-        uint32 permissions,
-        uint128 perTxLimit,
-        uint128 dailyLimit,
-        bool anyPayee
-    ) external returns (uint256 agentId) {
+    ///         `keySig` is the agent key's EIP-712 signature of RegisterAgent(human = caller, key, deadline):
+    ///         only the holder of the agent key can consent to being this human's agent.
+    function registerAgent(NewAgent calldata n, uint64 deadline, bytes calldata keySig) external returns (uint256 agentId) {
         if (!isBound(msg.sender)) revert NotBound(msg.sender);
+        address key = n.key;
         if (key == address(0) || key == msg.sender || keyUsed[key] || bytes(_humans[key].qieId).length != 0) revert BadKey(key);
+        if (n.token == address(0)) revert BadToken();
+        if (block.timestamp > deadline) revert SignatureExpired();
+        (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecover(registrationDigest(msg.sender, key, deadline), keySig);
+        if (err != ECDSA.RecoverError.NoError || signer != key) revert BadKeySignature();
         Human storage hu = _humans[msg.sender];
         if (hu.agentCount >= MAX_AGENTS) revert TooManyAgents();
         _agents.push(
             Agent({
                 key: key,
                 human: msg.sender,
-                label: label,
-                metaHash: metaHash,
-                permissions: permissions,
-                perTxLimit: perTxLimit,
-                dailyLimit: dailyLimit,
+                token: n.token,
+                label: n.label,
+                metaHash: n.metaHash,
+                permissions: n.permissions,
+                perTxLimit: n.perTxLimit,
+                dailyLimit: n.dailyLimit,
                 createdAt: uint64(block.timestamp),
                 revokedAt: 0,
                 revoked: false,
-                anyPayee: anyPayee
+                anyPayee: n.anyPayee
             })
         );
         agentId = _agents.length;
@@ -127,10 +135,20 @@ contract AgentRegistry is IAgentRegistry {
         _agentOfKey[key] = agentId;
         _agentsOf[msg.sender].push(agentId);
         hu.agentCount++;
-        emit AgentRegistered(agentId, msg.sender, key, label, metaHash);
-        emit AgentPermissionsSet(agentId, permissions);
-        emit AgentLimitsSet(agentId, perTxLimit, dailyLimit);
-        if (anyPayee) emit AgentAnyPayeeSet(agentId, true);
+        emit AgentRegistered(agentId, msg.sender, key, n.label, n.metaHash);
+        emit AgentTokenSet(agentId, n.token);
+        emit AgentPermissionsSet(agentId, n.permissions);
+        emit AgentLimitsSet(agentId, n.perTxLimit, n.dailyLimit);
+        if (n.anyPayee) emit AgentAnyPayeeSet(agentId, true);
+    }
+
+    /// @notice The EIP-712 digest an agent key signs to consent to being `human`'s agent.
+    function registrationDigest(address human_, address key, uint64 deadline) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(REGISTER_AGENT_TYPEHASH, human_, key, deadline)));
+    }
+
+    function domainSeparator() external view returns (bytes32) {
+        return _domainSeparatorV4();
     }
 
     function setPermissions(uint256 agentId, uint32 permissions) external {
@@ -187,29 +205,60 @@ contract AgentRegistry is IAgentRegistry {
         return agentId != 0 && agentId <= _agents.length && _agents[agentId - 1].permissions & permission == permission;
     }
 
-    /// @notice Would charging `amount` of `token` to `agentId` for `payeeId` pass, today?
+    /// @notice Would paying `amount` of `token` to payee `payeeId` from `agentId` pass, today? (PAY)
     function check(uint256 agentId, bytes32 payeeId, address token, uint256 amount) public view returns (bool ok, bytes32 code) {
+        return _check(agentId, PERM_PAY, payeeId, token, amount);
+    }
+
+    /// @notice The same for the paying side of an agent-to-agent deal (DEAL; the payee is bytes32(toAgent)).
+    function checkDeal(uint256 agentId, bytes32 payeeId, address token, uint256 amount) public view returns (bool ok, bytes32 code) {
+        return _check(agentId, PERM_DEAL, payeeId, token, amount);
+    }
+
+    /// @notice Charge a payment to an agent and its human's shared quota. Only spenders the agent's
+    ///         human authorised (their GuardedVault) can call this.
+    function consume(uint256 agentId, bytes32 payeeId, address token, uint256 amount) external {
+        _consume(agentId, PERM_PAY, payeeId, token, amount);
+    }
+
+    /// @notice Charge a deal escrow to the paying agent and its human's quota (the network escrow).
+    function consumeDeal(uint256 agentId, bytes32 payeeId, address token, uint256 amount) external {
+        _consume(agentId, PERM_DEAL, payeeId, token, amount);
+    }
+
+    /// @notice An authorised spender gives back a charge that never left (a cancelled or reclaimed deal):
+    ///         `amount` is taken off the agent's and the human's spend for `day` (never below zero).
+    function refund(uint256 agentId, address token, uint256 amount, uint256 day) external {
+        address h = humanOf(agentId);
+        if (!isSpender[h][msg.sender]) revert NotSpender(msg.sender);
+        uint256 a = _agentSpent[agentId][day];
+        _agentSpent[agentId][day] = a > amount ? a - amount : 0;
+        uint256 hs = _humanSpent[h][token][day];
+        _humanSpent[h][token][day] = hs > amount ? hs - amount : 0;
+        emit AgentRefunded(agentId, h, token, amount, day, msg.sender);
+    }
+
+    function _check(uint256 agentId, uint32 perm, bytes32 payeeId, address token, uint256 amount) private view returns (bool ok, bytes32 code) {
         (ok, code) = status(agentId);
         if (!ok) return (ok, code);
         Agent storage a = _agents[agentId - 1];
-        if (a.permissions & PERM_PAY == 0) return (false, "NOT_PERMITTED");
+        if (a.permissions & perm == 0) return (false, "NOT_PERMITTED");
+        if (token != a.token) return (false, "WRONG_TOKEN");
         if (!a.anyPayee && !payeeAllowed[agentId][payeeId]) return (false, "PAYEE_NOT_DELEGATED");
         if (amount == 0 || amount > a.perTxLimit) return (false, "OVER_AGENT_TX_LIMIT");
         uint256 day = block.timestamp / 1 days;
-        if (_agentSpent[agentId][token][day] + amount > a.dailyLimit) return (false, "OVER_AGENT_DAILY_LIMIT");
+        if (_agentSpent[agentId][day] + amount > a.dailyLimit) return (false, "OVER_AGENT_DAILY_LIMIT");
         if (_humanSpent[a.human][token][day] + amount > quota[a.human][token]) return (false, "OVER_HUMAN_QUOTA");
         return (true, bytes32(0));
     }
 
-    /// @notice Charge a spend to an agent and its human's shared quota. Only spenders the agent's
-    ///         human authorised (their GuardedVault, the network escrow) can call this.
-    function consume(uint256 agentId, bytes32 payeeId, address token, uint256 amount) external {
+    function _consume(uint256 agentId, uint32 perm, bytes32 payeeId, address token, uint256 amount) private {
         address h = humanOf(agentId);
         if (!isSpender[h][msg.sender]) revert NotSpender(msg.sender);
-        (bool ok, bytes32 code) = check(agentId, payeeId, token, amount);
+        (bool ok, bytes32 code) = _check(agentId, perm, payeeId, token, amount);
         if (!ok) revert AgentBlocked(code);
         uint256 day = block.timestamp / 1 days;
-        _agentSpent[agentId][token][day] += amount;
+        _agentSpent[agentId][day] += amount;
         _humanSpent[h][token][day] += amount;
         emit AgentSpent(agentId, h, payeeId, token, amount, msg.sender);
     }
@@ -224,12 +273,23 @@ contract AgentRegistry is IAgentRegistry {
         emit NetworkSet(network_);
     }
 
-    /// @notice The network bans an agent after repeated upheld reports. Permanent.
+    /// @notice The network bans an agent when its arbiter upholds repeated reports.
     function ban(uint256 agentId) external {
-        if (msg.sender != network || network == address(0)) revert OnlyNetwork();
-        if (agentId == 0 || agentId > _agents.length) revert UnknownAgent(agentId);
+        _onlyNetwork(agentId);
         banned[agentId] = true;
         emit AgentBanned(agentId);
+    }
+
+    /// @notice The network lifts a ban when its arbiter grants an appeal.
+    function unban(uint256 agentId) external {
+        _onlyNetwork(agentId);
+        banned[agentId] = false;
+        emit AgentUnbanned(agentId);
+    }
+
+    function _onlyNetwork(uint256 agentId) private view {
+        if (msg.sender != network || network == address(0)) revert OnlyNetwork();
+        if (agentId == 0 || agentId > _agents.length) revert UnknownAgent(agentId);
     }
 
     // ------------------------------------------------------------------ views
@@ -240,6 +300,18 @@ contract AgentRegistry is IAgentRegistry {
 
     function agentsOf(address h) external view returns (uint256[] memory) {
         return _agentsOf[h];
+    }
+
+    /// @notice Every agent `h` ever registered, with live status and today's spend, in one call.
+    function agentsView(address h) external view returns (AgentView[] memory out) {
+        uint256[] storage ids = _agentsOf[h];
+        out = new AgentView[](ids.length);
+        uint256 day = block.timestamp / 1 days;
+        for (uint256 i; i < ids.length; ++i) {
+            uint256 id = ids[i];
+            (bool ok, bytes32 code) = status(id);
+            out[i] = AgentView({id: id, agent: _agents[id - 1], ok: ok, code: code, spentToday: _agentSpent[id][day]});
+        }
     }
 
     function agentCount() external view returns (uint256) {
@@ -261,8 +333,10 @@ contract AgentRegistry is IAgentRegistry {
         return _agentOfKey[key];
     }
 
+    /// @notice What `agentId` spent today in `token` (an agent spends only its own token: 0 for any other).
     function spentToday(uint256 agentId, address token) external view returns (uint256) {
-        return _agentSpent[agentId][token][block.timestamp / 1 days];
+        if (agentId == 0 || agentId > _agents.length || _agents[agentId - 1].token != token) return 0;
+        return _agentSpent[agentId][block.timestamp / 1 days];
     }
 
     function humanSpentToday(address h, address token) external view returns (uint256) {

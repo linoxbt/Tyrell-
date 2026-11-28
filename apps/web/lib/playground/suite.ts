@@ -130,6 +130,15 @@ async function signMemory(w: World, m: ReturnType<typeof memory>, k: PrivateKeyA
   return sig;
 }
 
+/** AgentRegistry.registerAgent arguments: the agent key consents (EIP-712 RegisterAgent) to being `human`'s agent. */
+async function registration(c: Chain, agents: Address, human: Address, k: PrivateKeyAccount, label: string, perms: number, perTx: number, daily: number, anyPayee: boolean, token: Address) {
+  const dl = c.timestamp + 3_600n;
+  const digest = await c.read<Hex>(agents, "AgentRegistry", "registrationDigest", [human, k.address, dl]);
+  const sig = await k.sign({ hash: digest });
+  c.steps.push({ kind: "sign", text: `${c.who(k.address)} consents to being ${c.who(human)}'s agent (EIP-712 RegisterAgent)` });
+  return [{ key: k.address, token, label, metaHash: keccak256(toBytes("model: any")), permissions: perms, perTxLimit: USD(perTx), dailyLimit: USD(daily), anyPayee }, dl, sig] as const;
+}
+
 const balance = (w: World, who: Address, token = w.usd) => w.c.read<bigint>(token, "TyrellTestUSD", "balanceOf", [who]);
 const D = (s: string) => keccak256(toBytes(s)).slice(0, 34) as Hex;
 
@@ -332,10 +341,12 @@ async function agentsWorld(c: Chain): Promise<World> {
   await c.send(w.owner, w.vault, "GuardedVault", "setGlobalDailyCap", [w.usd, USD(100)]);
   const b = await addPayee(w, "school", c.label(addr("school"), "school"), 5, 20);
   await c.send(w.owner, w.ledger, "TyrellLedger", "addPayee", [b.p, payeeIdOf("school"), b.nonce, b.dl, b.sig]);
-  return { ...w, qie, agents, alice, eve: c.label(addr("eve"), "eve"), a1: c.label(key("a1").address, "agent #1 key"), a2: c.label(key("a2").address, "agent #2 key") };
+  const k1 = key("a1");
+  const k2 = key("a2");
+  return { ...w, qie, agents, alice, eve: c.label(addr("eve"), "eve"), k1, k2, a1: c.label(k1.address, "agent #1 key"), a2: c.label(k2.address, "agent #2 key") };
 }
 
-const A = (w: World) => w as World & { qie: Address; agents: Address; alice: Address; eve: Address; a1: Address; a2: Address };
+const A = (w: World) => w as World & { qie: Address; agents: Address; alice: Address; eve: Address; a1: Address; a2: Address; k1: PrivateKeyAccount; k2: PrivateKeyAccount };
 const payFor = (w: World, id: bigint, payee: string, amount: number, decision: string) =>
   w.c.send(w.signer, w.vault, "GuardedVault", "payForAgent", [id, payeeIdOf(payee), w.usd, USD(amount), D(decision)]);
 const payForExpect = (w: World, id: bigint, payee: string, amount: number, decision: string, code: string) =>
@@ -353,7 +364,7 @@ const agentsGroup: Group = {
       run: async (w) => {
         const x = A(w);
         await w.c.expectRevert(x.eve, x.agents, "AgentRegistry", "bindQieId", ["alice.qie"], "QieIdNotOwned");
-        await w.c.expectRevert(x.eve, x.agents, "AgentRegistry", "registerAgent", [x.a1, "eve's agent", pad("0x0"), 1, USD(4), USD(5), true], "NotBound");
+        await w.c.expectRevert(x.eve, x.agents, "AgentRegistry", "registerAgent", await registration(w.c, x.agents, x.eve, x.k1, "eve's agent", 1, 4, 5, true, w.usd), "NotBound");
       },
     },
     {
@@ -366,12 +377,26 @@ const agentsGroup: Group = {
       },
     },
     {
-      name: "Two agents register under alice, each with its own limits",
-      why: "#1 rent agent: pay, 4 per payment, 5 per day, landlord delegated. #2 bills agent: pay, any payee. Shared quota: 6 per day.",
+      name: "Nobody can claim another person's agent key",
+      why: "Agent keys are public. eve (bound to eve.qie) tries to register alice's agent key: once with no consent from the key, once replaying the consent it gave alice.",
       run: async (w) => {
         const x = A(w);
-        await w.c.send(x.alice, x.agents, "AgentRegistry", "registerAgent", [x.a1, "rent agent", keccak256(toBytes("model: any")), 1, USD(4), USD(5), false]);
-        await w.c.send(x.alice, x.agents, "AgentRegistry", "registerAgent", [x.a2, "bills agent", keccak256(toBytes("model: any")), 1, USD(4), USD(5), true]);
+        await w.c.send(x.eve, x.qie, "TestQieId", "claim", ["eve.qie"]);
+        await w.c.send(x.eve, x.agents, "AgentRegistry", "bindQieId", ["eve.qie"]);
+        const [spec, dl] = await registration(w.c, x.agents, x.alice, x.k1, "rent agent", 1, 4, 5, false, w.usd);
+        const forged = await key("eve-key").sign({ hash: await w.c.read<Hex>(x.agents, "AgentRegistry", "registrationDigest", [x.eve, x.a1, dl]) });
+        await w.c.expectRevert(x.eve, x.agents, "AgentRegistry", "registerAgent", [spec, dl, forged], "BadKeySignature");
+        const [, , alicesConsent] = await registration(w.c, x.agents, x.alice, x.k1, "rent agent", 1, 4, 5, false, w.usd);
+        await w.c.expectRevert(x.eve, x.agents, "AgentRegistry", "registerAgent", [spec, dl, alicesConsent], "BadKeySignature");
+      },
+    },
+    {
+      name: "Two agents register under alice, each with its own limits",
+      why: "Each agent key signs its consent. #1 rent agent: pay, 4 per payment, 5 per day, landlord delegated. #2 bills agent: pay, any payee. Shared quota: 6 per day.",
+      run: async (w) => {
+        const x = A(w);
+        await w.c.send(x.alice, x.agents, "AgentRegistry", "registerAgent", await registration(w.c, x.agents, x.alice, x.k1, "rent agent", 1, 4, 5, false, w.usd));
+        await w.c.send(x.alice, x.agents, "AgentRegistry", "registerAgent", await registration(w.c, x.agents, x.alice, x.k2, "bills agent", 1, 4, 5, true, w.usd));
         await w.c.send(x.alice, x.agents, "AgentRegistry", "setPayees", [1n, [payeeIdOf("landlord")], true]);
         await w.c.send(x.alice, x.agents, "AgentRegistry", "setQuota", [w.usd, USD(6)]);
         await w.c.send(x.alice, x.agents, "AgentRegistry", "setSpender", [w.vault, true]);
@@ -381,9 +406,10 @@ const agentsGroup: Group = {
     },
     {
       name: "Agent #1 pays its delegated payee through payForAgent",
-      why: "The vault asks the registry first, then applies every ledger and cap rule.",
+      why: "The vault asks the registry first, then applies every ledger and cap rule. With the registry linked, the plain pay path is closed, so agent rules can't be skipped.",
       run: async (w) => {
         const x = A(w);
+        await w.c.expectRevert(w.signer, w.vault, "GuardedVault", "pay", [payeeIdOf("landlord"), w.usd, USD(1), D("a0")], "UseAgentPath");
         const r = await payFor(w, 1n, "landlord", 3, "a1");
         w.c.check(r.events.some((e) => e.name === "PaidForAgent"), "PaidForAgent emitted");
         w.c.check((await w.c.read<bigint>(x.agents, "AgentRegistry", "spentToday", [1n, w.usd])) === USD(3), "agent #1 spent 3 today");
@@ -462,7 +488,13 @@ async function networkWorld(c: Chain): Promise<World> {
   const qie = await c.deploy("TestQieId", owner, [], "QIE ID store (test)");
   const agents = await c.deploy("AgentRegistry", owner, [qie]);
   const arbiter = c.label(addr("arbiter"), "arbiter (council)");
-  const net = await c.deploy("AgentNetwork", owner, [agents, usd, arbiter, USD(10), USD(2), 3n * 86_400n, 2_000, 3]);
+  const council = c.label(addr("council"), "council (network owner)");
+  const net = await c.deploy("AgentNetwork", owner, [
+    agents,
+    usd,
+    council,
+    { arbiter, minBond: USD(10), reportBond: USD(2), contestWindow: 3n * 86_400n, ruleWindow: 7n * 86_400n, slashBps: 2_000, banAfter: 3 },
+  ]);
   await c.send(owner, agents, "AgentRegistry", "setNetwork", [net]);
   const people: Record<string, Address> = {};
   for (const name of ["alice", "bob", "carol"]) {
@@ -479,15 +511,15 @@ async function networkWorld(c: Chain): Promise<World> {
   const bKey = key("bob-agent");
   c.label(aKey.address, "alice's agent key");
   c.label(bKey.address, "bob's agent key");
-  await c.send(people.alice!, agents, "AgentRegistry", "registerAgent", [aKey.address, "alice's buyer", pad("0x0"), 1 | 4 | 8, USD(20), USD(40), true]);
-  await c.send(people.bob!, agents, "AgentRegistry", "registerAgent", [bKey.address, "bob's seller", pad("0x0"), 1 | 4 | 8, USD(20), USD(40), true]);
+  await c.send(people.alice!, agents, "AgentRegistry", "registerAgent", await registration(c, agents, people.alice!, aKey, "alice's buyer", 1 | 4 | 8, 20, 40, true, usd));
+  await c.send(people.bob!, agents, "AgentRegistry", "registerAgent", await registration(c, agents, people.bob!, bKey, "bob's seller", 1 | 4 | 8, 20, 40, true, usd));
   return { c, owner, usd, agents, net, arbiter, ...people, aKey, bKey } as unknown as World;
 }
 
 const N = (w: World) => w as World & { agents: Address; net: Address; arbiter: Address; alice: Address; bob: Address; carol: Address; aKey: PrivateKeyAccount; bKey: PrivateKeyAccount };
 
-async function report(w: World, n: ReturnType<typeof N>, tag: string) {
-  const r = await w.c.send(n.carol, n.net, "AgentNetwork", "fileReport", [2n, 1, keccak256(toBytes(tag)), `ipfs://evidence-${tag}`]);
+async function report(w: World, n: ReturnType<typeof N>, tag: string, reporter = n.carol) {
+  const r = await w.c.send(reporter, n.net, "AgentNetwork", "fileReport", [2n, 1, keccak256(toBytes(tag)), `ipfs://evidence-${tag}`]);
   return (r.events.find((e) => e.name === "ReportFiled")!.args.reportId as bigint) ?? 0n;
 }
 
@@ -509,8 +541,8 @@ const networkGroup: Group = {
       },
     },
     {
-      name: "A signed agent-to-agent message verifies on-chain; a forged one does not",
-      why: "bob's agent receives a quote request signed by alice's agent key (EIP-712), then one signed by the wrong key.",
+      name: "A signed agent-to-agent message verifies on-chain; a forged or replayed one does not",
+      why: "bob's agent receives a quote request signed by alice's agent key (EIP-712), then one signed by the wrong key, then the first one again after acting on it.",
       run: async (w) => {
         const n = N(w);
         const dl = w.c.timestamp + 3_600n;
@@ -522,6 +554,10 @@ const networkGroup: Group = {
         w.c.check(ok, "genuine message: trusted");
         const [ok2, code] = await w.c.read<[boolean, Hex]>(n.net, "AgentNetwork", "verifyMessage", [1n, 2n, body, 1n, dl, forged]);
         w.c.check(!ok2 && fmt(code) === "BAD_SIGNATURE", "forged message: BAD_SIGNATURE");
+        // bob records that he acted on it; the same signed message can't be replayed
+        await w.c.send(n.bob, n.net, "AgentNetwork", "acceptMessage", [1n, 2n, body, 1n, dl, good]);
+        const [ok3, code3] = await w.c.read<[boolean, Hex]>(n.net, "AgentNetwork", "verifyMessage", [1n, 2n, body, 1n, dl, good]);
+        w.c.check(!ok3 && fmt(code3) === "NONCE_USED", "replayed message: NONCE_USED");
       },
     },
     {
@@ -538,6 +574,21 @@ const networkGroup: Group = {
       },
     },
     {
+      name: "A seller who delivered can't be stiffed by a buyer who waits out the deadline",
+      why: "alice escrows 2; bob marks it delivered. Past the deadline alice can no longer take it back; she didn't confirm or dispute in 3 days, so bob claims it.",
+      run: async (w) => {
+        const n = N(w);
+        await w.c.send(n.alice, n.net, "AgentNetwork", "openDeal", [1n, 2n, w.usd, USD(2), keccak256(toBytes("banner")), w.c.timestamp + 86_400n]);
+        await w.c.send(n.bob, n.net, "AgentNetwork", "deliver", [2n]);
+        w.c.warp(86_400n + 1n, "the deal's deadline passes");
+        await w.c.expectRevert(n.alice, n.net, "AgentNetwork", "reclaim", [2n], "WrongStatus");
+        w.c.warp(3n * 86_400n, "alice neither confirms nor disputes for 3 days");
+        const before = await balance(w, n.bob);
+        await w.c.send(n.bob, n.net, "AgentNetwork", "claim", [2n]);
+        w.c.check((await balance(w, n.bob)) - before === USD(2), "bob claimed the 2 he was owed");
+      },
+    },
+    {
       name: "Reports need an accountable reporter: a bound QIE ID and a bond",
       why: "A stranger with no QIE ID cannot report; nor can bob report his own agent.",
       run: async (w) => {
@@ -548,23 +599,27 @@ const networkGroup: Group = {
       },
     },
     {
-      name: "An uncontested report is upheld after 3 days: 20% of the bond is slashed",
-      why: "carol reports bob's agent; bob does not contest; anyone can finalize once the window closes.",
+      name: "An uncontested report earns the reporter nothing and slashes nothing",
+      why: "carol reports bob's agent; bob does not contest. After 3 days carol gets only her own bond back: a fake report can't make money. It costs bob's agent some reputation, never a ban.",
       run: async (w) => {
         const n = N(w);
+        const before = await balance(w, n.carol);
         const id = await report(w, n, "r1");
         await w.c.expectRevert(n.carol, n.net, "AgentNetwork", "finalize", [id], "WindowOpen");
         w.c.warp(3n * 86_400n + 1n, "the 3-day contest window closes");
         await w.c.send(n.carol, n.net, "AgentNetwork", "finalize", [id]);
-        w.c.check((await w.c.read<bigint>(n.net, "AgentNetwork", "bondOf", [2n])) === USD(24), "bob's agent bond: 30 → 24");
-        w.c.check((await w.c.read<bigint>(n.net, "AgentNetwork", "reputation", [2n])) === 400n, "reputation: 570 → 400 (−150, and a smaller bond)");
+        w.c.check((await balance(w, n.carol)) === before, "carol: her bond back, no profit");
+        w.c.check((await w.c.read<bigint>(n.net, "AgentNetwork", "bondOf", [2n])) === USD(30), "bob's agent bond: still 30");
+        w.c.check((await w.c.read<bigint>(n.net, "AgentNetwork", "reputation", [2n])) === 530n, "reputation: 580 → 530 (−50)");
       },
     },
     {
       name: "A contested report goes to the arbiter; a dismissed one costs the reporter",
-      why: "bob contests by matching the bond; the council dismisses it; bob receives both bonds.",
+      why: "carol waits out her cooldown and reports again; bob contests by matching the bond; the arbiter dismisses it; bob receives both bonds.",
       run: async (w) => {
         const n = N(w);
+        await w.c.expectRevert(n.carol, n.net, "AgentNetwork", "fileReport", [2n, 1, keccak256(toBytes("too soon")), "ipfs://x"], "ReportCooldown");
+        w.c.warp(3n * 86_400n, "carol's 3-day cooldown on this agent passes");
         const id = await report(w, n, "r2");
         await w.c.send(n.bob, n.net, "AgentNetwork", "contest", [id]);
         await w.c.expectRevert(n.carol, n.net, "AgentNetwork", "resolve", [id, true], "OnlyArbiter");
@@ -573,19 +628,51 @@ const networkGroup: Group = {
       },
     },
     {
-      name: "Three upheld reports ban the agent everywhere",
-      why: "Two more uncontested reports: the network bans bob's agent in the registry; it can no longer act at all.",
+      name: "Only the arbiter's rulings punish: three upheld reports slash and ban",
+      why: "Three contested reports, each upheld by the arbiter: 20% of the bond goes to the reporter each time, and the third bans bob's agent in the registry.",
       run: async (w) => {
         const n = N(w);
-        for (const tag of ["r3", "r4"]) {
-          const id = await report(w, n, tag);
-          w.c.warp(3n * 86_400n + 1n, "the contest window closes");
-          await w.c.send(n.carol, n.net, "AgentNetwork", "finalize", [id]);
-        }
+        const rule = async (tag: string, reporter: Address) => {
+          const id = await report(w, n, tag, reporter);
+          await w.c.send(n.bob, n.net, "AgentNetwork", "contest", [id]);
+          await w.c.send(n.arbiter, n.net, "AgentNetwork", "resolve", [id, true]);
+        };
+        w.c.warp(3n * 86_400n, "carol's cooldown passes");
+        await rule("r3", n.carol);
+        w.c.check((await w.c.read<bigint>(n.net, "AgentNetwork", "bondOf", [2n])) === USD(24), "bob's agent bond: 30 → 24");
+        await rule("r4", n.alice);
+        w.c.warp(3n * 86_400n, "carol's cooldown passes");
+        await rule("r5", n.carol);
         const [ok, code] = await w.c.read<[boolean, Hex]>(n.agents, "AgentRegistry", "status", [2n]);
         w.c.check(!ok && fmt(code) === "AGENT_BANNED", "status: AGENT_BANNED");
         w.c.check((await w.c.read<bigint>(n.net, "AgentNetwork", "reputation", [2n])) === 0n, "reputation: 0");
         await w.c.expectRevert(n.alice, n.net, "AgentNetwork", "openDeal", [1n, 2n, w.usd, USD(1), keccak256(toBytes("again")), w.c.timestamp + 86_400n], "AgentNotActive");
+      },
+    },
+    {
+      name: "A ban can be appealed, and only the arbiter can lift it",
+      why: "bob appeals with evidence; he can't lift the ban himself; the arbiter grants the appeal and bob's agent works again.",
+      run: async (w) => {
+        const n = N(w);
+        await w.c.send(n.bob, n.net, "AgentNetwork", "appeal", [2n, "ipfs://appeal"]);
+        await w.c.expectRevert(n.bob, n.net, "AgentNetwork", "unban", [2n, "self"], "OnlyArbiter");
+        await w.c.send(n.arbiter, n.net, "AgentNetwork", "unban", [2n, "appeal granted"]);
+        const [ok] = await w.c.read<[boolean, Hex]>(n.agents, "AgentRegistry", "status", [2n]);
+        w.c.check(ok, "bob's agent is active again");
+      },
+    },
+    {
+      name: "Leaving takes two steps, so a bond can't run from a report",
+      why: "alice asks to withdraw her agent's bond: it stops counting at once, but stays slashable for 3 days before she can take it.",
+      run: async (w) => {
+        const n = N(w);
+        await w.c.send(n.alice, n.net, "AgentNetwork", "requestWithdrawal", [1n, USD(10)]);
+        w.c.check((await w.c.read<boolean>(n.net, "AgentNetwork", "isBonded", [1n])) === false, "alice's agent no longer counts as bonded");
+        await w.c.expectRevert(n.alice, n.net, "AgentNetwork", "withdrawBond", [1n], "WithdrawalNotReady");
+        w.c.warp(3n * 86_400n, "3 days pass");
+        const before = await balance(w, n.alice);
+        await w.c.send(n.alice, n.net, "AgentNetwork", "withdrawBond", [1n]);
+        w.c.check((await balance(w, n.alice)) - before === USD(10), "alice took her 10 back");
       },
     },
   ],

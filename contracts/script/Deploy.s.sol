@@ -14,13 +14,17 @@ import {TyrellTestUSD} from "../src/TyrellTestUSD.sol";
 ///      over. After deploy, the owner registers lane keys and sets the vault's global daily cap from
 ///      QIE Wallet (`tyrell setup`, Phase 3).
 ///
-///      Env: OWNER, SUBMITTER (control gas key), VAULT_SIGNER, CONTROL (lane key, may pause the vault),
-///      TYRELL_ACCT (bytes32), TOKEN (optional; unset on a non-mainnet chain deploys TyrellTestUSD).
+///      Env: OWNER, SUBMITTER (control gas key), VAULT_SIGNER, TYRELL_ACCT (bytes32), TOKEN (optional:
+///      on QIE mainnet it defaults to, and must equal, QUSDC; unset elsewhere deploys TyrellTestUSD).
+///      CONTROL (the control lane key) is accepted for compatibility but not given any role: the vault lets
+///      whichever key is the active control-lane key pause it, so rotating that key needs no vault change.
 ///
 ///      forge script script/Deploy.s.sol --rpc-url qie_testnet --broadcast --account <deployer> \
 ///        --verify --verifier blockscout --verifier-url https://testnet.qie.digital/api/
 contract Deploy is Script {
     uint256 internal constant QIE_MAINNET = 1990;
+    /// @dev QUSDC on QIE mainnet (packages/chain QUSDC_MAINNET). A mainnet deploy refuses any other token.
+    address internal constant QUSDC_MAINNET = 0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5;
 
     struct Deployment {
         LaneRegistry registry;
@@ -35,22 +39,18 @@ contract Deploy is Script {
         address owner = vm.envAddress("OWNER");
         address submitter = vm.envAddress("SUBMITTER");
         address vaultSigner = vm.envAddress("VAULT_SIGNER");
-        address control = vm.envAddress("CONTROL");
         bytes32 acct = vm.envBytes32("TYRELL_ACCT");
-        address token = vm.envOr("TOKEN", address(0));
-        require(
-            owner != address(0) && submitter != address(0) && vaultSigner != address(0) && control != address(0),
-            "zero role"
-        );
+        address token = vm.envOr("TOKEN", block.chainid == QIE_MAINNET ? QUSDC_MAINNET : address(0));
+        require(owner != address(0) && submitter != address(0) && vaultSigner != address(0), "zero role");
         require(acct != bytes32(0), "TYRELL_ACCT unset");
-        require(token != address(0) || block.chainid != QIE_MAINNET, "TOKEN (QUSDC) required on mainnet");
+        require(block.chainid != QIE_MAINNET || token == QUSDC_MAINNET, "on QIE mainnet TOKEN must be QUSDC");
 
         d.startBlock = block.number;
         vm.startBroadcast();
         d.registry = new LaneRegistry(owner);
         d.anchor = new MemoryAnchor(owner, d.registry, acct, submitter);
         d.ledger = new TyrellLedger(d.registry);
-        d.vault = new GuardedVault(owner, d.ledger, vaultSigner, control);
+        d.vault = new GuardedVault(owner, d.ledger, vaultSigner, address(0));
         d.token = token != address(0) ? token : address(new TyrellTestUSD(owner));
         vm.stopBroadcast();
 

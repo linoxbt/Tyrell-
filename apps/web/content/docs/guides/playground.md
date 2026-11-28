@@ -1,12 +1,12 @@
 ---
 title: Playground
-description: Run the same attack on an AI agent with an ordinary wallet and one protected by Tyrell, then run 34 checks against the real contracts. In your browser, no wallet, no login.
+description: Run the same attack on an AI agent with an ordinary wallet and one protected by Tyrell, then run 38 checks against the real contracts. In your browser, no wallet, no login.
 ---
 
 The [playground](/playground) shows what Tyrell does in about a minute, for anyone. It is one page in three parts:
 
 1. **The demo:** a hacker attacks two AI agents that pay your rent. One pays from an ordinary wallet; the other is protected by Tyrell. You see who gets the money, and why.
-2. **The proof:** 34 checks run against Tyrell's real contract code in your browser.
+2. **The proof:** 38 checks run against Tyrell's real contract code in your browser.
 3. **For developers:** every test in the repository, and sandboxes for the safety rules.
 
 ## The demo
@@ -28,7 +28,7 @@ Live runs are rate-limited and preset results are cached for 30 minutes. When li
 
 To run it yourself, set `FORTYTWO_API_KEY` in the web app's environment (for example in Vercel's project settings) and redeploy.
 
-## The proof: 34 checks
+## The proof: 38 checks
 
 | Group | Contracts | What it proves |
 | --- | --- | --- |

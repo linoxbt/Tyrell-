@@ -4,10 +4,10 @@ import { useRef, useState } from "react";
 import type { Group, Result } from "@/lib/playground/suite";
 import { CLAIMS } from "@/lib/playground/plain";
 
-/** "Don't take our word for it": the 34 contract checks, grouped by the claim each group proves. */
+/** "Don't take our word for it": the 38 contract checks, grouped by the claim each group proves. */
 export function Proof() {
   const [groups, setGroups] = useState<Group[]>([]);
-  const [total, setTotal] = useState(34);
+  const [total, setTotal] = useState(38);
   const [results, setResults] = useState<Result[]>([]);
   const [state, setState] = useState<"idle" | "running" | "done">("idle");
   const [ms, setMs] = useState(0);

@@ -20,7 +20,7 @@ export const whyBlocked = (code?: string) => (code && WHY_BLOCKED[code]) ?? "it 
 export const CLAIMS: Record<string, { title: string; text: string }> = {
   memory: { title: "Nobody can forge your agent's memory", text: "Every memory is signed. Forged, unsigned or stolen-key memories are rejected by the contract." },
   vault: { title: "Money only goes to people you approved", text: "The vault pays your approved payees within your limits, and nothing else, even with a stolen key." },
-  "phase-a": { title: "Every AI agent answers to a real person", text: "Each agent is tied to a human's QIE ID, with its own permissions and spending limits." },
-  "phase-b": { title: "Misbehaving agents pay for it", text: "Agents put down a deposit. Proven abuse costs them part of it, and three strikes bans them." },
+  "phase-a": { title: "Every AI agent answers to a real person", text: "Each agent is tied to a human's QIE ID, with its own permissions and spending limits, and nobody can claim someone else's agent." },
+  "phase-b": { title: "Misbehaving agents pay for it", text: "Agents put down a deposit. Abuse proven to an arbiter costs them part of it, three upheld reports ban them (with an appeal), and fake reports earn nothing." },
   offchain: { title: "The safety rules work the same everywhere", text: "The exact payment rules and scam detector used by Tyrell, run here in your browser." },
 };

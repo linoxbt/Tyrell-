@@ -204,7 +204,7 @@ export function TryIt() {
             </li>
           ))}
         </ol>
-        <p className="mt-3 text-xs text-muted">See it run with real signatures in the 34 checks above ("Misbehaving agents pay for it").</p>
+        <p className="mt-3 text-xs text-muted">See it run with real signatures in the 38 checks above ("Misbehaving agents pay for it").</p>
       </Card>
     </div>
   );

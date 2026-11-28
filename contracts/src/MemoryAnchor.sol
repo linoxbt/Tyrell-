@@ -5,6 +5,7 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ILaneRegistry} from "./interfaces/ILaneRegistry.sol";
+import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
 
 /// @title MemoryAnchor
 /// @notice Anchors the signed digest of every Tyrell memory envelope, with the IPFS CID of its
@@ -14,6 +15,10 @@ import {ILaneRegistry} from "./interfaces/ILaneRegistry.sol";
 ///      Only the submitter (control's gas key) may anchor: the CID is not covered by the lane
 ///      signature, so an open submitter would let anyone front-run a pending anchor with a junk CID
 ///      and claim its ID.
+///      Agents network (phase A): once the owner links this deployment's agent (`linkAgent`), an agent-lane
+///      memory also needs that agent to be active (not revoked, banned or frozen, its human still bound to
+///      their QIE ID), to hold the MEMORY permission, and its registered key to be the signer.
+///      Ownership can be handed over (two-step) but never renounced.
 contract MemoryAnchor is EIP712, Ownable2Step {
     struct Memory {
         bytes16 id;
@@ -41,10 +46,14 @@ contract MemoryAnchor is EIP712, Ownable2Step {
     );
     uint256 public constant MAX_BATCH = 20;
     uint32 public constant MAX_BODY_LEN = 8192;
+    uint32 public constant PERM_MEMORY = 2;
 
     ILaneRegistry public immutable registry;
     bytes32 public immutable acct;
     address public submitter;
+    /// @notice Phase A: the agent registry and this deployment's agent id (zero registry = not linked).
+    IAgentRegistry public agentRegistry;
+    uint256 public agentId;
 
     mapping(bytes16 id => Anchor) private _anchors;
 
@@ -60,6 +69,7 @@ contract MemoryAnchor is EIP712, Ownable2Step {
         uint64 refBlock
     );
     event SubmitterChanged(address indexed previous, address indexed current);
+    event AgentLinked(address indexed registry, uint256 indexed agentId);
 
     error UnknownSigner();
     error LaneMismatch();
@@ -69,6 +79,10 @@ contract MemoryAnchor is EIP712, Ownable2Step {
     error NotSubmitter();
     error BadMemory();
     error BatchSize();
+    error NoRenounce();
+    error AgentKeyMismatch();
+    error AgentBlocked(bytes32 code);
+    error NoMemoryPermission();
 
     modifier onlySubmitter() {
         if (msg.sender != submitter) revert NotSubmitter();
@@ -87,6 +101,18 @@ contract MemoryAnchor is EIP712, Ownable2Step {
     /// @notice Owner only. Points anchoring at a new control gas key.
     function setSubmitter(address submitter_) external onlyOwner {
         _setSubmitter(submitter_);
+    }
+
+    /// @notice Owner only. Gate agent-lane memories on agent `agentId_` in `registry_` (zero registry unlinks).
+    function linkAgent(IAgentRegistry registry_, uint256 agentId_) external onlyOwner {
+        agentRegistry = registry_;
+        agentId = address(registry_) == address(0) ? 0 : agentId_;
+        emit AgentLinked(address(registry_), agentId);
+    }
+
+    /// @notice Disabled: hand ownership over with transferOwnership instead.
+    function renounceOwnership() public pure override {
+        revert NoRenounce();
     }
 
     function anchor(Memory calldata m, bytes calldata sig, string calldata cid) external onlySubmitter {
@@ -162,6 +188,17 @@ contract MemoryAnchor is EIP712, Ownable2Step {
         if (bound == ILaneRegistry.Lane.None) revert UnknownSigner();
         if (!active) revert KeyRevoked();
         if (uint8(bound) != lane) revert LaneMismatch();
+        if (lane == uint8(ILaneRegistry.Lane.Agent) && address(agentRegistry) != address(0)) _agentGate(signer);
+    }
+
+    /// @dev Phase A: the linked agent must be live, hold MEMORY, and be registered with this key.
+    function _agentGate(address signer) private view {
+        IAgentRegistry r = agentRegistry;
+        uint256 id = agentId;
+        (bool ok, bytes32 code) = r.status(id);
+        if (!ok) revert AgentBlocked(code);
+        if (r.agent(id).key != signer) revert AgentKeyMismatch();
+        if (!r.hasPermission(id, PERM_MEMORY)) revert NoMemoryPermission();
     }
 
     function _emitAnchored(Memory calldata m, address signer, bytes32 structHash, string calldata cid) private {

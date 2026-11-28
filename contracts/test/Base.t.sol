@@ -54,7 +54,7 @@ abstract contract Base is Test {
         reg = new LaneRegistry(owner);
         anchorC = new MemoryAnchor(owner, reg, ACCT, submitter);
         ledger = new TyrellLedger(reg);
-        vault = new GuardedVault(owner, ledger, vaultSigner, control);
+        vault = new GuardedVault(owner, ledger, vaultSigner, address(0)); // control pauses through its lane
         usd = new TyrellTestUSD(owner);
 
         vm.startPrank(owner);

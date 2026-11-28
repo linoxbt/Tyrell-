@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.28;
 
+import {ILaneRegistry} from "./ILaneRegistry.sol";
+
 interface ITyrellLedger {
     struct Payee {
         address addr;
@@ -84,6 +86,7 @@ interface ITyrellLedger {
     function suspendPayee(bytes32 payeeId, uint256 seedId, uint256 nonce, uint64 deadline, bytes calldata controlSig)
         external;
 
+    function registry() external view returns (ILaneRegistry);
     function payee(bytes32 payeeId) external view returns (Payee memory);
     function seed(uint256 seedId) external view returns (Seed memory);
     function lastNonce(address signer) external view returns (uint256);

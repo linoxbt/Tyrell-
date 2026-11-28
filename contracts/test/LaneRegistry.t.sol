@@ -129,4 +129,11 @@ contract LaneRegistryTest is Base {
         reg.acceptOwnership();
         assertEq(reg.owner(), next);
     }
+
+    function test_ownershipCannotBeRenounced() public {
+        vm.expectRevert(LaneRegistry.NoRenounce.selector);
+        vm.prank(owner);
+        reg.renounceOwnership();
+        assertEq(reg.owner(), owner);
+    }
 }

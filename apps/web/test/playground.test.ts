@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TOTAL, runSuite } from "../lib/playground/suite";
@@ -17,4 +18,12 @@ describe("playground", () => {
     expect(r.results).toHaveLength(TOTAL);
     expect(TOTAL).toBeGreaterThanOrEqual(30);
   }, 60_000);
+
+  it("the page and the docs state the real number of checks", () => {
+    const web = join(__dirname, "..");
+    expect(readFileSync(join(web, "components/playground/Proof.tsx"), "utf8")).toContain(`useState(${TOTAL})`);
+    const counts = [...readFileSync(join(web, "content/docs/guides/playground.md"), "utf8").matchAll(/(\d+) checks/g)].map((m) => Number(m[1]));
+    expect(counts.length).toBeGreaterThan(0);
+    expect(new Set(counts)).toEqual(new Set([TOTAL]));
+  });
 });

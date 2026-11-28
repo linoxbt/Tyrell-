@@ -237,4 +237,61 @@ contract GuardedVaultTest is Base {
         }
         assertLe(vault.spentToday(LANDLORD), 5e6);
     }
+
+    /// S-14: the pause right follows the control lane. A rotated-out control key can no longer pause.
+    function test_pauseRightFollowsTheControlLane() public {
+        assertTrue(vault.isControlKey(control));
+        assertFalse(vault.hasRole(vault.PAUSER_ROLE(), control)); // no cached role to go stale
+        (address next,) = makeAddrAndKey("controlLane-2");
+        vm.prank(owner);
+        reg.rotateLaneKey(control, next, "rotated");
+        assertFalse(vault.isControlKey(control));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, control, vault.PAUSER_ROLE())
+        );
+        vm.prank(control);
+        vault.pause();
+        vm.prank(next);
+        vault.pause();
+        assertTrue(vault.paused());
+        vm.prank(owner);
+        vault.unpause();
+        vm.prank(owner); // explicit pausers (the owner) still can
+        vault.pause();
+    }
+
+    /// S-14: the vault always keeps an admin.
+    function test_lastAdminCannotLeave() public {
+        assertEq(vault.adminCount(), 1);
+        bytes32 admin = vault.DEFAULT_ADMIN_ROLE();
+        vm.expectRevert(GuardedVault.LastAdmin.selector);
+        vm.prank(owner);
+        vault.renounceRole(admin, owner);
+        vm.expectRevert(GuardedVault.LastAdmin.selector);
+        vm.prank(owner);
+        vault.revokeRole(admin, owner);
+        address next = makeAddr("new-owner-wallet");
+        vm.prank(owner);
+        vault.grantRole(admin, next);
+        vm.prank(owner);
+        vault.grantRole(admin, next); // granting twice counts once
+        assertEq(vault.adminCount(), 2);
+        vm.prank(owner);
+        vault.renounceRole(admin, owner); // a hand-over is fine
+        assertEq(vault.adminCount(), 1);
+        assertTrue(vault.hasRole(admin, next));
+        vm.prank(next);
+        vault.revokeRole(admin, owner); // revoking a non-holder changes nothing
+        assertEq(vault.adminCount(), 1);
+        // other roles are unaffected by the guard
+        bytes32 signerRole = vault.SIGNER_ROLE();
+        vm.prank(vaultSigner);
+        vault.renounceRole(signerRole, vaultSigner);
+        assertFalse(vault.hasRole(signerRole, vaultSigner));
+    }
+
+    function test_extraPauserFromTheConstructor() public {
+        GuardedVault v = new GuardedVault(owner, ledger, vaultSigner, attacker);
+        assertTrue(v.hasRole(v.PAUSER_ROLE(), attacker));
+    }
 }
