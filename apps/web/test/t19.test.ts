@@ -77,4 +77,23 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
       await browser.close();
     }
   });
+
+  it("an incident opens its own detail page, and the back button returns to the list", async () => {
+    const { chromium } = createRequire(import.meta.url)("playwright") as typeof import("playwright");
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      await page.goto(`${url}/console`);
+      await page.getByRole("button", { name: /^Incidents/ }).click();
+      await page.getByText("See details →").first().click();
+      await page.getByText("Why the alarm went off").waitFor();
+      expect(new URL(page.url()).searchParams.get("incident")).toMatch(/^0x[0-9a-f]{32}$/);
+      for (const t of ["What arrived", "AI judge", "Quarantine", "Payments it touched", "The memory record"]) await page.getByText(t, { exact: true }).waitFor();
+      await page.goBack();
+      await page.getByText("See details →").first().waitFor();
+      expect(new URL(page.url()).searchParams.get("incident")).toBeNull();
+    } finally {
+      await browser.close();
+    }
+  });
 });

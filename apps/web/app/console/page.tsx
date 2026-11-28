@@ -36,8 +36,26 @@ export default function Console() {
   const byId = useMemo(() => new Map((view?.memories ?? []).map((m) => [m.id, m])), [view]);
 
   const [menu, setMenu] = useState(false);
+  // an incident opens as its own page (?incident=<memory id>), so the back button returns to the list
+  const [incident, setIncident] = useState<string>();
+  useEffect(() => {
+    const read = () => {
+      const id = new URLSearchParams(window.location.search).get("incident") ?? undefined;
+      setIncident(id);
+      if (id) setTab("incidents");
+    };
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+  const openIncident = (id?: string) => {
+    window.history.pushState(null, "", id ? `?incident=${encodeURIComponent(id)}` : window.location.pathname);
+    setIncident(id);
+    window.scrollTo({ top: 0 });
+  };
   const label = TABS.find((t) => t[0] === tab)![1];
   const go = (t: Tab) => {
+    if (incident) openIncident(undefined);
     setTab(t);
     setMenu(false);
   };
@@ -136,7 +154,22 @@ export default function Console() {
 
               {tab === "decisions" && <Decisions view={view} byId={byId} />}
               {tab === "timeline" && <Timeline view={view} onSelect={setSelected} />}
-              {tab === "incidents" && <Incidents view={view} />}
+              {tab === "incidents" &&
+                (incident && view.incidents.some((i) => i.memoryId === incident) ? (
+                  <IncidentDetail
+                    view={view}
+                    id={incident}
+                    byId={byId}
+                    onBack={() => window.history.back()}
+                    onSeed={(sid) => {
+                      openIncident(undefined);
+                      setSeedId(sid);
+                      setTab("blast");
+                    }}
+                  />
+                ) : (
+                  <Incidents view={view} onOpen={openIncident} />
+                ))}
               {tab === "account" && <OwnerPanel view={view} />}
 
               {selected && byId.get(selected) && <Detail m={byId.get(selected)!} onClose={() => setSelected(undefined)} />}
@@ -335,11 +368,16 @@ function Timeline({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
   );
 }
 
-function Incidents({ view }: { view: ViewDocument }) {
+function Incidents({ view, onOpen }: { view: ViewDocument; onOpen: (id: string) => void }) {
   return (
     <div className="space-y-3">
       {[...view.incidents].reverse().map((i) => (
-        <div key={i.memoryId} className="flex gap-3 rounded-xl border border-line bg-white p-4 text-sm sm:gap-4 sm:p-5">
+        <button
+          key={i.memoryId}
+          onClick={() => onOpen(i.memoryId)}
+          className="flex w-full gap-3 rounded-xl border border-line bg-white p-4 text-left text-sm transition-colors hover:border-brand/40 sm:gap-4 sm:p-5"
+          aria-label={`Open incident ${i.score}: ${i.rules.join(", ")}`}
+        >
           <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg font-semibold ${i.score >= 80 ? "bg-[#ffe9ed] text-rose" : "bg-tint-peach text-[#b26a00]"}`}>{i.score}</div>
           <div className="min-w-0">
             <div className="flex flex-wrap gap-1.5">
@@ -357,10 +395,194 @@ function Incidents({ view }: { view: ViewDocument }) {
                 <span className="mono text-[11px] text-muted">{i.ai.model}</span>
               </p>
             )}
+            <span className="mt-2 inline-block text-[13px] text-brand">See details →</span>
           </div>
-        </div>
+        </button>
       ))}
       {view.incidents.length === 0 && <p className="text-muted">No incidents.</p>}
+    </div>
+  );
+}
+
+const RULE_TEXT: Record<string, string> = {
+  blocklist: "The source is on your blocklist.",
+  imperative: "The text gives orders (\"always\", \"ignore previous\", \"system note\"…), the way prompt injections do.",
+  embedded: "The text carries an address or a link.",
+  payeeWords: "The text talks about payees, rent or a changed wallet.",
+  lookalike: "An address starts and ends like one you know, but is a different address (address poisoning).",
+  dust: "A zero or tiny transfer, typical of address poisoning.",
+  homoglyph: "The text mixes look-alike letters from other alphabets, or hides invisible characters.",
+};
+const RULE_POINTS: Record<string, number> = { blocklist: 100, imperative: 40, lookalike: 60, embedded: 25, homoglyph: 30, payeeWords: 20, dust: 10 };
+
+function IncidentDetail({ view, id, byId, onBack, onSeed }: { view: ViewDocument; id: string; byId: Map<string, ViewMemory>; onBack: () => void; onSeed: (seedId: number) => void }) {
+  const i = view.incidents.find((x) => x.memoryId === id)!;
+  const m = byId.get(id);
+  const seeds = view.seeds.filter((s) => m?.seeds.includes(s.seedId) || s.value.toLowerCase().includes(i.source.slice(2).toLowerCase()));
+  const affected = view.decisions.filter((d) => d.parents.includes(id) || d.parents.some((p) => byId.get(p)?.seeds.some((sid) => seeds.some((s) => s.seedId === sid))));
+  const rulesScore = Math.min(100, i.rules.reduce((n, r) => n + (RULE_POINTS[r] ?? 0), 0));
+  const level = i.score >= 80 ? { t: "High risk", c: "bg-[#ffe9ed] text-rose" } : i.score >= 60 ? { t: "Incident", c: "bg-tint-peach text-[#b26a00]" } : { t: "Low risk", c: "bg-paper text-body" };
+  const link = (a: string) => (view.explorer ? `${view.explorer}/address/${a}` : undefined);
+  const row = "grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]";
+  return (
+    <div className="space-y-5">
+      <button onClick={onBack} className="text-sm text-brand hover:underline">
+        ← All incidents
+      </button>
+
+      <section className="flex gap-4 rounded-xl border border-line bg-white p-5">
+        <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-xl text-2xl font-semibold ${i.score >= 80 ? "bg-[#ffe9ed] text-rose" : "bg-tint-peach text-[#b26a00]"}`}>{i.score}</div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${level.c}`}>{level.t}</span>
+            {m?.quarantined && <span className="rounded-md bg-rose px-2 py-0.5 text-xs text-white">quarantined</span>}
+            <span className="text-xs text-muted">block {i.block}</span>
+          </div>
+          <div className="mt-2 text-[13px] text-body">
+            Source{" "}
+            {link(i.source) ? (
+              <a href={link(i.source)} target="_blank" rel="noreferrer" className="mono break-all text-brand hover:underline">
+                {i.source}
+              </a>
+            ) : (
+              <span className="mono break-all text-ink">{i.source}</span>
+            )}
+          </div>
+          <div className="mt-1 text-[12px] text-muted">
+            Recorded as memory <span className="mono break-all">{id}</span>
+          </div>
+        </div>
+      </section>
+
+      <Panel title="What arrived">
+        <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-ink">{m ? bodyText(m) : i.summary}</p>
+      </Panel>
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+        <Panel title="Why the alarm went off">
+          <ul className="space-y-2.5 text-[13px]">
+            {i.rules.map((r) => (
+              <li key={r} className="flex gap-3">
+                <span className="mono w-24 shrink-0 rounded-md bg-paper px-2 py-0.5 text-center text-xs text-body">{r}</span>
+                <span className="min-w-0 flex-1 text-body">{RULE_TEXT[r] ?? "A sentinel rule matched."}</span>
+                <span className="mono shrink-0 text-xs text-muted">+{RULE_POINTS[r] ?? "?"}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 border-t border-line pt-3 text-[13px] text-body">
+            Rules score <b className="font-medium text-ink">{rulesScore}</b>
+            {i.ai ? (
+              <>
+                {" "}
+                · AI judge <b className="font-medium text-ink">{i.ai.score}</b> · final <b className="font-medium text-ink">{i.score}</b> (the higher of the two)
+              </>
+            ) : (
+              <> · final {i.score}</>
+            )}
+            . 60 or more is an incident.
+          </p>
+        </Panel>
+
+        <Panel title="AI judge">
+          {i.ai ? (
+            <div className="space-y-2 text-[13px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-md px-2 py-0.5 text-xs ${i.ai.injection ? "bg-[#ffe9ed] text-rose" : "bg-[#e6f7f0] text-band-green"}`}>{i.ai.injection ? i.ai.category.replace("_", " ") : "benign"}</span>
+                <span className="text-body">{Math.round(i.ai.confidence * 100)}% confident</span>
+                <span className="mono text-xs text-muted">{i.ai.model}</span>
+              </div>
+              {i.ai.reason && <p className="text-ink">“{i.ai.reason}”</p>}
+              <p className="text-xs text-muted">The judge can only raise the score. Payments never depend on it.</p>
+            </div>
+          ) : (
+            <p className="text-[13px] text-muted">The AI judge did not run for this one (no model configured). The rules alone raised the alarm.</p>
+          )}
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+        <Panel title="Quarantine">
+          {seeds.length ? (
+            <ul className="space-y-3 text-[13px]">
+              {seeds.map((s) => {
+                const reach = view.memories.filter((x) => x.seeds.includes(s.seedId)).length;
+                return (
+                  <li key={s.seedId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="mono text-ink">#{s.seedId}</span>
+                    <span className="text-body">{SEED_TYPE[s.type]}</span>
+                    <span className={`rounded-md px-2 py-0.5 text-xs ${s.released ? "bg-paper text-muted" : "bg-brand-50 text-brand"}`}>{s.released ? "released" : "active"}</span>
+                    <span className="text-muted">{reach} memories excluded</span>
+                    <button onClick={() => onSeed(s.seedId)} className="ml-auto text-brand hover:underline">
+                      See blast radius →
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="text-[13px] text-body">
+              Not quarantined. To exclude everything from this source:
+              <pre className="mono mt-2 overflow-x-auto rounded-lg bg-paper px-3 py-2 text-[12px] text-ink">pnpm tyrell quarantine --source {i.source}</pre>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="Payments it touched">
+          {affected.length ? (
+            <ul className="space-y-2 text-[13px]">
+              {affected.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center gap-2">
+                  <Verdict d={d} />
+                  <span className="text-body">
+                    {amount(view, d.proposal?.amount)} → <span className="mono">{short(String(d.proposal?.recipient ?? ""))}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[13px] text-muted">No payment decision read this memory.</p>
+          )}
+        </Panel>
+      </div>
+
+      {m && (
+        <Panel title="The memory record">
+          <dl className={row}>
+            <dt className="text-muted">Class</dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              <Cls m={m} /> <span className="text-body">{m.clsReason}</span>
+            </dd>
+            <dt className="text-muted">Lane</dt>
+            <dd className="text-ink">
+              {m.laneName} · {KIND[m.kind]}
+            </dd>
+            <dt className="text-muted">Block</dt>
+            <dd className="text-ink">{m.block}</dd>
+            <dt className="text-muted">Signer</dt>
+            <dd className="mono break-all text-ink">{m.signer}</dd>
+            <dt className="text-muted">Content id</dt>
+            <dd className="mono break-all text-ink">{m.cid}</dd>
+            <dt className="text-muted">Verification</dt>
+            <dd className="text-ink">{m.verification}</dd>
+            {m.seeds.length > 0 && (
+              <>
+                <dt className="text-muted">Seeds</dt>
+                <dd className="text-ink">{m.seeds.map((x) => `#${x}`).join(", ")}</dd>
+              </>
+            )}
+            {m.src.length > 0 && (
+              <>
+                <dt className="text-muted">Came from</dt>
+                <dd className="mono space-y-1 break-all text-[12px] text-ink">
+                  {m.src.map((r, k) => (
+                    <div key={k}>{Object.entries(r).map(([a, b]) => `${a}: ${String(b)}`).join(" · ")}</div>
+                  ))}
+                </dd>
+              </>
+            )}
+          </dl>
+        </Panel>
+      )}
     </div>
   );
 }
