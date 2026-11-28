@@ -206,9 +206,12 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
   if (apiPort > 0) {
     const token = apiToken();
     const want = Buffer.from(`Bearer ${token}`);
+    // A tunnel in front of the API (for a hosted console) may keep its own Host name: list it in
+    // TYRELL_API_HOSTS (comma-separated, exact names). The socket still listens on 127.0.0.1 only.
+    const extraHosts = new Set((process.env.TYRELL_API_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean));
     http = createHttpServer((req, res) => {
       const host = (req.headers.host ?? "").toLowerCase();
-      if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return void res.writeHead(421).end();
+      if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host) && !extraHosts.has(host.replace(/:\d+$/, ""))) return void res.writeHead(421).end();
       const got = Buffer.from(String(req.headers.authorization ?? ""));
       if (got.length !== want.length || !timingSafeEqual(got, want)) return void res.writeHead(401, { "www-authenticate": "Bearer" }).end();
       if (req.method !== "GET" || req.url !== "/api/view") return void res.writeHead(404).end();

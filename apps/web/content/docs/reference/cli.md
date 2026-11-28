@@ -42,6 +42,7 @@ Each command runs as one process and loads only the keys it is allowed (see [Arc
 | [`rebuild`](#tyrell-rebuild) | data | No (refuses to replace the live database while control runs) |
 | [`verify`](#tyrell-verify) | data | Yes |
 | [`store-check`](#tyrell-store-check) | none | No |
+| [`mcp`](#tyrell-mcp) | none (reads control's view API with its token) | Yes |
 | [`agents …`](#tyrell-agents) | owner, in QIE Wallet (`consent`, `register`: agent) | No |
 | [`network …`](#tyrell-network) | owner, in QIE Wallet (`message`: agent; `deploy`: Foundry deployer) | No |
 
@@ -262,6 +263,12 @@ Revokes or rotates a lane key from QIE Wallet (owner). Serves a local page for t
 | `--port <port>` | `0` (random) | Local port for the page |
 
 After a rotation, the old key file moves to `keys/retired/` and `addresses.json` is updated; restart that lane's process.
+
+On a deployment linked to an agent (`agents link-vault`), `--lane agent --rotate` also replaces that agent's registered key on the same page (`rotateAgentKey`, consented by the new key), so payments and agent memories keep working; the command waits for both transactions. A plain revoke of the agent lane prints a pointer to `tyrell agents rotate-key`.
+
+### tyrell mcp
+
+Runs the read-only [Tyrell MCP server](/docs/guides/mcp-server) on stdio, for other agents. It reads only control's local view API (`TYRELL_API_URL`, a loopback address only, default `http://127.0.0.1:$TYRELL_API_PORT`; token from `TYRELL_API_TOKEN` or `TYRELL_HOME/api-token`), holds no keys and has no write tools. Start it from an MCP client with `pnpm --silent tyrell mcp` (`--silent` keeps pnpm's banner off the MCP stream).
 
 ## Checks and drills
 

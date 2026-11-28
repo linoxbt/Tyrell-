@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { getAddress, type Address } from "viem";
-import { networks } from "@tyrell/chain";
+import { QUSDC_MAINNET, networks } from "@tyrell/chain";
 import { home, paths, readConfig, writeConfig } from "./config.js";
 
 export interface DeployOptions {
@@ -27,7 +27,9 @@ export function deploy(o: DeployOptions): string {
   const root = resolve(o.repoRoot ?? process.env.TYRELL_REPO ?? join(import.meta.dirname, "../../.."));
   const contracts = join(root, "contracts");
   const addrs = JSON.parse(readFileSync(paths().addresses, "utf8")) as Record<string, Address>;
-  if (c.network === "mainnet" && !o.token) throw new Error("--token (QUSDC) is required on mainnet");
+  // mainnet always pays in QUSDC (Deploy.s.sol refuses any other token there), so --token is optional
+  const token = o.token ?? (c.network === "mainnet" ? QUSDC_MAINNET : undefined);
+  if (c.network === "mainnet" && getAddress(token!) !== QUSDC_MAINNET) throw new Error(`on QIE mainnet the token must be QUSDC (${QUSDC_MAINNET})`);
 
   const args = ["script", "script/Deploy.s.sol", "--rpc-url", c.rpcs[0]!, "--broadcast"];
   if (o.unlockedSender) {
@@ -47,7 +49,7 @@ export function deploy(o: DeployOptions): string {
     SUBMITTER: addrs.submitter!,
     VAULT_SIGNER: addrs.signer!,
     TYRELL_ACCT: c.acct,
-    ...(o.token ? { TOKEN: getAddress(o.token) } : {}),
+    ...(token ? { TOKEN: getAddress(token) } : {}),
   };
   const r = spawnSync(join(contracts, "node_modules/.bin/forge"), args, { cwd: contracts, env, stdio: "inherit" });
   if (r.status !== 0) throw new Error(`forge script failed (exit ${r.status})`);

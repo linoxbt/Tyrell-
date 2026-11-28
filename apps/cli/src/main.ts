@@ -233,7 +233,7 @@ signerCmd.command("start").action(
 
 program
   .command("steward <task>")
-  .description("Run one Steward turn (agent key only; needs LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)")
+  .description("Run one Steward turn (agent key only; needs FORTYTWO_API_KEY, or LLM_BASE_URL, LLM_API_KEY and LLM_MODEL)")
   .action(
     run(async (task: string) => {
       const t = await stewardTurn(task);

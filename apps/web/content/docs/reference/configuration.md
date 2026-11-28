@@ -87,6 +87,7 @@ Keystores are Web3 Secret Storage files (version 3) with a second MAC that binds
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TYRELL_API_PORT` | `7878` | Port of the read-only view API on `127.0.0.1`; `0` disables it |
+| `TYRELL_API_HOSTS` | none | Extra `Host` names the view API accepts besides `127.0.0.1`, `localhost` and `[::1]` (comma-separated, exact), for a tunnel in front of it. It still listens on `127.0.0.1` only and still needs the token |
 | `TYRELL_API_TOKEN` | the contents of `TYRELL_HOME/api-token` | Bearer token the view API requires (`Authorization: Bearer <token>`). The file is created with a random token, mode 600, on first start |
 | `TYRELL_SOCKET_MODE` | `600` | Octal mode of `control.sock`. With one OS user per process, use `660` and a shared group; any permission for other users is refused |
 | `TYRELL_LOW_GAS` | `0.05` | `tyrell status` warns when the submitter has less than this much QIEV3 for gas |
@@ -176,9 +177,9 @@ The agents network has its own script, `contracts/script/DeployNetwork.s.sol` (`
 
 ## Loading a .env file
 
-Nothing loads a `.env` file automatically. Copy `.env.example` to `.env`, fill it in, and load it into your shell before running the CLI:
+Copy `.env.example` to `.env` at the repository root and fill it in. `pnpm tyrell …` loads it on every run (Node's `--env-file-if-exists`), and a variable already set in your shell wins over the file. Nothing else loads it: for `pnpm probe`, the tests, or a process you start another way, load it into your shell first:
 
 ```sh
 set -a; . ./.env; set +a
-pnpm tyrell status
+pnpm probe
 ```

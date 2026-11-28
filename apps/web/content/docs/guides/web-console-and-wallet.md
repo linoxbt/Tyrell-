@@ -37,7 +37,7 @@ pnpm tyrell snapshot --out apps/web/public/snapshot.json --include-bodies
 ```
 
 > [!IMPORTANT]
-> The browser never talks to control directly; the Next.js server proxies it. Control's view API answers only with its bearer token and only to a loopback `Host` (`127.0.0.1`, `localhost` or `[::1]`), so a hosted console can reach it only through a tunnel that rewrites the `Host` header to `127.0.0.1`. The view contains decrypted memory bodies: expose it only for demo data. The hosted demo serves a recording.
+> The browser never talks to control directly; the Next.js server proxies it. Control's view API answers only with its bearer token and only to a loopback `Host` (`127.0.0.1`, `localhost` or `[::1]`), so a hosted console reaches it through a tunnel: either list the tunnel's host name in `TYRELL_API_HOSTS`, or have the tunnel rewrite `Host` to `127.0.0.1`. The view contains decrypted memory bodies: expose it only for demo data. The hosted demo serves a recording.
 
 ## Console tabs
 

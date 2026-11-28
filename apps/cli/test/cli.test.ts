@@ -53,6 +53,7 @@ beforeAll(async () => {
     TYRELL_SCRYPT_N: "1024",
     QIE_RPC_URLS: `${anvil.url},${anvil.url}`,
     TYRELL_API_PORT: String(apiPort),
+    TYRELL_API_HOSTS: "tunnel.example",
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --disable-warning=ExperimentalWarning`,
   };
 }, 60_000);
@@ -354,6 +355,16 @@ describe("tyrell CLI on anvil", () => {
       req.end();
     });
     expect(rebound).toBe(421);
+    // a tunnel's own name works once listed in TYRELL_API_HOSTS (still with the token)
+    const viaTunnel = (headers: Record<string, string>) =>
+      new Promise<number>((resolve, reject) => {
+        const req = httpRequest({ host: "127.0.0.1", port: apiPort, path: "/api/view", headers }, (res) => (res.resume(), resolve(res.statusCode ?? 0)));
+        req.on("error", reject);
+        req.end();
+      });
+    expect(await viaTunnel({ ...auth, host: "tunnel.example" })).toBe(200);
+    expect(await viaTunnel({ host: "tunnel.example" })).toBe(401);
+    expect(await viaTunnel({ ...auth, host: "tunnel.example.evil" })).toBe(421);
     const r = await fetch(`http://127.0.0.1:${apiPort}/api/view`, { headers: auth });
     expect(r.status).toBe(200);
     const v = (await r.json()) as { v: number; memories: unknown[]; decisions: unknown[]; token: { symbol: string } };

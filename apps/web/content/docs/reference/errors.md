@@ -163,7 +163,7 @@ A refusal becomes the decision's `payError`.
 | `pass --reason <text> (or --reason-cid <cid>)` | `tyrell release` without a reason |
 | `PINATA_JWT is not set` | Pinata store without a JWT |
 | `set FORTYTWO_API_KEY (Fortytwo, Qwen), or LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (any OpenAI-compatible endpoint)` | `tyrell steward` without a model |
-| `--token (QUSDC) is required on mainnet` | `tyrell deploy` on mainnet without `--token` |
+| `on QIE mainnet the token must be QUSDC (0x3F43…5DA5)` | `tyrell deploy` on mainnet with a `--token` other than QUSDC (leave it out: mainnet defaults to QUSDC) |
 | `pass --account <foundry keystore name>` | `tyrell deploy` without a deployer |
 | `--unlocked-sender is for local chains only` | Wrong network |
 | `--mint only works with the testnet TyrellTestUSD token` | `setup register --mint` with a real token |

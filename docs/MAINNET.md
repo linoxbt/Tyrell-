@@ -42,7 +42,7 @@ Give `control.sock` group access with `TYRELL_SOCKET_MODE=660` and a group share
 requests that make control act are signed by the caller's lane key either way.
 
 Send a little QIEV3 for gas (a few cents' worth each; contracts/GAS.md: a full deploy is about 6.5M gas,
-the agents network another 8.1M, an anchor about 95k) to:
+the agents network another 8.3M, an anchor about 95k) to:
 
 | Address | Why |
 | --- | --- |
@@ -109,9 +109,9 @@ Control's read-only view API (`127.0.0.1:7878`) needs its bearer token, `TYRELL_
 TYRELL_API_URL=http://127.0.0.1:7878 TYRELL_API_TOKEN=$(cat $TYRELL_HOME/api-token) pnpm web:dev
 ```
 
-To show it on the hosted console instead, expose the API through a tunnel that rewrites the `Host`
-header to `127.0.0.1` (control refuses any other host), and set `TYRELL_API_URL` and `TYRELL_API_TOKEN`
-in the Vercel project. The view contains decrypted memory bodies: only do this for demo data.
+To show it on the hosted console instead, expose the API through a tunnel, start control with
+`TYRELL_API_HOSTS=<the tunnel's host name>` (or have the tunnel rewrite `Host` to `127.0.0.1`; control
+refuses any other host), and set `TYRELL_API_URL` and `TYRELL_API_TOKEN` in the Vercel project. The view contains decrypted memory bodies: only do this for demo data.
 
 ## 5. M1 and M2 on mainnet (record the video here)
 

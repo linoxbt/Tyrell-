@@ -13,7 +13,7 @@ import { readLedger } from "@tyrell/chain";
 /** `tyrell signer start`: the signer process. Holds the vault signer key and nothing else. */
 export async function startSigner(log: (s: string) => void = (s) => console.error(s)) {
   const foreign = checkKeyIsolation("signer");
-  if (foreign.length) log(`warning: signer can read ${foreign.length} key file(s) of other roles (TYRELL_STRICT_KEYS=1 enforces isolation)`);
+  if (foreign.length) log(`warning: signer can read ${foreign.length} key file(s) of other roles (allowed on a local chain only: on testnet and mainnet this aborts, and TYRELL_STRICT_KEYS=1 makes it abort here too)`);
   const c = readConfig();
   const signer = new VaultSigner({ deployment: deployment(c), client: clients(c)[0]!, key: account("signer", "signer"), rpc: c.rpcs[0]! });
   const server = await signer.serve(paths().signerSocket);
