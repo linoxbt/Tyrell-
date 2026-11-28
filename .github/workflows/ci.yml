@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.21
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: No private keys or API keys in the history
+        run: pnpm scan-keys:history
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Contracts (Foundry)
+        run: pnpm contracts:test
+
+      - name: Generated files are up to date
+        run: |
+          pnpm gen:abi
+          pnpm gen:playground --check
+          git diff --exit-code -- packages/chain/src/abi.ts
+
+      - name: Typecheck
+        run: |
+          pnpm typecheck
+          pnpm --filter @tyrell/web exec tsc --noEmit
+
+      - name: Browser for the web tests
+        run: pnpm --filter @tyrell/web exec playwright install --with-deps chromium
+
+      - name: Tests
+        run: pnpm test
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
