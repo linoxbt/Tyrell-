@@ -66,6 +66,16 @@ export const CHAINS: Record<number, ChainParams> = {
   31337: { id: 31337, name: "Local chain (anvil)", short: "local", rpcUrls: ["http://127.0.0.1:8545"], testnet: true },
 };
 
+/**
+ * Which wallet connection the site uses, decided at build time:
+ *  - "reown": Reown AppKit, when NEXT_PUBLIC_REOWN_PROJECT_ID is set (or NEXT_PUBLIC_WALLET_MODE=reown, which
+ *    runs AppKit without the WalletConnect relay: browser wallets only; used by tests);
+ *  - "injected": plain EIP-6963 browser wallets, when no project id is set or NEXT_PUBLIC_WALLET_MODE=injected.
+ * Kept here (not in lib/reown) so a page can know the mode without loading the Reown bundle.
+ */
+export const WALLET_MODE: "reown" | "injected" =
+  process.env.NEXT_PUBLIC_WALLET_MODE === "injected" ? "injected" : process.env.NEXT_PUBLIC_WALLET_MODE === "reown" || process.env.NEXT_PUBLIC_REOWN_PROJECT_ID ? "reown" : "injected";
+
 export const chainName = (id?: number) => (id ? (CHAINS[id]?.name ?? `Chain ${id}`) : "No network");
 
 export interface Session {
@@ -103,7 +113,7 @@ export interface WalletCtx {
 
 export const WalletContext = createContext<WalletCtx | null>(null);
 export const LAST_WALLET = "tyrell.wallet.rdns";
-const SESSION = "tyrell.wallet.session";
+export const SESSION = "tyrell.wallet.session";
 
 /** The EIP-4361 ("Sign-In with Ethereum") message the wallet signs. */
 export function signInMessage(o: { host: string; origin: string; address: Address; chainId: number; nonce: string; issuedAt: string; expiresAt: string }): string {

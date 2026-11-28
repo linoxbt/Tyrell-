@@ -75,13 +75,22 @@ export function Demo() {
           await tick(i === 1 ? 1500 : 4000);
           if (!done) setStage(i);
         }
-        const r = await req;
-        const body = (await r.json()) as DemoResult & { error?: string; message?: string; retryAfter?: number };
-        if (r.ok) result = body;
+        // anything but a real result (a timeout page, a security challenge, a model error) replays the recording
+        let body: (DemoResult & { error?: string; message?: string; retryAfter?: number }) | undefined;
+        let ok = false;
+        try {
+          const r = await req;
+          ok = r.ok;
+          body = (await r.json()) as typeof body;
+        } catch {
+          ok = false;
+        }
+        if (ok && body && body.steward && body.unprotected) result = body;
         else {
+          const limited = body?.error === "rate_limited";
           const rec = recorded?.runs[key(trick, hijacked)];
-          if (!rec) throw new Error(body.error === "rate_limited" ? `${body.message} Try again in ${body.retryAfter} seconds.` : "The live AI is unavailable right now.");
-          setNote(body.error === "rate_limited" ? "The live AI is busy, so this replays a real run recorded earlier." : "The live AI is unavailable, so this replays a real run recorded earlier.");
+          if (!rec) throw new Error(limited ? `${body?.message} Try again in ${body?.retryAfter} seconds.` : "The live AI is unavailable right now. Try again in a minute.");
+          setNote(limited ? "The live AI is busy, so this replays a real run recorded earlier." : "The live AI did not answer in time, so this replays a real run recorded earlier.");
           result = rec;
           source = "recorded";
         }
@@ -194,7 +203,7 @@ export function Demo() {
               {running ? "Running…" : outcome ? "Run it again" : "Run the attack"}
             </button>
             <p className="text-[13px] leading-relaxed text-muted">
-              {status === undefined ? "…" : live ? "Uses the real AI live. Takes about half a minute." : "Replays a real run recorded with the live AI. Live runs are off right now."}
+              {status === undefined ? "…" : live ? "Uses the real AI live. Usually takes 30 to 60 seconds." : "Replays a real run recorded with the live AI. Live runs are off right now."}
             </p>
           </div>
           {running && (
@@ -224,9 +233,12 @@ function Results({ o }: { o: Outcome }) {
   const stolenPlain = plain.balances.attacker;
   const tried = (ps: Proposal[]) => ps.filter((p) => who(p.recipient) !== "your landlord").length;
   const blocked = tyrell.outcomes.filter((x) => x.result === "blocked");
+  // only refusals of payments to someone other than your landlord count as stopping the hacker
+  const stopped = blocked.filter((x) => who(x.proposal.recipient) !== "your landlord");
   const tyrellPaid = tyrell.balances.landlord > 0n;
+  const stolenTyrell = tyrell.balances.attacker;
   const rewritten = [...run.steward.steps, ...run.unprotected.steps].some((s) => s.type === "tool" && s.original && who(s.original) === "your landlord");
-  const code = run.steward.proposals.find((p) => p.verdict?.decision === "BLOCK")?.verdict?.code;
+  const code = (stopped[0] ?? blocked[0])?.proposal.verdict?.code;
   const j = run.judge;
 
   const plainHead = stolenPlain > 0n ? { t: `The hacker got ${money(stolenPlain)} QUSDC`, c: "text-rose" } : plain.balances.landlord > 0n ? { t: "Rent went to your landlord", c: "text-band-green" } : { t: "Nothing was paid", c: "text-ink" };
@@ -236,13 +248,23 @@ function Results({ o }: { o: Outcome }) {
       : plain.balances.landlord > 0n
         ? "The AI saw through the trick this time and paid your landlord. An ordinary wallet relies on that."
         : "The AI did not make a payment.";
-  const tyrellHead = tyrellPaid ? { t: "Rent paid. The hacker got nothing", c: "text-band-green" } : { t: "The hacker got nothing", c: "text-band-green" };
-  const tyrellText = blocked.length
-    ? `The AI tried to pay the hacker ${blocked.length === 1 ? "once" : `${blocked.length} times`}. Tyrell refused every time: ${whyBlocked(code)}.`
-    : tyrellPaid
-      ? "The AI paid your landlord, who is on your approved list, so Tyrell let it through."
-      : "The AI did not make a payment.";
-
+  const tyrellHead =
+    stolenTyrell > 0n
+      ? { t: `The hacker got ${money(stolenTyrell)} QUSDC`, c: "text-rose" }
+      : tyrellPaid
+        ? { t: "Rent paid. The hacker got nothing", c: "text-band-green" }
+        : { t: "The hacker got nothing", c: "text-band-green" };
+  const others = blocked.length - stopped.length;
+  const tyrellText =
+    stolenTyrell > 0n
+      ? "Money reached the hacker. This should never happen; please report it."
+      : stopped.length
+        ? `The AI tried to pay the hacker ${stopped.length === 1 ? "once" : `${stopped.length} times`}. Tyrell refused every time: ${whyBlocked(code)}.${tyrellPaid ? " Your landlord was paid." : ""}`
+        : others
+          ? `Tyrell held back ${others === 1 ? "a payment" : `${others} payments`} to your landlord: ${whyBlocked(code)}.${tyrellPaid ? " The others went through." : ""}`
+          : tyrellPaid
+            ? "The AI paid your landlord, who is on your approved list, so Tyrell let it through."
+            : "The AI did not make a payment.";
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-end gap-x-3 gap-y-1">

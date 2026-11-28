@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { getAddress, zeroAddress, type Address } from "viem";
@@ -23,7 +22,7 @@ const NEXT = join(WEB, "node_modules/.bin/next");
 const SNAPSHOT = join(WEB, "public/snapshot.json");
 const MODES = {
   injected: { distDir: ".next-injected", env: { NEXT_PUBLIC_WALLET_MODE: "injected" } as Record<string, string> },
-  reown: { distDir: ".next", env: {} as Record<string, string> },
+  reown: { distDir: ".next", env: { NEXT_PUBLIC_WALLET_MODE: "reown" } as Record<string, string> },
 } as const;
 type Mode = keyof typeof MODES;
 
@@ -98,7 +97,7 @@ const WALLET = `(() => {
 })();`;
 
 async function walletPage(lab: Chainlab): Promise<{ page: Page; close: () => Promise<void> }> {
-  const { chromium } = createRequire(import.meta.url)("playwright") as typeof import("playwright");
+  const { chromium } = await import("playwright");
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await page.exposeFunction("__rpc", async (method: string, params: unknown[]) => {
@@ -156,8 +155,8 @@ describe.each(Object.keys(MODES) as Mode[])("wallet login and owner actions (%s)
       await page.goto(`${url}/console`, { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "Account" }).click();
       await page.getByText("Role here:").waitFor({ timeout: 20_000 });
-      const toLocal = page.getByRole("button", { name: "Switch wallet to Local chain (anvil)" });
-      if (await toLocal.isVisible().catch(() => false)) await toLocal.click();
+      // a local test chain is never offered to the wallet; this wallet is already on it
+      expect(await page.getByRole("button", { name: /Switch wallet to Local chain/ }).count()).toBe(0);
       await page.getByText("Role here:").locator("..").getByText("Owner", { exact: true }).waitFor({ timeout: 20_000 });
       const agent = lab.lanes.agent.address as Address;
       await page.getByText(`${agent.slice(0, 6)}…${agent.slice(-4)}`).waitFor();
@@ -175,9 +174,14 @@ describe.each(Object.keys(MODES) as Mode[])("wallet login and owner actions (%s)
       await agentRow.getByLabel("Password to encrypt the key file").fill("correct horse battery");
       await agentRow.getByLabel("Same password again").fill("correct horse battery");
       const dl = page.waitForEvent("download");
-      await agentRow.getByRole("button", { name: "Add the agent key" }).click();
+      await agentRow.getByRole("button", { name: "Create and download agent.json" }).click();
       const ks = JSON.parse(readFileSync(await (await dl).path(), "utf8")) as { address: string; tyrell: { role: string } };
       expect(ks.tyrell.role).toBe("agent");
+      // the transaction waits until the owner confirms the file is saved
+      const add = agentRow.getByRole("button", { name: "Add the agent key" });
+      expect(await add.isDisabled()).toBe(true);
+      await agentRow.getByLabel("I saved agent.json").check();
+      await add.click();
       await agentRow.getByText("no active key").waitFor({ state: "detached", timeout: 20_000 });
       expect(await lab.pub.readContract({ address: lab.deployment.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] })).toBe(getAddress(`0x${ks.address}`));
     } finally {

@@ -80,10 +80,22 @@ function rehypeCallouts() {
   };
 }
 
-/** External links open in a new tab; code blocks get a language label for the copy bar. */
+/** A URL is safe to render when it is relative, a fragment, or http(s)/mailto. Everything else (javascript:, data:, vbscript:…) is dropped. */
+export function safeUrl(u: string): boolean {
+  // browsers ignore whitespace and control characters inside a scheme, so strip them before looking
+  const t = u.replace(/[\u0000-\u0020\u007f-\u009f]/g, "").toLowerCase();
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(t)?.[1];
+  return !scheme || scheme === "http" || scheme === "https" || scheme === "mailto";
+}
+
+/** External links open in a new tab; unsafe link schemes are removed; code blocks get a language label for the copy bar. */
 function rehypeLinksAndCode() {
   return (tree: Root) => {
     visit(tree, "element", (node: Element, index, parent) => {
+      for (const attr of ["href", "src"] as const) {
+        const v = node.properties?.[attr];
+        if (typeof v === "string" && !safeUrl(v)) delete node.properties[attr];
+      }
       if (node.tagName === "a" && typeof node.properties?.href === "string" && /^https?:\/\//.test(node.properties.href)) {
         node.properties.target = "_blank";
         node.properties.rel = ["noreferrer"];
@@ -115,13 +127,18 @@ const processor = unified()
   })
   .use(rehypeStringify);
 
+/** Markdown to the docs' HTML. */
+export async function renderMarkdown(md: string): Promise<string> {
+  return String(await processor.process(md));
+}
+
 const cache = new Map<string, Doc>();
 
 export async function loadDoc(slug: string): Promise<Doc | undefined> {
   if (cache.has(slug)) return cache.get(slug);
   const d = readDoc(slug);
   if (!d) return undefined;
-  const html = String(await processor.process(d.body));
+  const html = await renderMarkdown(d.body);
   const doc = { slug, ...d, html, toc: tocOf(d.body) };
   cache.set(slug, doc);
   return doc;

@@ -1,7 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ensureBuild, webEnv } from "./nextBuild";
@@ -51,8 +50,7 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
 
   it("draws the same memories, decisions and parent -> child edges for the demo seed", async () => {
     const expected = JSON.parse(readFileSync(EXPECTED, "utf8")) as { seedId: number; memories: string[]; decisions: string[]; memoryEdges: number };
-    // Playwright is pre-installed globally; require() resolves it through NODE_PATH, ESM import does not.
-    const { chromium } = createRequire(import.meta.url)("playwright") as typeof import("playwright");
+    const { chromium } = await import("playwright");
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 });
@@ -79,7 +77,7 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
   });
 
   it("an incident opens its own detail page, and the back button returns to the list", async () => {
-    const { chromium } = createRequire(import.meta.url)("playwright") as typeof import("playwright");
+    const { chromium } = await import("playwright");
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -92,6 +90,76 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
       await page.goBack();
       await page.getByText("See details →").first().waitFor();
       expect(new URL(page.url()).searchParams.get("incident")).toBeNull();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it("an incident opened from a link goes back to the list, not off the site; incidents work from the keyboard", async () => {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      const view = (await (await fetch(`${url}/api/view`)).json()) as { incidents: Array<{ memoryId: string }> };
+      const id = view.incidents[0]!.memoryId;
+      await page.goto(`${url}/console?incident=${id}`);
+      await page.getByText("Why the alarm went off").waitFor();
+      await page.getByRole("button", { name: "← All incidents" }).click();
+      await page.getByText("See details →").first().waitFor();
+      expect(new URL(page.url()).pathname).toBe("/console");
+      expect(new URL(page.url()).searchParams.get("incident")).toBeNull();
+
+      // keyboard: focus an incident card and press Enter
+      await page.getByRole("button", { name: /^Open incident/ }).first().focus();
+      await page.keyboard.press("Enter");
+      await page.getByText("Why the alarm went off").waitFor();
+
+      // timeline rows open the memory panel from the keyboard too, and it scrolls into view
+      await page.getByRole("button", { name: "Timeline" }).click();
+      await page.getByRole("row", { name: /^Open memory/ }).first().focus();
+      await page.keyboard.press("Enter");
+      await page.getByRole("button", { name: "Close" }).waitFor();
+      expect(await page.getByRole("button", { name: "Close" }).isVisible()).toBe(true);
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it("the Account tab on a recording from a local chain explains itself and never offers that chain to the wallet", async () => {
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      await page.goto(`${url}/console`);
+      await page.getByRole("button", { name: "Account" }).click();
+      await page.getByText(/recorded on a local test chain/).waitFor();
+      expect(await page.getByText(/Switch wallet to/).count()).toBe(0);
+      expect(await page.getByText("Connect a wallet to see the keys.").count()).toBe(0);
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it("no other site can frame the pages; the wallet bundle loads only where it is needed", async () => {
+    const r = await fetch(`${url}/`);
+    expect(r.headers.get("x-frame-options")).toBe("DENY");
+    expect(r.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+
+    const { chromium } = await import("playwright");
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      const appkit = () => page.evaluate(() => !!customElements.get("w3m-modal"));
+      await page.goto(`${url}/`, { waitUntil: "networkidle" });
+      expect(await appkit()).toBe(false);
+      await page.goto(`${url}/docs`, { waitUntil: "networkidle" });
+      expect(await appkit()).toBe(false);
+      // the header's Connect button still works: it loads the wallet stack and opens it
+      await page.goto(`${url}/`, { waitUntil: "networkidle" });
+      await page.locator("header").getByRole("button", { name: "Connect wallet" }).first().click();
+      await page.locator("w3m-modal").getByText("WalletConnect").first().waitFor({ timeout: 20_000 });
+      await page.goto(`${url}/console`, { waitUntil: "networkidle" });
+      await page.waitForFunction(() => !!customElements.get("w3m-modal"), undefined, { timeout: 20_000 });
     } finally {
       await browser.close();
     }

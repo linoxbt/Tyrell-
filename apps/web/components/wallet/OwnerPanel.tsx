@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPublicClient, createWalletClient, custom, getAddress, http, isAddress, isAddressEqual, zeroAddress, type Address, type PublicClient } from "viem";
-import { createKey, download, type Role } from "@/lib/keystore";
+import { createKey, download, type KeystoreV3, type Role } from "@/lib/keystore";
 import { CHAINS, chainName, useWallet } from "@/lib/wallet";
 import type { ViewDocument } from "@/lib/view";
 import { Avatar, ConnectButton } from "./Wallet";
@@ -56,7 +56,9 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
   const [loading, setLoading] = useState(false);
   const target = view.chainId;
   const sameChain = w.chainId === target;
-  const publicRpc = CHAINS[target] && target !== 31337 ? CHAINS[target]!.rpcUrls[0] : undefined;
+  // only QIE's public networks can be read from here; a local test chain (anvil, 31337) lives on someone's computer
+  const publicRpc = CHAINS[target] && !CHAINS[target]!.rpcUrls[0]!.includes("127.0.0.1") ? CHAINS[target]!.rpcUrls[0] : undefined;
+  const reachable = !!publicRpc;
 
   const client = useCallback((): PublicClient | undefined => {
     if (w.wallet && sameChain) return createPublicClient({ transport: custom(w.wallet.provider) }) as PublicClient;
@@ -93,7 +95,9 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
   }, [load]);
 
   const isOwner = !!(w.account && r && isAddressEqual(r.owner, w.account));
-  const role = !w.account ? undefined : isOwner ? "Owner" : r?.mine ? `${LANES.find((l) => l[0] === r.mine!.lane)?.[1]} lane key${r.mine.active ? "" : " (revoked)"}` : "Viewer";
+  // "Viewer" only once the registry was actually read; before that (or when it cannot be read) the role is unknown
+  const role = !w.account ? undefined : !r ? "unknown" : isOwner ? "Owner" : r.mine ? `${LANES.find((l) => l[0] === r.mine!.lane)?.[1]} lane key${r.mine.active ? "" : " (revoked)"}` : "Viewer";
+  const canRead = !!client();
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
@@ -127,7 +131,7 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
           </div>
         )}
 
-        {w.account && !sameChain && (
+        {w.account && !sameChain && reachable && (
           <button onClick={() => w.switchTo(target)} className="mt-4 rounded-lg border border-line px-3 py-2 text-sm text-ink transition-colors hover:bg-paper">
             Switch wallet to {chainName(target)}
           </button>
@@ -144,7 +148,24 @@ export function OwnerPanel({ view }: { view: ViewDocument }) {
           )}
         </div>
         {err && <p className="mb-3 rounded-lg bg-[#ffe9ed] px-3 py-2 text-[13px] text-rose">Could not read the registry: {err}</p>}
-        {!r && !err && <p className="text-sm text-muted">{client() ? "Reading…" : "Connect a wallet to see the keys."}</p>}
+        {!r && !err && canRead && <p className="text-sm text-muted">Reading…</p>}
+        {!r && !err && !canRead && (
+          <div className="space-y-2 text-sm text-body">
+            <p>
+              {target === 31337
+                ? "This console is showing a run recorded on a local test chain, which only exists on the computer that recorded it."
+                : `This console is showing a deployment on ${chainName(target)}, which this page cannot read.`}{" "}
+              There are no keys to manage from here.
+            </p>
+            <p className="text-[13px] text-muted">
+              To manage your own keys, run the console next to your Tyrell deployment on QIE (set <span className="mono">TYRELL_API_URL</span> to control&apos;s view, see the{" "}
+              <a href="/docs/guides/web-console-and-wallet" className="text-brand hover:underline">
+                console guide
+              </a>
+              ). On that machine, <span className="mono">pnpm tyrell revoke</span> works too.
+            </p>
+          </div>
+        )}
         {r && (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-paper px-3 py-2 text-sm">
@@ -175,8 +196,13 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
   const [pasted, setPasted] = useState("");
   const [reason, setReason] = useState("suspected compromise");
   const [state, setState] = useState<string>();
+  // one key per attempt: created once, downloaded, and reused by every retry until the row is closed
+  const [made, setMade] = useState<{ address: Address; keystore: KeystoreV3 }>();
+  const [saved, setSaved] = useState(false);
+  const creating = useRef(false);
   const none = isAddressEqual(keyAddr, zeroAddress);
   const busy = !!state?.startsWith("Confirm") || !!state?.startsWith("Waiting") || !!state?.startsWith("Creating");
+  const file = `${name}.json`;
 
   const close = () => {
     setMode(undefined);
@@ -184,6 +210,34 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
     setPw("");
     setPw2("");
     setPasted("");
+    setMade(undefined);
+    setSaved(false);
+  };
+
+  const errText = (e: unknown) => {
+    const x = e as { code?: number; shortMessage?: string; message?: string };
+    return x.code === 4001 ? "Cancelled in the wallet." : (x.shortMessage ?? x.message ?? String(e));
+  };
+
+  /** Step 1 of "create": make the key and download it encrypted. */
+  const make = async () => {
+    if (creating.current || made) return;
+    try {
+      if (pw.length < 8) throw new Error("The password must be at least 8 characters.");
+      if (pw !== pw2) throw new Error("The two passwords differ.");
+      creating.current = true;
+      setState("Creating the key…");
+      const k = await createKey(name as Role, pw);
+      setMade({ address: k.address!, keystore: k.keystore });
+      download(file, k.keystore);
+      setPw("");
+      setPw2("");
+      setState(undefined);
+    } catch (e) {
+      setState(errText(e));
+    } finally {
+      creating.current = false;
+    }
   };
 
   const run = async () => {
@@ -200,12 +254,9 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
           if (!isAddress(pasted.trim())) throw new Error("That is not an address.");
           next = getAddress(pasted.trim());
         } else {
-          if (pw.length < 8) throw new Error("The password must be at least 8 characters.");
-          if (pw !== pw2) throw new Error("The two passwords differ.");
-          setState("Creating the key…");
-          const k = await createKey(name as Role, pw);
-          next = k.address!;
-          download(`${name}.json`, k.keystore);
+          if (!made) throw new Error("Create the key file first.");
+          if (!saved) throw new Error(`Confirm that you saved ${file} first.`);
+          next = made.address;
         }
         setState("Confirm in your wallet…");
         hash =
@@ -214,12 +265,12 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
             : await wc.writeContract({ address: registry, abi: registryAbi, functionName: "rotateLaneKey", args: [keyAddr, next, reason], chain: null });
       }
       setState("Waiting for the block…");
-      await createPublicClient({ transport: custom(w.wallet.provider) }).waitForTransactionReceipt({ hash });
+      const receipt = await createPublicClient({ transport: custom(w.wallet.provider) }).waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error("The transaction failed on-chain, so nothing changed. You can try again.");
       close();
       onDone();
     } catch (e) {
-      const x = e as { code?: number; shortMessage?: string; message?: string };
-      setState(x.code === 4001 ? "Cancelled in the wallet." : (x.shortMessage ?? x.message ?? String(e)));
+      setState(errText(e));
     }
   };
 
@@ -270,19 +321,34 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
                 ))}
               </div>
               {source === "create" ? (
-                <div className="mt-2 space-y-2">
-                  <label className="block text-xs text-body">
-                    Password to encrypt the key file
-                    <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} className={field} />
-                  </label>
-                  <label className="block text-xs text-body">
-                    Same password again
-                    <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} className={field} />
-                  </label>
-                  <p className="text-[11px] text-muted">
-                    Downloads as <span className="mono">{name}.json</span>, encrypted. Put it in <span className="mono">~/.tyrell/keys/</span> and use your Tyrell passphrase as the password.
-                  </p>
-                </div>
+                made ? (
+                  <div className="mt-2 space-y-2 text-xs text-body">
+                    <p>
+                      New {name} key <span className="mono text-ink">{short(made.address)}</span>, downloaded as <span className="mono">{file}</span> (encrypted). It is the only copy: put it in{" "}
+                      <span className="mono">~/.tyrell/keys/</span> and the password in that role&apos;s passphrase file.{" "}
+                      <button onClick={() => download(file, made.keystore)} className="text-brand hover:underline">
+                        Download again
+                      </button>
+                    </p>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />I saved {file}
+                    </label>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <label className="block text-xs text-body">
+                      Password to encrypt the key file
+                      <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} className={field} />
+                    </label>
+                    <label className="block text-xs text-body">
+                      Same password again
+                      <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} className={field} />
+                    </label>
+                    <p className="text-[11px] text-muted">
+                      Downloads as <span className="mono">{file}</span>, encrypted. The key is made in this page and never sent anywhere.
+                    </p>
+                  </div>
+                )
               ) : (
                 <label className="mt-2 block text-xs text-body">
                   Key address (from <span className="mono">pnpm tyrell setup keys</span>)
@@ -297,9 +363,19 @@ function KeyRow({ lane, name, what, keyAddr, canRevoke, registry, onDone }: { la
               <input value={reason} onChange={(e) => setReason(e.target.value)} className={field} />
             </label>
           )}
-          <button onClick={run} disabled={busy || (mode !== "add" && !reason)} className={`mt-2 w-full rounded-md py-2 text-sm text-white transition-opacity disabled:opacity-60 ${mode === "revoke" ? "bg-rose" : "bg-brand"}`}>
-            {mode === "add" ? `Add the ${name} key` : mode === "replace" ? `Replace the ${name} key` : `Revoke the ${name} key`}
-          </button>
+          {mode !== "revoke" && source === "create" && !made ? (
+            <button onClick={make} disabled={busy} className="mt-2 w-full rounded-md bg-brand py-2 text-sm text-white transition-opacity disabled:opacity-60">
+              Create and download {file}
+            </button>
+          ) : (
+            <button
+              onClick={run}
+              disabled={busy || (mode !== "add" && !reason) || (mode !== "revoke" && source === "create" && !saved)}
+              className={`mt-2 w-full rounded-md py-2 text-sm text-white transition-opacity disabled:opacity-60 ${mode === "revoke" ? "bg-rose" : "bg-brand"}`}
+            >
+              {mode === "add" ? `Add the ${name} key` : mode === "replace" ? `Replace the ${name} key` : `Revoke the ${name} key`}
+            </button>
+          )}
           {state && <p className="mt-2 text-xs text-body">{state}</p>}
           {mode === "revoke" && <p className="mt-2 text-[11px] text-muted">Lane {lane}. A revoked key can never be re-added.</p>}
         </div>

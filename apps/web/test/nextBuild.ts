@@ -11,12 +11,16 @@ import { join } from "node:path";
 const WEB = join(__dirname, "..");
 const NEXT = join(WEB, "node_modules/.bin/next");
 
-/** The env a test build and its server use: snapshot mode and no Reown project id (no network). */
+/**
+ * The env a test build and its server use: snapshot mode, and no Reown project id (no network). The default
+ * build still runs Reown AppKit, as production does (NEXT_PUBLIC_WALLET_MODE=reown: browser wallets, no relay).
+ */
 export function webEnv(distDir: string, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra, NEXT_TELEMETRY_DISABLED: "1", NEXT_DIST_DIR: distDir };
   delete env.TYRELL_API_URL;
   delete env.NEXT_PUBLIC_REOWN_PROJECT_ID;
-  if (!("NEXT_PUBLIC_WALLET_MODE" in extra)) delete env.NEXT_PUBLIC_WALLET_MODE;
+  delete env.TYRELL_API_TOKEN;
+  if (!("NEXT_PUBLIC_WALLET_MODE" in extra)) env.NEXT_PUBLIC_WALLET_MODE = "reown";
   return env;
 }
 

@@ -20,7 +20,17 @@ interface Hit {
 }
 
 let indexPromise: Promise<Entry[]> | undefined;
-const loadIndex = () => (indexPromise ??= fetch("/docs/search.json").then((r) => r.json() as Promise<Entry[]>));
+/** Loads the index once; a failed load is forgotten, so the next search tries again. */
+const loadIndex = () =>
+  (indexPromise ??= fetch("/docs/search.json")
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json() as Promise<Entry[]>;
+    })
+    .catch((e: unknown) => {
+      indexPromise = undefined;
+      throw e;
+    }));
 
 export function SearchButton({ onClick }: { onClick: () => void }) {
   return (
@@ -71,12 +81,14 @@ export function Search({ open, onClose }: { open: boolean; onClose: () => void }
   const [q, setQ] = useState("");
   const [index, setIndex] = useState<Entry[]>([]);
   const [sel, setSel] = useState(0);
+  const [failed, setFailed] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     if (!open) return;
-    void loadIndex().then(setIndex);
+    setFailed(false);
+    void loadIndex().then(setIndex, () => setFailed(true));
     setTimeout(() => input.current?.focus(), 30);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -115,7 +127,8 @@ export function Search({ open, onClose }: { open: boolean; onClose: () => void }
           <kbd className="mono hidden rounded border border-line px-1.5 text-[11px] text-muted sm:inline">esc</kbd>
         </div>
         <ul className="max-h-[60vh] overflow-y-auto p-2">
-          {q && hits.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">No results for “{q}”.</li>}
+          {failed && <li className="px-3 py-6 text-center text-sm text-rose">Search could not load. Close and open it again to retry.</li>}
+          {!failed && q && hits.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">No results for “{q}”.</li>}
           {!q && <li className="px-3 py-6 text-center text-sm text-muted">Search every page of the Tyrell docs.</li>}
           {hits.map((h, i) => (
             <li key={`${h.href}-${i}`}>

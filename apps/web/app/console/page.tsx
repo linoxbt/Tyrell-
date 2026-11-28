@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LineageGraph } from "@/components/LineageGraph";
 import { Bars, Icon } from "@/components/argus/ui";
 import { Mark } from "@/components/Logo";
@@ -160,7 +160,7 @@ export default function Console() {
                     view={view}
                     id={incident}
                     byId={byId}
-                    onBack={() => window.history.back()}
+                    onBack={() => openIncident(undefined)}
                     onSeed={(sid) => {
                       openIncident(undefined);
                       setSeedId(sid);
@@ -258,9 +258,11 @@ function Overview({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
           <Panel title="Recent memories">
             <ul className="space-y-2 text-sm">
               {view.memories.slice(-5).reverse().map((m) => (
-                <li key={m.id} className="flex min-w-0 cursor-pointer items-center gap-2" onClick={() => onSelect(m.id)}>
-                  <Cls m={m} />
-                  <span className="truncate text-body">{bodyText(m)}</span>
+                <li key={m.id}>
+                  <button onClick={() => onSelect(m.id)} className={`flex w-full min-w-0 items-center gap-2 rounded text-left ${FOCUS}`}>
+                    <Cls m={m} />
+                    <span className="truncate text-body">{bodyText(m)}</span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -325,7 +327,7 @@ function Timeline({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
       <ul className="space-y-2.5 sm:hidden">
         {rows.map((m) => (
           <li key={m.id}>
-            <button onClick={() => onSelect(m.id)} className={`w-full rounded-xl border border-line bg-white p-3.5 text-left transition-colors active:bg-paper ${m.quarantined ? "opacity-60" : ""}`}>
+            <button onClick={() => onSelect(m.id)} className={`w-full rounded-xl border border-line bg-white p-3.5 text-left transition-colors active:bg-paper ${FOCUS} ${m.quarantined ? "opacity-60" : ""}`}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <span className="font-medium" style={{ color: LANE_COLOR[m.lane] }}>{m.laneName}</span>
                 <span className="text-muted">{KIND[m.kind]}</span>
@@ -351,7 +353,19 @@ function Timeline({ view, onSelect }: { view: ViewDocument; onSelect: (id: strin
           </thead>
           <tbody>
             {rows.map((m) => (
-              <tr key={m.id} className={`cursor-pointer border-t border-line align-top transition-colors hover:bg-paper ${m.quarantined ? "opacity-60" : ""}`} onClick={() => onSelect(m.id)}>
+              <tr
+                key={m.id}
+                tabIndex={0}
+                aria-label={`Open memory ${short(m.id, 4)}`}
+                className={`cursor-pointer border-t border-line align-top transition-colors hover:bg-paper focus-visible:bg-paper focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand ${m.quarantined ? "opacity-60" : ""}`}
+                onClick={() => onSelect(m.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect(m.id);
+                  }
+                }}
+              >
                 <td className="mono px-4 py-2.5 text-xs">{m.block}</td>
                 <td className="pr-3">
                   <span className="font-medium" style={{ color: LANE_COLOR[m.lane] }}>{m.laneName}</span>
@@ -375,7 +389,7 @@ function Incidents({ view, onOpen }: { view: ViewDocument; onOpen: (id: string) 
         <button
           key={i.memoryId}
           onClick={() => onOpen(i.memoryId)}
-          className="flex w-full gap-3 rounded-xl border border-line bg-white p-4 text-left text-sm transition-colors hover:border-brand/40 sm:gap-4 sm:p-5"
+          className={`flex w-full gap-3 rounded-xl border border-line bg-white p-4 text-left text-sm transition-colors hover:border-brand/40 sm:gap-4 sm:p-5 ${FOCUS}`}
           aria-label={`Open incident ${i.score}: ${i.rules.join(", ")}`}
         >
           <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg font-semibold ${i.score >= 80 ? "bg-[#ffe9ed] text-rose" : "bg-tint-peach text-[#b26a00]"}`}>{i.score}</div>
@@ -426,7 +440,7 @@ function IncidentDetail({ view, id, byId, onBack, onSeed }: { view: ViewDocument
   const row = "grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]";
   return (
     <div className="space-y-5">
-      <button onClick={onBack} className="text-sm text-brand hover:underline">
+      <button onClick={onBack} className={`rounded text-sm text-brand hover:underline ${FOCUS}`}>
         ← All incidents
       </button>
 
@@ -587,6 +601,9 @@ function IncidentDetail({ view, id, byId, onBack, onSeed }: { view: ViewDocument
   );
 }
 
+/** Keyboard focus ring for clickable cards and rows. */
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+
 const Pill = ({ c, children }: { c: string; children: React.ReactNode }) => <span className={`rounded-md px-2 py-0.5 text-xs ${c}`}>{children}</span>;
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
@@ -626,8 +643,13 @@ function Legend() {
 }
 
 function Detail({ m, onClose }: { m: ViewMemory; onClose: () => void }) {
+  // opened from a list far above, so bring it into view
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [m.id]);
   return (
-    <div className="mt-6 rounded-xl border border-line bg-white p-4 text-sm sm:p-5">
+    <div ref={ref} className="mt-6 scroll-mt-24 rounded-xl border border-line bg-white p-4 text-sm sm:p-5">
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <span className="mono text-xs">{m.id}</span>
         <Cls m={m} />

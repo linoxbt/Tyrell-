@@ -13,20 +13,30 @@ export function Proof() {
   const [ms, setMs] = useState(0);
   const busy = useRef(false);
 
+  const [error, setError] = useState<string>();
+
   async function start() {
     if (busy.current) return;
     busy.current = true;
     setState("running");
+    setError(undefined);
     setResults([]);
-    const mod = await import("@/lib/playground/suite");
-    setGroups(mod.GROUPS);
-    setTotal(mod.TOTAL);
-    const t0 = performance.now();
-    const r = await mod.runSuite((x) => setResults((prev) => [...prev, x]));
-    setResults(r.results);
-    setMs(Math.round(performance.now() - t0));
-    setState("done");
-    busy.current = false;
+    try {
+      const mod = await import("@/lib/playground/suite");
+      setGroups(mod.GROUPS);
+      setTotal(mod.TOTAL);
+      const t0 = performance.now();
+      const r = await mod.runSuite((x) => setResults((prev) => [...prev, x]));
+      setResults(r.results);
+      setMs(Math.round(performance.now() - t0));
+      setState("done");
+    } catch (e) {
+      // a failed download or an engine error must never leave the button stuck on "Checking…"
+      setError((e as Error).message || String(e));
+      setState("idle");
+    } finally {
+      busy.current = false;
+    }
   }
 
   const passed = results.filter((r) => r.status === "pass").length;
@@ -53,6 +63,7 @@ export function Proof() {
             </div>
           )}
         </div>
+        {error && <p className="mt-3 rounded-lg bg-[#ffe9ed] px-3 py-2 text-[13px] text-rose">The checks could not run: {error}. Press the button to try again.</p>}
         {state !== "idle" && (
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-paper">
             <div className={`h-full rounded-full transition-[width] duration-200 ${failed ? "bg-rose" : "bg-band-green"}`} style={{ width: `${(results.length / total) * 100}%` }} />

@@ -53,6 +53,30 @@ export interface DemoResult {
 }
 
 const MAX_STEPS = 3;
+/** The whole run (judge and both agents, in parallel) must finish inside this, well within the route's 120 s. */
+export const RUN_BUDGET_MS = 90_000;
+/** Per model call: caps what one call can cost. The judge asks for far less itself. */
+export const MAX_TOKENS = 2048;
+
+/**
+ * Wraps fetch for every model call of one run: aborts when the run's budget is spent, and caps the tokens a
+ * call may produce (the vendored client takes a fetch, so the copied code stays unchanged).
+ */
+export function budgetedFetch(deadline: AbortSignal, maxTokens = MAX_TOKENS, inner: typeof fetch = fetch): typeof fetch {
+  return ((url: string, init: RequestInit = {}) => {
+    let body = init.body;
+    if (typeof body === "string") {
+      try {
+        const j = JSON.parse(body) as Record<string, unknown>;
+        if (j && typeof j === "object" && j.max_tokens === undefined) body = JSON.stringify({ ...j, max_tokens: maxTokens });
+      } catch {
+        /* not JSON: send as is */
+      }
+    }
+    const signal = init.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+    return inner(url, { ...init, body, signal });
+  }) as typeof fetch;
+}
 
 /** The landlord is the only registered payee: 5 per payment, 5 a day; 8 a day across all payees. */
 function ledger(ts: bigint): LedgerState {
@@ -111,7 +135,8 @@ async function loop(model: ChatModel, system: string, user: string, recall: stri
       }
     }
   } catch (e) {
-    run.error = (e as Error).message.slice(0, 300);
+    const err = e as Error;
+    run.error = err.name === "TimeoutError" || err.name === "AbortError" ? "the AI took too long to answer" : err.message.slice(0, 300);
   }
   run.ms = Date.now() - t0;
   return run;
@@ -144,8 +169,15 @@ export class Hijacked implements ChatModel {
   }
 }
 
-export async function runDemo(scenario: Scenario, poison: string, cfg: { agent: LlmConfig; judge: LlmConfig }, o: { fetch?: typeof fetch; now?: Date; hijacked?: boolean } = {}): Promise<DemoResult> {
+export async function runDemo(
+  scenario: Scenario,
+  poison: string,
+  cfg: { agent: LlmConfig; judge: LlmConfig },
+  o: { fetch?: typeof fetch; now?: Date; hijacked?: boolean; budgetMs?: number } = {},
+): Promise<DemoResult> {
   const t0 = Date.now();
+  const deadline = AbortSignal.timeout(o.budgetMs ?? RUN_BUDGET_MS);
+  const f = budgetedFetch(deadline, MAX_TOKENS, o.fetch ?? fetch);
   const now = o.now ?? new Date();
   const ts = BigInt(Math.floor(now.getTime() / 1000));
   const untrusted = scenario.memory(poison);
@@ -154,7 +186,7 @@ export async function runDemo(scenario: Scenario, poison: string, cfg: { agent: 
     { cls: "untrusted", text: untrusted },
   ];
   const mk = (c: LlmConfig) =>
-    new OpenAICompatibleModel({ baseURL: c.baseURL, apiKey: c.apiKey, model: c.model, ...(c.reasoningEffort ? { reasoningEffort: c.reasoningEffort } : {}), ...(o.fetch ? { fetch: o.fetch } : {}) });
+    new OpenAICompatibleModel({ baseURL: c.baseURL, apiKey: c.apiKey, model: c.model, ...(c.reasoningEffort ? { reasoningEffort: c.reasoningEffort } : {}), fetch: f });
 
   // Tyrell: labelled memories (ids as the runtime shows them), the real prompt, and the policy engine behind propose_payment
   const labelled = memories.map((m, i) => `${label(m.cls)} (m${i + 1}) ${m.text}`).join("\n");
@@ -186,7 +218,7 @@ export async function runDemo(scenario: Scenario, poison: string, cfg: { agent: 
     const j0 = Date.now();
     const addresses = [ATTACKER, LOOKALIKE].filter((a) => untrusted.includes(a));
     const rules = score({ texts: [poison], addresses }, { blocklist: new Set(), known: [LANDLORD] });
-    const j = new LlmJudge({ baseURL: cfg.judge.baseURL, apiKey: cfg.judge.apiKey, model: cfg.judge.model, ...(cfg.judge.reasoningEffort ? { reasoningEffort: cfg.judge.reasoningEffort } : {}), timeoutMs: 45_000, ...(o.fetch ? { fetch: o.fetch } : {}) });
+    const j = new LlmJudge({ baseURL: cfg.judge.baseURL, apiKey: cfg.judge.apiKey, model: cfg.judge.model, ...(cfg.judge.reasoningEffort ? { reasoningEffort: cfg.judge.reasoningEffort } : {}), timeoutMs: 45_000, fetch: f });
     const ai = await j.judge([poison]);
     const s = aiScore(ai);
     return { rules, ...(ai ? { ai } : { error: "the judge gave no usable answer (rules only)" }), aiScore: s, combined: Math.max(rules.score, s), ms: Date.now() - j0 };

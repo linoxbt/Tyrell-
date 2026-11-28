@@ -12,6 +12,7 @@ import {
   QIE_WALLET_LINKS,
   QIE_WALLET_RDNS,
   QIE_WALLET_URL,
+  WALLET_MODE,
   WalletContext,
   clearSession,
   errText,
@@ -37,15 +38,15 @@ import {
  */
 
 /**
- * Reown AppKit is the wallet connection. NEXT_PUBLIC_REOWN_PROJECT_ID (dashboard.reown.com) unlocks the
- * WalletConnect relay (QR codes, mobile deep links) and Reown's wallet directory; without it AppKit still
- * runs and connects browser wallets (QIE Wallet first). NEXT_PUBLIC_WALLET_MODE=injected selects the
- * plain browser-wallet picker instead (used by tests).
+ * Reown AppKit is the wallet connection when NEXT_PUBLIC_REOWN_PROJECT_ID (dashboard.reown.com) is set: it
+ * unlocks the WalletConnect relay (QR codes, mobile deep links) and Reown's wallet directory. Without a
+ * project id the site uses the plain browser-wallet picker (lib/wallet.tsx), unless
+ * NEXT_PUBLIC_WALLET_MODE=reown asks for AppKit anyway (browser wallets only, no relay; used by tests).
  */
 const PLACEHOLDER_PROJECT_ID = "00000000000000000000000000000000";
 export const REOWN_PROJECT_ID = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || PLACEHOLDER_PROJECT_ID;
 export const reownConfigured = REOWN_PROJECT_ID !== PLACEHOLDER_PROJECT_ID;
-export const reownEnabled = process.env.NEXT_PUBLIC_WALLET_MODE !== "injected";
+export const reownEnabled = WALLET_MODE === "reown";
 
 const qie = (id: 1990 | 1983, testnet: boolean) => {
   const c = CHAINS[id]!;

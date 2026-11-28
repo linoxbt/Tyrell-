@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { runDemo } from "../lib/ai/demo";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MAX_TOKENS, budgetedFetch, runDemo } from "../lib/ai/demo";
 import { settleTyrell, settleUnprotected } from "../lib/ai/onchain";
-import { admit, LIMITS, resetGuard } from "../lib/ai/guard";
+import { admit, admitShared, LIMITS, resetGuard, sameOriginJson } from "../lib/ai/guard";
 import { ATTACKER, LANDLORD, SCENARIOS } from "../lib/ai/scenarios";
 import { JUDGE_SYSTEM } from "../lib/playground/vendor/judge";
 import { FORTYTWO, llmFromEnv } from "../lib/playground/vendor/llm";
@@ -127,5 +127,92 @@ describe("live AI demo (server side)", () => {
     const t2 = await settleTyrell(honest);
     expect(t2.outcomes[0]).toMatchObject({ result: "paid" });
     expect(t2.balances).toEqual({ landlord: 5_000_000n, attacker: 0n, funds: 5_000_000n });
+  });
+
+  it("caps every model call in tokens and stops the whole run at its time budget", async () => {
+    const { f, calls } = fakeFortytwo(LANDLORD);
+    const s = SCENARIOS[0]!;
+    await runDemo(s, s.poison, cfg, { fetch: f });
+    const agentCalls = calls.filter((c) => c.body.messages[0]!.content !== JUDGE_SYSTEM);
+    expect(agentCalls.every((c) => (c.body as { max_tokens?: number }).max_tokens === MAX_TOKENS)).toBe(true);
+    // the judge keeps its own, smaller cap
+    expect((calls.find((c) => c.body.messages[0]!.content === JUDGE_SYSTEM)!.body as { max_tokens?: number }).max_tokens).toBe(120);
+
+    // a model that never answers: the run ends at the budget with an error on each agent
+    const hang = ((_u: string, init: RequestInit) =>
+      new Promise<Response>((_, reject) => init.signal?.addEventListener("abort", () => reject(init.signal!.reason)))) as unknown as typeof fetch;
+    const t0 = Date.now();
+    const r = await runDemo(s, s.poison, cfg, { fetch: hang, budgetMs: 300 });
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(r.steward.error).toBe("the AI took too long to answer");
+    expect(r.unprotected.error).toBe("the AI took too long to answer");
+
+    // budgetedFetch leaves a non-JSON body alone
+    let seen: RequestInit | undefined;
+    await budgetedFetch(new AbortController().signal, 10, (async (_u: string, i: RequestInit) => ((seen = i), new Response("{}"))) as unknown as typeof fetch)("x", { body: "raw" });
+    expect(seen!.body).toBe("raw");
+  });
+
+  it("accepts only same-origin JSON POSTs", () => {
+    const req = (h: Record<string, string>) => new Request("https://tyrell.example/api/ai/demo", { method: "POST", headers: h, body: "{}" });
+    expect(sameOriginJson(req({ "content-type": "application/json", origin: "https://tyrell.example", host: "tyrell.example", "sec-fetch-site": "same-origin" }))).toBeUndefined();
+    expect(sameOriginJson(req({ "content-type": "text/plain" }))).toBe("the body must be JSON");
+    expect(sameOriginJson(req({ "content-type": "application/json", "sec-fetch-site": "cross-site" }))).toBe("cross-site requests are not accepted");
+    expect(sameOriginJson(req({ "content-type": "application/json", origin: "https://evil.example", host: "tyrell.example" }))).toBe("cross-site requests are not accepted");
+  });
+
+  it("never resets every visitor at once when the table is full", () => {
+    resetGuard();
+    const keep = LIMITS.perMinute;
+    LIMITS.perMinute = 1e9; // isolate the per-visitor table
+    try {
+      const t = 50_000_000;
+      // the table is full of visitors from long ago; then someone uses up their runs now
+      for (let i = 0; i < LIMITS.maxVisitors; i++) admit(`old${i}`, t - 3 * LIMITS.visitorWindowMs);
+      for (let i = 0; i < LIMITS.perVisitor; i++) expect(admit("busy", t + i).ok).toBe(true);
+      expect(admit("fresh", t + 10).ok).toBe(true);
+      // the stale ones were dropped, not everybody: "busy" is still out of runs
+      expect(admit("busy", t + 20)).toMatchObject({ ok: false, reason: "You have used your live runs for now." });
+    } finally {
+      LIMITS.perMinute = keep;
+      resetGuard();
+    }
+  });
+
+  it("shares the limits through a Redis REST store when one is configured, and falls back to memory when it fails", async () => {
+    resetGuard();
+    const counts = new Map<string, number>();
+    const redis = (async (_u: string, init: { body: string }) => {
+      const cmds = JSON.parse(init.body) as string[][];
+      return Response.json(cmds.map(([op, k]) => (op === "INCR" ? { result: counts.set(k!, (counts.get(k!) ?? 0) + 1).get(k!) } : { result: 1 })));
+    }) as unknown as typeof fetch;
+    const env = { KV_REST_API_URL: "https://kv.example", KV_REST_API_TOKEN: "t" };
+    const t = 60_000 * 1000;
+    for (let i = 0; i < LIMITS.perMinute; i++) expect((await admitShared(`s${i}`, env, redis, t)).ok).toBe(true);
+    expect(await admitShared("s-next", env, redis, t)).toMatchObject({ ok: false, reason: "The live demo is busy." });
+    const broken = (async () => new Response("down", { status: 500 })) as unknown as typeof fetch;
+    expect((await admitShared("fallback", env, broken, t)).ok).toBe(true);
+    resetGuard();
+  });
+});
+
+describe("live AI demo route", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    resetGuard();
+  });
+  const post = (body: unknown, h: Record<string, string> = {}) =>
+    new Request("http://localhost/api/ai/demo", { method: "POST", headers: { "content-type": "application/json", host: "localhost", origin: "http://localhost", ...h }, body: JSON.stringify(body) });
+
+  it("answers 502, not a fake result, when the model fails; 403 cross-site", async () => {
+    vi.stubEnv("FORTYTWO_API_KEY", "sk-ft-v1-test");
+    vi.stubGlobal("fetch", (async () => new Response("{}", { status: 402 })) as unknown as typeof fetch);
+    const { POST } = await import("../app/api/ai/demo/route");
+    const r = await POST(post({ scenario: "token-name", hijacked: true }, { "x-real-ip": "1.1.1.1" }));
+    expect(r.status).toBe(502);
+    expect(((await r.json()) as { error: string }).error).toBe("model_failed");
+    const x = await POST(post({ scenario: "token-name" }, { origin: "https://evil.example" }));
+    expect(x.status).toBe(403);
   });
 });

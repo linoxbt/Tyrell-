@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { runDemo, type DemoResult } from "@/lib/ai/demo";
-import { admit, cached, remember } from "@/lib/ai/guard";
-import { CUSTOM_MAX, scenarioOf } from "@/lib/ai/scenarios";
-import { llmFromEnv } from "@/lib/playground/vendor/llm";
+import { runDemo, type DemoResult } from "../../../../lib/ai/demo";
+import { admitShared, cached, remember, sameOriginJson } from "../../../../lib/ai/guard";
+import { CUSTOM_MAX, scenarioOf } from "../../../../lib/ai/scenarios";
+import { llmFromEnv } from "../../../../lib/playground/vendor/llm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +23,8 @@ export function GET() {
 export async function POST(req: Request) {
   const c = config();
   if (!c) return NextResponse.json({ error: "not_configured" }, { status: 503 });
+  const refused = sameOriginJson(req);
+  if (refused) return NextResponse.json({ error: "forbidden", message: refused }, { status: 403 });
   let body: { scenario?: unknown; text?: unknown; hijacked?: unknown };
   try {
     body = (await req.json()) as typeof body;
@@ -43,10 +45,13 @@ export async function POST(req: Request) {
   if (hit) return NextResponse.json({ ...hit, cached: true });
 
   const visitor = req.headers.get("x-real-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const gate = admit(visitor);
+  const gate = await admitShared(visitor);
   if (!gate.ok) return NextResponse.json({ error: "rate_limited", message: gate.reason, retryAfter: gate.retryAfter }, { status: 429, headers: { "retry-after": String(gate.retryAfter) } });
 
   const result = await runDemo(scenario, poison, c, { hijacked });
-  if (scenario.id !== "custom" && !result.steward.error && !result.unprotected.error) remember(key, result);
+  // an agent that never got an answer (out of credits, rate limited, too slow) is not a result: the page
+  // replays the recording instead of showing "the hacker got nothing" for a run that did not happen
+  if (result.steward.error || result.unprotected.error) return NextResponse.json({ error: "model_failed", message: result.steward.error ?? result.unprotected.error }, { status: 502 });
+  if (scenario.id !== "custom") remember(key, result);
   return NextResponse.json(result);
 }
