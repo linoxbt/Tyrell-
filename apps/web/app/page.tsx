@@ -5,12 +5,12 @@ import { Nav } from "@/components/argus/Nav";
 import { Problem } from "@/components/argus/Problem";
 import { AttackGate, BuiltOnQie, Cta, Faq, Footer, Guarantees, Marquee, Platform, Steps } from "@/components/argus/Sections";
 import { useReveal } from "@/lib/useReveal";
-import { useSample } from "@/lib/useView";
+import { useView } from "@/lib/useView";
 
 // Section order follows the Argus template: hero + dashboard, logo strip, problem, steps, platform, eval gate,
 // integrations, pricing (here: guarantees), FAQ, CTA, footer.
 export default function Landing() {
-  const { view } = useSample();
+  const { view } = useView(30_000);
   useReveal([Boolean(view)]);
   return (
     <>

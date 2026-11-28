@@ -11,7 +11,6 @@ Each command runs as one process and loads only the keys it is allowed (see [Arc
 
 | Command | Keys | Needs control |
 | --- | --- | --- |
-| [`import`](#tyrell-import) | writes all keys | No |
 | [`setup keys`](#tyrell-setup-keys) | writes all keys | No |
 | [`setup register`](#tyrell-setup-register) | owner, in QIE Wallet | No |
 | [`deploy`](#tyrell-deploy) | Foundry deployer | No |
@@ -44,14 +43,6 @@ Each command runs as one process and loads only the keys it is allowed (see [Arc
 Global options: `--version` prints `0.1.0`; `--help` works on every command.
 
 ## Setup and deployment
-
-### tyrell import
-
-```sh
-pnpm tyrell import <account file>
-```
-
-Sets up `TYRELL_HOME` from the account file the [console](/console) downloads when it creates an account. Asks for the password chosen in the console (or reads `TYRELL_IMPORT_PASSWORD`), opens every key with it, checks each key's role tag and address, and refuses to overwrite existing keys. Writes `keys/<role>.json`, `keys/addresses.json`, `config.json`, `deployment-<chain>.json` and, if absent, the passphrase file.
 
 ### tyrell setup keys
 

@@ -1,15 +1,13 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { getAddress, type Address } from "viem";
+import { getAddress, zeroAddress, type Address } from "viem";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright";
 import { laneRegistryAbi } from "@tyrell/chain";
 import { startChainlab, type Chainlab } from "../../../test/support/anvil";
-import { importAccount } from "../../cli/src/import";
 import { ensureBuild, webEnv } from "./nextBuild";
 
 /*
@@ -22,6 +20,7 @@ import { ensureBuild, webEnv } from "./nextBuild";
 
 const WEB = join(__dirname, "..");
 const NEXT = join(WEB, "node_modules/.bin/next");
+const SNAPSHOT = join(WEB, "public/snapshot.json");
 const MODES = {
   injected: { distDir: ".next-injected", env: { NEXT_PUBLIC_WALLET_MODE: "injected" } as Record<string, string> },
   reown: { distDir: ".next", env: {} as Record<string, string> },
@@ -29,12 +28,6 @@ const MODES = {
 type Mode = keyof typeof MODES;
 
 const servers: ChildProcess[] = [];
-/** Optional screenshots for review: WEB_SCREENSHOT_DIR=/some/dir */
-const shot = async (page: Page, name: string) => {
-  if (!process.env.WEB_SCREENSHOT_DIR) return;
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: join(process.env.WEB_SCREENSHOT_DIR, `${name}.png`), fullPage: true });
-};
 const urls: Partial<Record<Mode, string>> = {};
 
 const freePort = () =>
@@ -55,7 +48,7 @@ async function serve(mode: Mode): Promise<string> {
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 200; i++) {
     try {
-      if ((await fetch(`${url}/snapshot.json`)).ok) break;
+      if ((await fetch(`${url}/api/view`)).ok) break;
     } catch {
       /* starting */
     }
@@ -118,153 +111,77 @@ async function walletPage(lab: Chainlab): Promise<{ page: Page; close: () => Pro
   return { page, close: () => browser.close() };
 }
 
-describe.each(Object.keys(MODES) as Mode[])("wallet login and the console (%s)", (mode) => {
+describe.each(Object.keys(MODES) as Mode[])("wallet login and owner actions (%s)", (mode) => {
   let lab: Chainlab;
   beforeAll(async () => {
     lab = await startChainlab();
   }, 120_000);
   afterAll(() => lab?.stop());
 
-  const activeKey = (registry: Address, lane: number) => lab.pub.readContract({ address: registry, abi: laneRegistryAbi, functionName: "activeKey", args: [lane] });
-
-  async function signIn(page: Page, url: string, owner: Address) {
-    await page.goto(`${url}/start`, { waitUntil: "networkidle" });
-    await page.getByText("QIE Wallet is installed in this browser.").waitFor();
-    await page.locator("main").getByRole("button", { name: "Connect wallet" }).first().click();
-    const sheet = page.getByRole("dialog", { name: "Wallet" });
-    if (mode === "reown") {
-      const modal = page.locator("w3m-modal");
-      await modal.getByText("WalletConnect").first().waitFor({ timeout: 20_000 });
-      expect(await modal.getByText("QIE Wallet", { exact: true }).count()).toBe(1);
-      await modal.getByText("QIE Wallet", { exact: true }).click();
-      await page.locator("header button", { hasText: `${owner.slice(0, 6)}…` }).first().waitFor({ timeout: 20_000 });
-      await page.locator("w3m-modal.open").waitFor({ state: "detached", timeout: 10_000 }).catch(() => page.keyboard.press("Escape"));
-      await page.locator("header button", { hasText: `${owner.slice(0, 6)}…` }).first().click();
-    } else {
-      await sheet.getByRole("button", { name: /QIE Wallet/ }).click();
-    }
-    await sheet.getByText("Not signed in").waitFor();
-    if (mode === "reown") await sheet.getByText("Connected with Reown · WalletConnect").waitFor();
-    await sheet.getByRole("button", { name: "Sign in with your wallet" }).click();
-    await sheet.getByText("Signed in", { exact: true }).waitFor({ timeout: 15_000 });
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("tyrell.wallet.session") ?? "{}").address)).toBe(owner);
-    await page.keyboard.press("Escape");
-    await page.getByText(`Signed in as ${owner}.`).waitFor();
-    await page.getByText("Create your Tyrell account").first().waitFor();
-  }
-
-  it("never shows sample data: the console opens your own account", async () => {
+  it("connects QIE Wallet, signs in, reads the owner role and revokes a lane key on-chain", async () => {
+    const snap = JSON.parse(readFileSync(SNAPSHOT, "utf8")) as { contracts: { memoryAnchor: string } };
+    expect(snap.contracts.memoryAnchor.toLowerCase(), "snapshot contracts must match a fresh chainlab deployment").toBe(lab.deployment.memoryAnchor.toLowerCase());
+    const url = urls[mode]!;
+    const owner = getAddress(lab.owner);
     const { page, close } = await walletPage(lab);
     try {
-      await page.goto(`${urls[mode]!}/console`, { waitUntil: "networkidle" });
-      await page.getByText("Connect the wallet that owns your Tyrell account").waitFor();
-      expect(await page.getByText("Recorded demo").count()).toBe(0);
-      // the console's own design: the labelled rail is there, with no sample data behind it
-      await page.getByRole("button", { name: "Lineage" }).waitFor();
-      expect(await page.getByText("Verified memories").count()).toBe(0);
+      // the get-started checklist reacts to the wallet
+      await page.goto(`${url}/start`, { waitUntil: "networkidle" });
+      await page.getByText("QIE Wallet is installed in this browser.").waitFor();
+      await page.locator("main").getByRole("button", { name: "Connect wallet" }).first().click();
+
+      const sheet = page.getByRole("dialog", { name: "Wallet" });
+      if (mode === "reown") {
+        // Reown AppKit's modal: QIE Wallet is listed once, as installed
+        const modal = page.locator("w3m-modal");
+        await modal.getByText("WalletConnect").first().waitFor({ timeout: 20_000 });
+        expect(await modal.getByText("QIE Wallet", { exact: true }).count()).toBe(1);
+        await modal.getByText("QIE Wallet", { exact: true }).click();
+        await page.locator("header").getByRole("button", { name: `Wallet ${owner.slice(0, 6)}…${owner.slice(-4)}` }).or(page.locator("header button", { hasText: `${owner.slice(0, 6)}…` })).first().waitFor({ timeout: 20_000 });
+        await page.locator("w3m-modal.open").waitFor({ state: "detached", timeout: 10_000 }).catch(() => page.keyboard.press("Escape"));
+        await page.locator("header button", { hasText: `${owner.slice(0, 6)}…` }).first().click();
+      } else {
+        await sheet.getByRole("button", { name: /QIE Wallet/ }).click();
+      }
+      await sheet.getByText("Not signed in").waitFor();
+      if (mode === "reown") await sheet.getByText("Connected with Reown · WalletConnect").waitFor();
+      await sheet.getByRole("button", { name: "Sign in with your wallet" }).click();
+      await sheet.getByText("Signed in", { exact: true }).waitFor({ timeout: 15_000 });
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem("tyrell.wallet.session") ?? "{}").address)).toBe(owner);
+      await page.keyboard.press("Escape");
+      await page.getByText(`Signed in as ${owner}.`).waitFor();
+      expect(await page.locator("pre", { hasText: "--owner" }).innerText()).toContain(`--owner ${owner}`);
+
+      // the console's Account tab: owner role, the four lane keys, and a revoke
+      await page.goto(`${url}/console`, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Account" }).click();
+      await page.getByText("Role here:").waitFor({ timeout: 20_000 });
+      const toLocal = page.getByRole("button", { name: "Switch wallet to Local chain (anvil)" });
+      if (await toLocal.isVisible().catch(() => false)) await toLocal.click();
+      await page.getByText("Role here:").locator("..").getByText("Owner", { exact: true }).waitFor({ timeout: 20_000 });
+      const agent = lab.lanes.agent.address as Address;
+      await page.getByText(`${agent.slice(0, 6)}…${agent.slice(-4)}`).waitFor();
+      const agentRow = page.locator("li", { hasText: "agent" }).filter({ hasText: "Steward" });
+      await agentRow.getByRole("button", { name: "Revoke" }).click();
+      await agentRow.getByRole("textbox").fill(`e2e (${mode}): suspected compromise`);
+      await agentRow.getByRole("button", { name: "Revoke the agent key" }).click();
+      await agentRow.getByText("no active key").waitFor({ timeout: 20_000 });
+
+      expect(await lab.pub.readContract({ address: lab.deployment.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] })).toBe(zeroAddress);
+      expect(await lab.pub.readContract({ address: lab.deployment.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [1] })).toBe(lab.lanes.user.address);
+
+      // then add a new agent key, created in the browser and downloaded encrypted
+      await agentRow.getByRole("button", { name: "Add key" }).click();
+      await agentRow.getByLabel("Password to encrypt the key file").fill("correct horse battery");
+      await agentRow.getByLabel("Same password again").fill("correct horse battery");
+      const dl = page.waitForEvent("download");
+      await agentRow.getByRole("button", { name: "Add the agent key" }).click();
+      const ks = JSON.parse(readFileSync(await (await dl).path(), "utf8")) as { address: string; tyrell: { role: string } };
+      expect(ks.tyrell.role).toBe("agent");
+      await agentRow.getByText("no active key").waitFor({ state: "detached", timeout: 20_000 });
+      expect(await lab.pub.readContract({ address: lab.deployment.laneRegistry, abi: laneRegistryAbi, functionName: "activeKey", args: [2] })).toBe(getAddress(`0x${ks.address}`));
     } finally {
       await close();
     }
-  }, 60_000);
-
-  if (mode === "injected")
-    it("creates an account from the wallet, imports it with the CLI, and creates a lane key in the browser", async () => {
-      const url = urls[mode]!;
-      const owner = getAddress(lab.owner);
-      const { page, close } = await walletPage(lab);
-      const dir = mkdtempSync(join(tmpdir(), "tyrell-web-"));
-      try {
-        await signIn(page, url, owner);
-        await page.goto(`${url}/console`, { waitUntil: "networkidle" });
-        await page.getByRole("button", { name: /Create a new account/ }).waitFor();
-        await shot(page, "console-start");
-        await page.getByRole("button", { name: /Create a new account/ }).click();
-        await page.getByLabel("Password (8 characters or more)").fill("correct horse battery");
-        await page.getByLabel("Same password again").fill("correct horse battery");
-        const dl = page.waitForEvent("download", { timeout: 120_000 });
-        await page.getByRole("button", { name: "Create my account" }).click();
-        const file = join(dir, "account.json");
-        await (await dl).saveAs(file);
-        await page.getByText("Your account is ready.", { exact: false }).waitFor({ timeout: 120_000 });
-        await shot(page, "console-created");
-
-        // the CLI sets this computer up from the downloaded file
-        const prev = process.env.TYRELL_HOME;
-        process.env.TYRELL_HOME = join(dir, "home");
-        try {
-          expect(() => importAccount(file, "wrong password")).toThrow("wrong password");
-          const r = importAccount(file, "correct horse battery");
-          expect(r.config.chainId).toBe(31337);
-          const d = JSON.parse(readFileSync(r.deploymentFile, "utf8")) as { laneRegistry: Address; owner: Address };
-          expect(getAddress(d.owner)).toBe(owner);
-          expect(await activeKey(d.laneRegistry, 2)).toBe(r.addresses.agent);
-          expect(await activeKey(d.laneRegistry, 4)).toBe(r.addresses.control);
-          expect(existsSync(join(dir, "home", "keys", "data.json"))).toBe(true);
-          expect(() => importAccount(file, "correct horse battery")).toThrow("already has keys");
-
-          // the console reads the new account from the chain
-          await page.getByRole("button", { name: "Open my account" }).click();
-          await page.getByText("Verified memories").waitFor({ timeout: 20_000 });
-          await shot(page, "console-overview");
-
-          // lane keys: revoke the agent key, then create a new one in the browser
-          await page.getByRole("button", { name: "Account" }).click();
-          await page.getByText("Gas for your keys").waitFor();
-          await page.getByText("needs QIE").first().waitFor({ timeout: 20_000 });
-          const row = page.locator("li", { hasText: "Steward, the AI agent" });
-          await row.getByRole("button", { name: "Revoke" }).click();
-          await row.getByLabel("Reason").fill("e2e: rotate the agent");
-          await row.getByRole("button", { name: "Revoke the agent key" }).click();
-          await row.getByText("no active key").waitFor({ timeout: 20_000 });
-          await row.getByRole("button", { name: "Add key" }).click();
-          await shot(page, "console-keys-add");
-          await row.getByLabel("Password to encrypt the key file").fill("correct horse battery");
-          await row.getByLabel("Same password again").fill("correct horse battery");
-          const keyDl = page.waitForEvent("download");
-          await row.getByRole("button", { name: "Add the agent key" }).click();
-          const keyFile = join(dir, "agent.json");
-          await (await keyDl).saveAs(keyFile);
-          await row.getByText("no active key").waitFor({ state: "detached", timeout: 20_000 });
-          const ks = JSON.parse(readFileSync(keyFile, "utf8")) as { address: string; tyrell: { role: string } };
-          expect(ks.tyrell.role).toBe("agent");
-          expect(await activeKey(d.laneRegistry, 2)).toBe(getAddress(`0x${ks.address}`));
-          expect(getAddress(`0x${ks.address}`)).not.toBe(r.addresses.agent);
-        } finally {
-          if (prev === undefined) delete process.env.TYRELL_HOME;
-          else process.env.TYRELL_HOME = prev;
-        }
-      } finally {
-        await close();
-        rmSync(dir, { recursive: true, force: true });
-      }
-    }, 240_000);
-
-  if (mode === "reown")
-    it("opens an existing deployment and replaces a lane key with one from `tyrell setup keys`", async () => {
-      const url = urls[mode]!;
-      const owner = getAddress(lab.owner);
-      const { page, close } = await walletPage(lab);
-      try {
-        await signIn(page, url, owner);
-        await page.goto(`${url}/console`, { waitUntil: "networkidle" });
-        await page.getByRole("button", { name: /Open an account I have/ }).click();
-        await page.getByLabel("Deployment JSON").fill(JSON.stringify(lab.deployment, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
-        await page.getByRole("button", { name: "Open", exact: true }).click();
-        await page.getByText("Verified memories").waitFor({ timeout: 20_000 });
-        await page.getByRole("button", { name: "Account" }).click();
-        await page.getByText("Role here:").locator("..").getByText("Owner", { exact: true }).waitFor({ timeout: 20_000 });
-        const fresh = getAddress(`0x${"ab".repeat(20)}`);
-        const row = page.locator("li", { hasText: "What arrives in your wallet" });
-        await row.getByRole("button", { name: "Replace" }).click();
-        await row.getByRole("button", { name: "Use a key I already have" }).click();
-        await row.getByLabel(/Key address/).fill(fresh);
-        await row.getByLabel("Reason").fill("e2e: new ingest machine");
-        await row.getByRole("button", { name: "Replace the wallet key" }).click();
-        await row.getByText(`${fresh.slice(0, 6)}…${fresh.slice(-4)}`).waitFor({ timeout: 20_000 });
-        expect(await activeKey(lab.deployment.laneRegistry, 3)).toBe(fresh);
-        expect(await activeKey(lab.deployment.laneRegistry, 1)).toBe(lab.lanes.user.address);
-      } finally {
-        await close();
-      }
-    }, 180_000);
+  }, 180_000);
 });

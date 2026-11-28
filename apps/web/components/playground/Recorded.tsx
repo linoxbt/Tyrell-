@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ATTACKS } from "@/lib/attacks";
 import { REPO } from "../argus/ui";
@@ -124,6 +125,15 @@ export function Recorded() {
         </ul>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-[20px] bg-night p-6 text-snow sm:flex-row sm:items-center">
+        <div>
+          <div className="text-[17px] font-medium">A full end-to-end run, recorded</div>
+          <p className="mt-1 text-sm text-mist">The console replays a run of every process on a local chain: a poisoned token arrives, the payment is refused, the source is quarantined and the clean state comes back.</p>
+        </div>
+        <Link href="/console" className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-5 py-3 text-center text-[15px] transition-colors hover:bg-brand-deep sm:ml-auto">
+          Open the console
+        </Link>
+      </div>
     </div>
   );
 }

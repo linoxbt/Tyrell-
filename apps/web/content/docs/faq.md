@@ -69,7 +69,7 @@ Bodies are encrypted with AES-256-GCM before they reach IPFS, so only holders of
 
 ### What if a lane key is stolen?
 
-Revoke it from QIE Wallet (`tyrell revoke --lane <lane>`, or the console's Account tab, which can also add a replacement). `MemoryAnchor` refuses anything it signs from then on. Rotate with `--rotate`, and seed a `signer-window` quarantine to exclude what it wrote while compromised.
+Revoke it from QIE Wallet (`tyrell revoke --lane <lane>`, or the console's Account tab). `MemoryAnchor` refuses anything it signs from then on. Rotate with `--rotate`, and seed a `signer-window` quarantine to exclude what it wrote while compromised.
 
 ### Can I rebuild without your server?
 
@@ -93,7 +93,7 @@ No. It sees only incoming on-chain text: token names and symbols, and NFT metada
 
 ### Does the hosted console connect to my agent?
 
-No. The hosted console reads your account from QIE (keys, payees, payments, activity). For the full view of your agent's memory, run the web app next to control with `TYRELL_API_URL=http://127.0.0.1:7878 pnpm web:dev`.
+No. The hosted demo serves a recorded snapshot. To see your own agent live, run the web app next to control with `TYRELL_API_URL=http://127.0.0.1:7878`.
 
 ### Why connect a wallet to the console?
 

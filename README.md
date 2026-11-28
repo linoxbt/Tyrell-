@@ -12,7 +12,7 @@ Live demo: **https://tyrell-mu.vercel.app**
 
 - [Playground](https://tyrell-mu.vercel.app/playground): the real contracts, compiled and running in an EVM in your browser. 34 live checks across memory, the vault, Phase A and Phase B, no login and no wallet. It also shows the recorded results of the full repository test suites.
 - [Docs](https://tyrell-mu.vercel.app/docs): guides, concepts, the agents network, contract and CLI reference, and the security model ([llms.txt](https://tyrell-mu.vercel.app/llms.txt) for language models).
-- [Console](https://tyrell-mu.vercel.app/console): your own Tyrell account. Create one from your wallet (contracts deployed, keys made and encrypted in the browser, then `pnpm tyrell import`), or open one you have; create, replace and revoke lane keys; run the web app next to control for the full view.
+- [Console](https://tyrell-mu.vercel.app/console): a recorded end-to-end run (read-only snapshot); connect a wallet with Reown AppKit to see your role and manage lane keys.
 
 ## The problem
 
@@ -148,7 +148,7 @@ pnpm contracts:test     # Foundry unit, fuzz and invariant tests
 pnpm test               # TypeScript tests, including end-to-end runs on a local anvil chain
 pnpm coverage           # enforces 100% on the verifier and the policy engine (NFR-04)
 pnpm probe              # re-runs the QIE network probe and rewrites PROBE.md
-pnpm web:dev            # the web app at http://localhost:3000
+pnpm web:dev            # the web view at http://localhost:3000 (snapshot or live, see below)
 ```
 
 ### Running on QIE (testnet first, then mainnet)
@@ -186,18 +186,18 @@ monitoring), rebuilt in Next.js with Tyrell's own content and data:
 - `/console`: the operator console. Overview (classes, decisions, payees, seeds), lineage graph,
   blast radius per seed, decisions with what the model had read, timeline and incidents.
 
-Control serves a read-only view document on `127.0.0.1:7878`; `TYRELL_API_URL=http://127.0.0.1:7878
-pnpm web:dev` gives the console the full view. Without it, the console reads your account straight
-from QIE. The recorded sample run (`apps/web/public/snapshot.json`, written with
-`pnpm tyrell snapshot`) is shown only on the playground.
+Control serves a read-only view document on `127.0.0.1:7878`. `TYRELL_API_URL=http://127.0.0.1:7878
+pnpm web:dev` shows it live. Without it, the web view serves `apps/web/public/snapshot.json` (write one
+with `pnpm tyrell snapshot --out apps/web/public/snapshot.json`), which is how the hosted demo runs.
 
 **Wallet connection** uses [Reown AppKit](https://reown.com/appkit): QIE Wallet and other browser wallets,
 plus mobile wallets over WalletConnect (QR code or deep link). Set `NEXT_PUBLIC_REOWN_PROJECT_ID` (from
 dashboard.reown.com, with the site's domain on its allowlist; see `apps/web/.env.example`). Without it the
 web app falls back to browser wallets only. Either way, signing in is an EIP-4361 message (no transaction),
-and the console's Account tab lets the owner wallet add (or create), replace and revoke lane keys.
+and the console's Account tab lets the owner wallet revoke a lane key.
 
-The hosted demo is the Vercel project `tyrell`, deployed from `apps/web` with `vercel deploy --prod`. The hosted site never gets
+The hosted demo is the Vercel project `tyrell`, deployed from `apps/web` with `vercel deploy --prod`. To
+refresh it, write a new snapshot from a real run and deploy again. The hosted site never gets
 `TYRELL_API_URL`: control and the signer hold lane keys and stay on the operator's machine. Social-card
 URLs use `TYRELL_SITE_URL`, or the Vercel production domain when that is unset.
 

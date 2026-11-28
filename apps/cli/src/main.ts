@@ -6,7 +6,6 @@ import { encode } from "@tyrell/ipc";
 import { blobStore, clients, deployment, passphrase, paths, readConfig, type TyrellConfig } from "./config.js";
 import { ownerPageHtml, pendingOwnerTxs, serveOwnerPage, setupKeys } from "./setup.js";
 import { deploy } from "./deploy.js";
-import { askPassword, importAccount } from "./import.js";
 import { startDaemon } from "./daemon.js";
 import { rebuild, say, show, status, verifyDigest } from "./commands.js";
 import { payeeAdd, payeeList, payeeReinstate, payeeRemove, release, startSigner, stewardTurn } from "./agent.js";
@@ -99,20 +98,6 @@ setup
       }
       server.close();
       console.log("Registered: four lane keys active and the vault cap set.");
-    }),
-  );
-
-program
-  .command("import <file>")
-  .description("Set up this computer from the account file the web console downloads (keys, account id, contracts)")
-  .action(
-    run(async (file: string) => {
-      const pw = process.env.TYRELL_IMPORT_PASSWORD ?? (await askPassword("Password you chose in the console: "));
-      const r = importAccount(file, pw);
-      console.log(`Imported into ${paths().home} (${r.config.network}, chain ${r.config.chainId}).`);
-      for (const [role, a] of Object.entries(r.addresses)) console.log(`  ${role.padEnd(9)} ${a}`);
-      console.log(`Deployment: ${r.deploymentFile}`);
-      console.log("Next: send a little QIE for gas to the submitter and signer addresses above, then `pnpm tyrell control start`.");
     }),
   );
 

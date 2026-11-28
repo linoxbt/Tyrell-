@@ -5,9 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { LineageGraph } from "@/components/LineageGraph";
 import { Bars, Icon } from "@/components/argus/ui";
 import { Mark } from "@/components/Logo";
-import { AccountStart, AccountTab, useConsoleView } from "@/components/account/ConsoleAccount";
+import { OwnerPanel } from "@/components/wallet/OwnerPanel";
 import { ConnectButton } from "@/components/wallet/Wallet";
 import { kpis, ruleTrace } from "@/lib/kpis";
+import { useView } from "@/lib/useView";
 import { amount, bodyText, CLS_STYLE, graphFor, KIND, LANE_COLOR, SEED_TYPE, short, type ViewDecision, type ViewDocument, type ViewMemory } from "@/lib/view";
 
 type Tab = "overview" | "graph" | "blast" | "decisions" | "timeline" | "incidents" | "account";
@@ -23,8 +24,7 @@ const TABS: Array<[Tab, string, IconName]> = [
 ];
 
 export default function Console() {
-  const acc = useConsoleView();
-  const { view, error } = acc;
+  const { view, source, error } = useView(15_000);
   const [tab, setTab] = useState<Tab>("overview");
   const [seedId, setSeedId] = useState<number>();
   const [selected, setSelected] = useState<string>();
@@ -100,7 +100,8 @@ export default function Console() {
 
         <div className="px-4 py-5 [overflow-wrap:anywhere] sm:px-8 sm:py-7">
           {error && !view && <p className="rounded-xl border border-rose/30 bg-[#ffe9ed] p-4 text-rose">Could not load the projection: {error}</p>}
-          {!view && !error && (acc.account ? <p className="text-muted">Loading…</p> : <AccountStart acc={acc} />)}
+          {!view && !error && <p className="text-muted">Loading…</p>}
+          {view && source === "snapshot" && <p className="mb-4 text-[13px] text-muted">Recorded demo · read-only</p>}
           {view && graph && (
             <>
               {tab === "overview" && <Overview view={view} onSelect={setSelected} />}
@@ -136,7 +137,7 @@ export default function Console() {
               {tab === "decisions" && <Decisions view={view} byId={byId} />}
               {tab === "timeline" && <Timeline view={view} onSelect={setSelected} />}
               {tab === "incidents" && <Incidents view={view} />}
-              {tab === "account" && <AccountTab acc={acc} view={view} />}
+              {tab === "account" && <OwnerPanel view={view} />}
 
               {selected && byId.get(selected) && <Detail m={byId.get(selected)!} onClose={() => setSelected(undefined)} />}
             </>
