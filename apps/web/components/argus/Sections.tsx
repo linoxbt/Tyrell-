@@ -7,7 +7,7 @@ import { Mark, Wordmark } from "../Logo";
 import { Button, Check, Icon, Pill, REPO, SectionHead } from "./ui";
 
 /* ---------- strip under the hero: the template's customer logo marquee, carrying the QIE parts Tyrell runs on ---------- */
-export function Marquee({ view }: { view?: ViewDocument }) {
+export function Marquee(_: { view?: ViewDocument }) {
   const items = [
     "QIE Mainnet · chain 1990",
     "QIE Wallet",
@@ -17,7 +17,7 @@ export function Marquee({ view }: { view?: ViewDocument }) {
     "IPFS · Pinata",
     "EIP-712",
     "Blockscout",
-    view ? `block ${view.head}` : "MemoryAnchor",
+    "MemoryAnchor",
   ];
   return (
     <section className="overflow-hidden bg-night py-10">
@@ -409,7 +409,6 @@ export function Footer({ view }: { view?: ViewDocument }) {
         </div>
         <div className="mt-14 flex flex-wrap justify-between gap-2 border-t border-white/10 py-6 text-xs text-fog md:mt-20">
           <span>Built for QIE Mainnet Hackathon 3.0 · Apache 2.0</span>
-          <span className="mono">{view ? `digest ${short(view.digest, 6)} · block ${view.head}` : ""}</span>
         </div>
       </div>
       {/* the template's three stripes, here Tyrell's trust classes: trusted, derived, untrusted */}

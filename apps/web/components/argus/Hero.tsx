@@ -100,7 +100,7 @@ function Dashboard({ view }: { view?: ViewDocument }) {
           <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
           <span className="h-3 w-3 rounded-full bg-[#28c840]" />
           <span className="mono mx-auto flex items-center gap-2 rounded-full border border-line px-4 py-1.5 text-[13px] text-body">
-            <Mark size={14} /> app.tyrell/{view?.network ?? "mainnet"}/steward
+            <Mark size={14} /> tyrell · your account
           </span>
         </div>
         <div className="grid grid-cols-[68px_1fr]">
@@ -120,9 +120,8 @@ function Dashboard({ view }: { view?: ViewDocument }) {
               <span className="text-lg font-medium text-ink">steward</span>
               <span className="mono text-[13px] text-muted">/ decisions</span>
               <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">
-                <span className="h-1.5 w-1.5 rounded-full bg-band-green" /> {view?.network ?? "mainnet"}
+                <span className="h-1.5 w-1.5 rounded-full bg-band-green" /> QIE
               </span>
-              <span className="rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">block {view?.head ?? "—"}</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[13px] text-body">Filter</span>
             </div>
             <div className="mt-5 flex gap-7 border-b border-line text-[15px]">
@@ -229,7 +228,7 @@ function MobileDashboard({ view }: { view?: ViewDocument }) {
           <Mark size={22} />
           <span className="text-[15px] font-medium text-ink">steward</span>
           <span className="ml-auto flex items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-[11px] text-body">
-            <span className="h-1.5 w-1.5 rounded-full bg-band-green" /> {view?.network ?? "mainnet"}
+            <span className="h-1.5 w-1.5 rounded-full bg-band-green" /> QIE
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2 p-3">

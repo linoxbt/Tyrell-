@@ -158,11 +158,18 @@ export async function startDaemon(o: { refreshMs?: number; log?: (s: string) => 
   const apiPort = Number(process.env.TYRELL_API_PORT ?? 7878);
   let http: HttpServer | undefined;
   if (apiPort > 0) {
+    // The console in a browser may read it only from Tyrell's own site (or local development): any other
+    // page would otherwise be able to read your memories from 127.0.0.1.
+    const origins = new Set((process.env.TYRELL_WEB_ORIGINS ?? "https://tyrell-mu.vercel.app,http://localhost:3000,http://127.0.0.1:3000").split(",").map((o) => o.trim()).filter(Boolean));
     http = createHttpServer((req, res) => {
+      const origin = req.headers.origin;
+      const cors: Record<string, string> = origin && origins.has(origin) ? { "access-control-allow-origin": origin, "access-control-allow-private-network": "true", vary: "Origin" } : {};
+      if (req.method === "OPTIONS" && req.url === "/api/view") return void res.writeHead(cors["access-control-allow-origin"] ? 204 : 403, { ...cors, "access-control-allow-methods": "GET" }).end();
       if (req.method !== "GET" || req.url !== "/api/view") return void res.writeHead(404).end();
+      if (origin && !cors["access-control-allow-origin"]) return void res.writeHead(403).end();
       const p = control.projection;
-      if (!p) return void res.writeHead(503).end();
-      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(view(p)));
+      if (!p) return void res.writeHead(503, cors).end();
+      res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(view(p)));
     });
     await new Promise<void>((r) => http!.listen(apiPort, "127.0.0.1", () => r()));
     log(`control: read-only web API on http://127.0.0.1:${apiPort}/api/view`);

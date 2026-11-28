@@ -45,6 +45,6 @@ Control re-reads events from the deployment block on each refresh. That is fine 
 
 OpenZeppelin 5.5 and later use `mcopy` (a Cancun opcode), which QIE's EVM does not support (probe P-4). The contracts stay on 5.4.0 until QIE supports Cancun.
 
-## The hosted demo is a snapshot
+## The web host never holds keys
 
-The public web app serves a recorded run. It never connects to a live control process, because control and the signer hold lane keys that must stay on the operator's machine. Run the console with `TYRELL_API_URL` locally for live data.
+The public web app never connects to a control process itself, because control and the signer hold lane keys that must stay on the operator's machine. Your browser can read your local control process directly (control allows only `TYRELL_WEB_ORIGINS`). Keys the console creates are generated in your browser with its cryptographic random generator, encrypted with your password (scrypt, keystore v3) before they are downloaded, and never sent anywhere; a compromised page or browser extension could still see a key while it is being made, so for high-value accounts create keys with `tyrell setup keys` on the machine that runs Tyrell and paste their addresses instead.

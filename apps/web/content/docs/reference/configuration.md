@@ -52,6 +52,7 @@ Tyrell is configured with a few files in `TYRELL_HOME` and environment variables
 | `QIE_RPC_URLS` | the network's defaults | `setup keys` | Comma-separated RPC list written into a new `config.json` |
 | `PINATA_JWT` | none | Control, rebuild | Required for the Pinata store. Never commit it |
 | `TYRELL_API_PORT` | `7878` | Control | Port of the read-only web API on `127.0.0.1`; `0` disables it |
+| `TYRELL_WEB_ORIGINS` | `https://tyrell-mu.vercel.app,http://localhost:3000,http://127.0.0.1:3000` | Control | Web pages allowed to read the API from a browser; any other origin is refused |
 | `QIE_MCP_URL` | `https://mcp.qie.digital/mcp` | `payee add`, ingest | QIE MCP server |
 | `TYRELL_REPO` | the repository root | `deploy`, `attack run` | Where the `contracts/` folder is |
 

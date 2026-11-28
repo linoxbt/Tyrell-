@@ -1,55 +1,73 @@
 ---
 title: Web Console and Wallet
-description: Use the Tyrell console in snapshot or live mode, connect QIE Wallet with Reown AppKit, sign in, and manage lane keys from the browser.
+description: Create and open your Tyrell account in the console, connect QIE Wallet with Reown AppKit, create and manage lane keys from the browser, and connect your control process for the full view.
 ---
 
-The web app in `apps/web` is the human's window into Tyrell. It shows what the agent remembers, where each memory came from, what was blocked and why, and lets the owner wallet act on lane keys. It never holds a key that can write memories or pay.
+The web app in `apps/web` is the human's window into Tyrell. The console is your own account: it creates one from your wallet, reads it from QIE, manages its lane keys, and, with your control process connected, shows what the agent remembers, where each memory came from and what was blocked. It never holds a key that can write memories or pay: keys it creates are encrypted in the browser and downloaded.
 
 ## Pages
 
 | Path | What it is |
 | --- | --- |
-| `/` | The landing page; its dashboard shows real figures from the projection |
-| [`/console`](/console) | The operator console |
+| `/` | The landing page; its product illustrations use a recorded sample run |
+| [`/console`](/console) | Your Tyrell account |
 | [`/start`](/start) | Get started: connect your owner wallet, then the setup commands |
-| [`/playground`](/playground) | Live, in-browser demonstrations of the guarantees |
+| [`/playground`](/playground) | The demo: a live attack on two AI agents, 34 contract checks, and a full recorded run. The only place sample data is shown |
 | `/docs` | This documentation |
 
-## Data modes
+## What the console shows
 
-The console reads one [view document](/docs/reference/view-document) from `/api/view`:
+The console never shows sample data. It shows, in this order:
 
-| Mode | When | Source |
+| You have | The console shows | Read from |
 | --- | --- | --- |
-| Live | `TYRELL_API_URL` is set on the web server and control answers | Control's read-only API (`GET /api/view` on `127.0.0.1:7878`), proxied server-side |
-| Snapshot | Otherwise | `apps/web/public/snapshot.json` |
+| Your control process connected | The full view: Overview, Lineage, Blast radius, Decisions, Timeline, Incidents, Keys | Control's read-only [view document](/docs/reference/view-document) |
+| An account (created or opened in this browser) | Your account from QIE: Overview, Payees, Activity, Keys | The contracts, through your wallet or a public QIE RPC |
+| Neither | **Your Tyrell account**: create a new account, open one you have, or connect your control process | — |
 
-The response header `x-tyrell-source` is `live` or `snapshot`, and the console shows a banner in snapshot mode. In live mode the console refreshes every 15 seconds.
+Accounts you create or open are remembered in this browser (their contract addresses only), and the one on your wallet's network opens automatically.
+
+### Creating an account
+
+**Create a new account** needs a connected wallet on QIE Testnet (1983), QIE Mainnet (1990) or a local chain:
+
+1. You choose a password. The browser makes the seven keys Tyrell's processes use (user, agent, wallet, control, submitter, signer and the data key) and encrypts each one with it, in the same keystore format `tyrell setup keys` writes.
+2. Your wallet sends the transactions `tyrell deploy` would: `LaneRegistry`, `MemoryAnchor`, `TyrellLedger`, `GuardedVault` (and a test token off mainnet; on mainnet the vault uses QUSDC), then `addLaneKey` for the four lanes. That is eight or nine confirmations.
+3. The account file `tyrell-account-<chain>.json` downloads: the encrypted keys, the account id and the contract addresses.
+
+On the computer that will run Tyrell:
 
 ```sh
-# live, on the machine that runs control
-TYRELL_API_URL=http://127.0.0.1:7878 pnpm web:dev
-
-# write a new snapshot from a running control process
-pnpm tyrell snapshot --out apps/web/public/snapshot.json
+pnpm tyrell import ~/Downloads/tyrell-account-1983.json   # asks for the password
+pnpm tyrell control start
 ```
 
-> [!IMPORTANT]
-> The browser never talks to control directly; the Next.js server proxies it. The hosted demo never sets `TYRELL_API_URL`: control and the signer hold lane keys and stay on the operator's machine.
+`tyrell import` checks the password against every key, each key's role tag and address, refuses to overwrite existing keys, and writes `keys/`, `config.json`, `deployment-<chain>.json` and the passphrase file into `TYRELL_HOME`.
+
+### Opening an account
+
+**Open an account I have** takes the account file or a deployment file (`~/.tyrell/deployment-<chain>.json`, as `tyrell deploy` writes it). Only the contract addresses are read.
+
+### Connecting your control process
+
+Control serves a read-only view on `http://127.0.0.1:7878/api/view`. Enter that address under **Running Tyrell on this computer?** and the console reads it straight from your browser. Control answers only pages from Tyrell's own site and local development (`TYRELL_WEB_ORIGINS`, by default `https://tyrell-mu.vercel.app`, `http://localhost:3000` and `http://127.0.0.1:3000`), so another website you visit cannot read your memories.
+
+A self-hosted web server can also proxy one control process for everyone who opens it, with `TYRELL_API_URL` (the server's `/api/view`). The hosted site does not set it.
 
 ## Console tabs
 
 | Tab | Shows |
 | --- | --- |
-| Overview | Verified memories, decisions, untrusted reads and payments blocked; the R0–R5 policy trace of the latest decision; latest decisions; payees with caps; quarantine seeds; recent memories |
+| Overview (account) | Lane keys set, approved payees, memories recorded, vault balance; what is left to set up (gas for the submitter and signer, payees, funding, starting Tyrell); recent payments; the account's contracts |
+| Payees | Approved payees with their caps and status |
+| Activity | Memories recorded (by lane, with signer) and payments |
+| Overview (full) | Verified memories, decisions, untrusted reads and payments blocked; the R0–R5 policy trace of the latest decision; latest decisions; payees; quarantine seeds; recent memories |
 | Lineage | The lineage graph of the last 60 memories: sources to memories (dashed) and parent to child (solid), coloured by lane |
 | Blast radius | Pick a seed; see every memory and decision it reaches |
-| Decisions | Every payment decision with its verdict, reasons, transaction link and the memories the model had read (its parents) |
-| Timeline | Every memory with block, lane, kind and class (cards on phones) |
-| Incidents | Sentinel incidents with score, rules, source and, when the AI judge ran, its category, confidence and reason |
-| Account | Your wallet, your role on this deployment, the four lane keys, and revoke for the owner |
-
-Click any memory to open its detail: id, class and why, lane, kind, block, verification result, seeds, signer, CID and body.
+| Decisions | Every payment decision with its verdict, reasons, transaction link and the memories the model had read |
+| Timeline | Every memory with block, lane, kind and class |
+| Incidents | Sentinel incidents with score, rules, source and the AI judge's verdict |
+| Keys | Your wallet, your role, the four lane keys; add, replace and revoke for the owner |
 
 ## Connecting a wallet
 
@@ -94,29 +112,20 @@ The page asks the wallet to sign it (`personal_sign`), verifies the signature lo
 
 If your wallet is on another network, the wallet sheet offers **QIE Mainnet** (chain 1990) and **QIE Testnet** (chain 1983). It calls `wallet_switchEthereumChain` and, if the wallet does not know QIE yet, `wallet_addEthereumChain` with the QIE RPCs and explorer.
 
-## The Account tab
+## The Keys tab
 
-The Account tab reads the deployment the console is showing:
+The Keys tab reads the account's `LaneRegistry`: its owner, `activeKey(lane)` for lanes 1 to 4, and `laneOf(yourAddress)`. Your role is **Owner** if your address is the registry's owner, a lane key if it is bound to a lane, and **Viewer** otherwise.
 
-1. `MemoryAnchor.registry()` gives the `LaneRegistry` address.
-2. `LaneRegistry.owner()` gives the owner.
-3. `LaneRegistry.activeKey(lane)` for lanes 1 to 4 gives the current keys.
-4. `LaneRegistry.laneOf(yourAddress)` tells whether your address is itself a lane key.
+If you are the owner and your wallet is on the account's network, each lane offers:
 
-Your role is **Owner** if your address is the registry's owner, a lane key if it is bound to a lane, and **Viewer** otherwise. Reads go through your wallet when it is on the deployment's chain, and through a public QIE RPC otherwise. For a local chain, switch your wallet to it.
-
-### Revoking a lane key
-
-If you are the owner and your wallet is on the deployment's chain, each lane key has a **Revoke** button. Enter a reason (it is recorded on-chain) and confirm in your wallet. The page sends `LaneRegistry.revokeLaneKey(key, reason)`, waits for the receipt and refreshes.
-
-A revoked key stops at once: `MemoryAnchor` refuses anything it signs, and it can never be re-added. To replace it with a new key file, run:
-
-```sh
-pnpm tyrell revoke --lane <user|agent|wallet|control> --rotate
-```
+| Action | Sends | Notes |
+| --- | --- | --- |
+| **Add key** (empty lane) | `addLaneKey(lane, key)` | **Create a new key here**: the browser makes the key, encrypts it with your password and downloads `<lane>.json` for `~/.tyrell/keys/`. **Use a key I already have**: paste an address from `tyrell setup keys` |
+| **Replace** | `rotateLaneKey(old, new, reason)` | The same two ways to get the new key; the reason is recorded on-chain |
+| **Revoke** | `revokeLaneKey(key, reason)` | Stops the key at once; it can never be added again |
 
 > [!WARNING]
-> Revoking the control or signer path stops payments and anchoring until a new key is registered. Revoking is the emergency stop; rotating is the recovery.
+> Revoking the control key stops payments and anchoring until a new one is added. Revoking is the emergency stop; replacing is the recovery. Use the same password as your Tyrell passphrase for keys you create here, so the processes can open them.
 
 ## The get-started page
 
@@ -127,14 +136,14 @@ pnpm tyrell revoke --lane <user|agent|wallet|control> --rotate
 | 1. Get QIE Wallet | Browser | A wallet is detected or connected |
 | 2. Connect and sign in | Browser | A valid sign-in session exists |
 | 3. Use the QIE network | Browser | The wallet is on chain 1990 or 1983 |
-| 4. Install | Your computer | — |
-| 5. Create your agent's keys and deploy | Your computer | — |
-| 6. Register the keys with your wallet | Your computer | — |
+| 4. Create your Tyrell account | Console | — |
+| 5. Install Tyrell on your computer | Your computer | — |
+| 6. Import your account | Your computer | — |
 | 7. Start Tyrell | Your computer | — |
-| 8. Add who your agent may pay, then let it work | Your computer | — |
-| 9. Watch it here | Your computer | — |
+| 8. Approve who your agent may pay, then let it work | Your computer | — |
+| 9. Watch it in the console | Console | — |
 
-Steps 4 to 9 show the exact commands with copy buttons, and the deploy command is pre-filled with your connected address as `--owner`.
+Steps 5 to 8 show the exact commands with copy buttons. Prefer the command line throughout? `tyrell setup keys`, `tyrell deploy` and `tyrell setup register` do the same as the console's account creation.
 
 ## Environment variables
 

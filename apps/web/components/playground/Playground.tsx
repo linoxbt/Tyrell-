@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Pill } from "../argus/ui";
 import { Demo } from "./Demo";
 import { Proof } from "./Proof";
 import { Recorded } from "./Recorded";
+import { RecordedRun } from "./RecordedRun";
 import { TryIt } from "./TryIt";
 
 /*
@@ -56,6 +58,9 @@ export function Playground() {
             .
           </p>
           <div className="mt-5 space-y-3">
+            <Extra title="Explore a full recorded run" sub="Every memory, the lineage graph, decisions and incidents from a recorded end-to-end run, as the console shows a real account">
+              <RecordedRun />
+            </Extra>
             <Extra title="Every test in the repository" sub="TypeScript and Foundry test suites, and the 10-attack set, as last recorded">
               <Recorded />
             </Extra>
@@ -70,8 +75,10 @@ export function Playground() {
 }
 
 function Extra({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
+  // contents mount on first open: the lineage graph needs a visible box to lay itself out
+  const [seen, setSeen] = useState(false);
   return (
-    <details className="group rounded-2xl border border-line bg-white">
+    <details className="group rounded-2xl border border-line bg-white" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && setSeen(true)}>
       <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4">
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-medium text-ink">{title}</span>
@@ -79,7 +86,7 @@ function Extra({ title, sub, children }: { title: string; sub: string; children:
         </span>
         <span className="text-muted transition-transform group-open:rotate-180">⌄</span>
       </summary>
-      <div className="border-t border-line p-4 sm:p-5">{children}</div>
+      <div className="border-t border-line p-4 sm:p-5">{seen ? children : null}</div>
     </details>
   );
 }

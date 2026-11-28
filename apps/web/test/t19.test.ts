@@ -32,7 +32,7 @@ beforeAll(async () => {
   server = spawn(join(WEB, "node_modules/.bin/next"), ["start", "-p", String(port), "-H", "127.0.0.1"], { cwd: WEB, env, stdio: "ignore" });
   for (let i = 0; i < 200; i++) {
     try {
-      if ((await fetch(`${url}/api/view`)).ok) break;
+      if ((await fetch(`${url}/snapshot.json`)).ok) break;
     } catch {
       /* starting */
     }
@@ -42,11 +42,11 @@ beforeAll(async () => {
 
 afterAll(() => server?.kill("SIGTERM"));
 
-describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast`", () => {
-  it("serves the snapshot in read-only mode", async () => {
+describe.skipIf(!ready)("T-19: the recorded run's blast radius (playground) matches `tyrell blast`", () => {
+  it("the console never serves the recorded run: /api/view needs a real control process", async () => {
     const r = await fetch(`${url}/api/view`);
-    expect(r.headers.get("x-tyrell-source")).toBe("snapshot");
-    expect(((await r.json()) as { v: number }).v).toBe(1);
+    expect(r.status).toBe(404);
+    expect(((await (await fetch(`${url}/snapshot.json`)).json()) as { v: number }).v).toBe(1);
   });
 
   it("draws the same memories, decisions and parent -> child edges for the demo seed", async () => {
@@ -56,8 +56,10 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 });
-      await page.goto(`${url}/console`);
-      await page.getByRole("button", { name: "Blast radius" }).click();
+      // the recorded run lives on the playground
+      await page.goto(`${url}/playground`);
+      await page.getByText("Explore a full recorded run").click();
+      await page.getByRole("tab", { name: "Blast radius" }).click();
       await page.locator("select").selectOption(String(expected.seedId));
       const g = page.getByTestId("lineage-graph");
       await g.waitFor();
@@ -70,7 +72,7 @@ describe.skipIf(!ready)("T-19: the web view's blast radius matches `tyrell blast
       expect(memoryEdges.length).toBeGreaterThanOrEqual(expected.memoryEdges);
       if (process.env.WEB_SCREENSHOT_DIR) {
         await page.screenshot({ path: join(process.env.WEB_SCREENSHOT_DIR, "blast.png") });
-        await page.getByRole("button", { name: "Decisions" }).click();
+        await page.getByRole("tab", { name: "Decisions" }).click();
         await page.screenshot({ path: join(process.env.WEB_SCREENSHOT_DIR, "decisions.png") });
       }
     } finally {

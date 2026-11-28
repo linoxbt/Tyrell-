@@ -6,7 +6,7 @@ import { Nav } from "@/components/argus/Nav";
 import { Footer } from "@/components/argus/Sections";
 import { Check, Icon, Pill, REPO } from "@/components/argus/ui";
 import { ConnectButton } from "@/components/wallet/Wallet";
-import { useView } from "@/lib/useView";
+import { useSample } from "@/lib/useView";
 import { QIE_WALLET_RDNS, QIE_WALLET_URL, chainName, useWallet } from "@/lib/wallet";
 
 type State = "done" | "todo" | "now";
@@ -63,13 +63,12 @@ function Step({ n, state, title, children, action }: { n: number; state: State; 
 }
 
 export default function Start() {
-  const { view } = useView(60_000);
+  const { view } = useSample();
   const w = useWallet();
   const hasWallet = w.wallets.length > 0;
   const hasQie = w.wallets.some((x) => x.rdns === QIE_WALLET_RDNS);
   const onQie = w.chainId === 1990 || w.chainId === 1983;
   const net = w.chainId === 1983 ? "testnet" : "mainnet";
-  const owner = w.account ?? "<your QIE Wallet address>";
 
   const s1: State = hasWallet || w.account ? "done" : "now";
   const s2: State = w.session ? "done" : s1 === "done" ? "now" : "todo";
@@ -179,46 +178,50 @@ export default function Start() {
               <div className="mono text-xs uppercase tracking-wider text-muted">On your computer</div>
               <h2 className="mt-1 text-[26px] font-medium tracking-[-0.02em] text-ink sm:text-[30px]">Run Tyrell next to your agent</h2>
               <p className="mt-2 text-[15px] leading-[1.6] text-body">
-                The processes that hold keys stay on your machine, one key each. That is deliberate: a website should never hold the keys that sign for your money.
-                {w.account && " Your address is already filled in below."}
+                The processes that hold keys run on your machine, one key each. The website never holds them: it only makes them, encrypted, for you to download.
               </p>
             </div>
             <ol className="mt-6 space-y-3">
-              <Step n={4} state="todo" title="Install">
+              <Step
+                n={4}
+                state="todo"
+                title="Create your Tyrell account"
+                action={
+                  <Link href="/console" className="whitespace-nowrap rounded-lg bg-brand px-3 py-1.5 text-sm text-white transition-colors hover:bg-brand-deep">
+                    Open the console
+                  </Link>
+                }
+              >
+                In the console, your wallet creates Tyrell&apos;s contracts and registers its keys. Your browser makes the keys, encrypts them with a password you choose, and downloads them as one account file.
+              </Step>
+              <Step n={5} state="todo" title="Install Tyrell on your computer">
                 Node 22 and pnpm 10.
                 <Code>{`git clone --recurse-submodules ${REPO}.git tyrell\ncd tyrell && pnpm install`}</Code>
               </Step>
-              <Step n={5} state="todo" title="Create your agent's keys and deploy">
-                Four lane keys are generated and encrypted on your machine. The contracts are deployed with your wallet as owner.
-                <Code>{`pnpm tyrell setup keys --network ${net} --store pinata --gateway https://<you>.mypinata.cloud --new-passphrase\nexport PINATA_JWT=...   # never commit it\ncast wallet import tyrell-deployer --interactive   # a funded throwaway deployer\npnpm tyrell deploy --owner ${owner} --account tyrell-deployer --verify`}</Code>
-              </Step>
-              <Step n={6} state="todo" title="Register the keys with your wallet">
-                Opens a local page where your QIE Wallet approves the lane keys and the vault&apos;s daily cap. Only the owner can do this.
-                <Code>{`pnpm tyrell setup register`}</Code>
+              <Step n={6} state="todo" title="Import your account">
+                Puts the keys and contract addresses where the Tyrell processes look for them. It asks for your password.
+                <Code>{`pnpm tyrell import ~/Downloads/tyrell-account-${net === "mainnet" ? 1990 : 1983}.json`}</Code>
               </Step>
               <Step n={7} state="todo" title="Start Tyrell">
-                Control anchors memories, decides and serves the console. The signer can only pay registered payees. Ingest watches what lands in your wallet.
+                Control anchors memories, decides and serves the console. The signer can only pay approved payees. Ingest watches what lands in your wallet.
                 <Code>{`pnpm tyrell control start &\npnpm tyrell signer start &\npnpm tyrell ingest start &`}</Code>
               </Step>
-              <Step n={8} state="todo" title="Add who your agent may pay, then let it work">
+              <Step n={8} state="todo" title="Approve who your agent may pay, then let it work">
                 Payees are confirmed through QIE ID and signed by you. Your agent can only propose; the policy engine and the vault decide.
-                <Code>{`pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5\nexport LLM_BASE_URL=... LLM_API_KEY=... LLM_MODEL=...   # any OpenAI-compatible model\npnpm tyrell steward "pay this month's rent"`}</Code>
+                <Code>{`pnpm tyrell payee add --label landlord --qie-id landlord.qie --cap 5 --daily 5\nexport FORTYTWO_API_KEY=...   # Qwen on Fortytwo, or any OpenAI-compatible model\npnpm tyrell steward "pay this month's rent"`}</Code>
               </Step>
-              <Step n={9} state="todo" title="Watch it here">
-                Point the console at your machine to see memories, decisions, incidents and blast radius live. Quarantine and key revocation stay one command away.
-                <Code>{`# control serves a read-only view on 127.0.0.1:7878\nTYRELL_API_URL=http://127.0.0.1:7878 pnpm web:dev   # then open http://localhost:3000/console`}</Code>
+              <Step n={9} state="todo" title="Watch it in the console">
+                Open the console and connect your control process (it serves a read-only view on <span className="mono">http://127.0.0.1:7878</span>) to see every memory, decision, incident and blast radius live.
               </Step>
             </ol>
 
             <div className="mt-10 flex flex-col gap-3 rounded-[20px] bg-night p-6 text-snow sm:flex-row sm:items-center">
               <div>
                 <div className="text-[17px] font-medium">Just looking?</div>
-                <p className="mt-1 text-sm text-mist">
-                  The console shows a recorded demo run{view ? ` (${view.memories.length} memories, ${view.decisions.length} decisions)` : ""}: a poisoned token, a refused payment and a quarantine.
-                </p>
+                <p className="mt-1 text-sm text-mist">The playground runs a real attack on two AI agents, one with an ordinary wallet and one protected by Tyrell. No wallet needed.</p>
               </div>
-              <Link href="/console" className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-5 py-3 text-center text-[15px] transition-colors hover:bg-brand-deep sm:ml-auto">
-                Open the console
+              <Link href="/playground" className="shrink-0 whitespace-nowrap rounded-lg bg-brand px-5 py-3 text-center text-[15px] transition-colors hover:bg-brand-deep sm:ml-auto">
+                Open the playground
               </Link>
             </div>
           </div>

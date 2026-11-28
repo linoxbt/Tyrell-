@@ -333,6 +333,17 @@ describe("tyrell CLI on anvil", () => {
     expect(v.token.symbol).toBe("tUSD");
     expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`, { method: "POST" })).status).toBe(404);
     expect((await fetch(`http://127.0.0.1:${apiPort}/api/other`)).status).toBe(404);
+    // the console may read it from Tyrell's site; any other web page may not
+    const site = await fetch(`http://127.0.0.1:${apiPort}/api/view`, { headers: { origin: "https://tyrell-mu.vercel.app" } });
+    expect(site.status).toBe(200);
+    expect(site.headers.get("access-control-allow-origin")).toBe("https://tyrell-mu.vercel.app");
+    const pre = await fetch(`http://127.0.0.1:${apiPort}/api/view`, { method: "OPTIONS", headers: { origin: "https://tyrell-mu.vercel.app", "access-control-request-private-network": "true" } });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-private-network")).toBe("true");
+    const evil = await fetch(`http://127.0.0.1:${apiPort}/api/view`, { headers: { origin: "https://evil.example" } });
+    expect(evil.status).toBe(403);
+    expect(evil.headers.get("access-control-allow-origin")).toBeNull();
+    expect((await fetch(`http://127.0.0.1:${apiPort}/api/view`, { method: "OPTIONS", headers: { origin: "https://evil.example" } })).status).toBe(403);
   });
 
   it("everything still rebuilds to the same digest", () => {
